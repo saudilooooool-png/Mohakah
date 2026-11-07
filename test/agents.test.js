@@ -175,7 +175,7 @@ test('الخادم: نقاط النهاية تعمل، والمواصفات تُ
     assert.equal(seen[0].spec.chair, 'ceo');
     assert.equal(seen[0].meeting.transcript.length, 0, 'متحدث غير مشارك يُسقط');
     assert.equal(seen[0].meeting.round, 3, 'الجولة تُقص إلى الحد الأقصى');
-    const bad = await fetch(`${base}/api/meeting/turn`, { method: 'POST', body: JSON.stringify({ eventId: 'd1_welcome', message: 'x' }) });
+    const bad = await fetch(`${base}/api/meeting/turn`, { method: 'POST', body: JSON.stringify({ eventId: 'd1_usage_report', message: 'x' }) });
     assert.equal(bad.status, 400);
   } finally {
     server.close();
@@ -196,8 +196,8 @@ function simAtSprint(seed = 3) {
 }
 
 test('كل اجتماعات السيناريو الحوارية متسقة مع خيارات أحداثها وشخصيات الشركة', () => {
-  const dialogues = scenario.events.filter((e) => e.dialogue);
-  assert.ok(dialogues.length >= 2);
+  const dialogues = [...scenario.events, ...scenario.randomEvents].filter((e) => e.dialogue);
+  assert.ok(dialogues.length >= 21);
   for (const e of dialogues) assert.deepEqual(validateDialogueSpec(e, company.people), [], e.id);
 });
 
@@ -408,4 +408,57 @@ test('الإصدار: أسبوع الجودة يضع الإصلاح على خا�
 test('الإصدار: عدم الحسم ينتهي بالإطلاق في الموعد بأخطائه (متسق مع فوات الموعد)', () => {
   const { item } = simAtRelease();
   assert.equal(meetingResult(playOffline(item, ['كل الخيارات لها مزايا وعيوب، والأمر يحتاج تفكيرًا.'])).optionId, 'launch_now');
+});
+
+// ——— المحادثات الحرة (المراسلات خارج الاجتماعات) ———
+
+const itemAt = (eventId, day, seed = 3) => {
+  const sim = new Simulation({ company, scenario, seed });
+  while (sim.day < day) sim.endDay();
+  return { sim, item: sim.inbox().find((i) => i.eventId === eventId) };
+};
+
+test('كل الرسائل والشكاوى المجدولة صارت محادثات حرة بجولتين', () => {
+  const msgs = [...scenario.events, ...scenario.randomEvents].filter((e) => ['message', 'complaint'].includes(e.type));
+  assert.ok(msgs.length >= 16);
+  for (const e of msgs) {
+    assert.equal(e.dialogue?.mode, 'chat', e.id);
+    assert.equal(e.dialogue.maxRounds, 2, e.id);
+  }
+});
+
+test('شكوى الأفق: المحادثة مع العميل نفسه (جهة خارجية) لا مع من نقل الشكوى', () => {
+  const { item } = itemAt('d1_ufuq_complaint', 1);
+  assert.deepEqual(item.dialogue.participants, ['ufuq_contact']);
+  assert.ok(company.people.find((p) => p.id === 'ufuq_contact').external);
+  const good = meetingResult(playOffline(item, [
+    'أفهم أن تعطل التقارير في نهاية الشهر يؤثر على اجتماع إدارتكم. أخبرني: أي التقارير تتعطل ومتى بالتحديد؟',
+    'سأراجع الأمر مع الفريق وأتواصل معك بتحديث يوم الأحد، ونبحث حلًا مؤقتًا لنهاية الشهر.',
+  ]));
+  assert.equal(good.optionId, 'call_and_plan');
+  const promise = meetingResult(playOffline(item, ['نعتذر جدًا، أعدك بإصلاح المشكلة خلال 10 أيام.']));
+  assert.equal(promise.optionId, 'promise_date');
+  const weak = meetingResult(playOffline(item, ['نعتذر عن الإزعاج.']));
+  assert.equal(weak.optionId, 'escalate', 'العميل يطلب التحدث مع المدير');
+});
+
+test('سؤال فهد عن البيانات: السؤال المحدد يكشف الأرقام، والقرار يُبنى عليها', () => {
+  const { item } = itemAt('d12_churn_pattern', 12);
+  let m = openMeeting(item);
+  const q = 'في أي خطوة من الإعداد يتوقفون؟ وهل استوردوا جهات الاتصال؟';
+  m = applyTurn(m, q, offlineTurn(item.dialogue, m, q));
+  assert.ok(m.transcript.some((l) => l.speaker === 'analyst' && /7 من كل 10/.test(l.text)), 'فهد يكشف الأرقام عند السؤال المحدد');
+  const a = 'سنحسن رحلة التهيئة لتسهيل استيراد جهات الاتصال، ونضيفها لخارطة الطريق.';
+  m = applyTurn(m, a, offlineTurn(item.dialogue, m, a));
+  m = applyTurn(m, '', offlineClose(item.dialogue, m), { closing: true });
+  assert.equal(meetingResult(m).optionId, 'onboarding');
+});
+
+test('المحادثات تُقيَّم في مهارة التواصل بنسبة النقاط المحققة', () => {
+  const { sim, item } = itemAt('d18_dev_burnout', 18);
+  const r = meetingResult(playOffline(item, ['ما الذي يتعبك بالتحديد؟ أريد أن أفهم.']));
+  sim.respond(item.id, r.optionId, { rationale: r.rationale, transcript: r.transcript, addressed: r.addressed });
+  const act = sim.actions.at(-1);
+  assert.deepEqual(act.addressed, ['listen']);
+  assert.equal(act.concernsTotal, 2);
 });

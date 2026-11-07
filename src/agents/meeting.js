@@ -211,6 +211,7 @@ export function validateDialogueSpec(event, people) {
   const options = new Set(event.options.map((o) => o.id));
   const parts = new Set(spec.participants);
   if (!parts.has(spec.chair)) problems.push('رئيس الاجتماع ليس من المشاركين');
+  if (spec.mode && !['chat', 'meeting'].includes(spec.mode)) problems.push(`نوع حوار غير معروف: ${spec.mode}`);
   for (const p of spec.participants) if (!ids.has(p)) problems.push(`مشارك غير معروف: ${p}`);
   for (const l of spec.opening) if (!parts.has(l.speaker)) problems.push(`متحدث في الافتتاح ليس مشاركًا: ${l.speaker}`);
   for (const c of spec.concerns) {

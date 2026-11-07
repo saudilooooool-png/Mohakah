@@ -170,7 +170,9 @@ async function meetingStep(itemId, message, { closing = false } = {}) {
     const opt = session.respond(itemId, r.optionId, r.rationale, { transcript: r.transcript, addressed: r.addressed, mode: r.mode });
     delete meetings[itemId]; saveMeetings();
     delete drafts[itemId]; saveDrafts();
-    toast(`انتهى الاجتماع: ${opt.label}`, r.addressed.length >= 2 ? 'good' : 'bad');
+    const isChat = item.dialogue.mode === 'chat';
+    const good = r.addressed.length >= Math.min(2, item.dialogue.concerns.length);
+    toast(`${isChat ? 'انتهت المحادثة' : 'انتهى الاجتماع'}: ${opt.label}`, good ? 'good' : 'bad');
     render();
     return;
   }

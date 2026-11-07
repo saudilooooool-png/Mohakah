@@ -21,14 +21,19 @@ async function run(viewport, tag) {
   await page.waitForSelector('.hero');
   await snap('1-desk');
 
-  // قرار: شكوى العميل
+  // محادثة حرة: شكوى العميل (مع العميل نفسه)
   await page.goto(`${BASE}#/inbox`);
   await page.locator('.inbox-list .item').first().click();
-  await page.locator('.opt').first().click();
-  await page.fill('#why', 'العميل استراتيجي ويجب أن أفهم المشكلة منه مباشرة قبل أي وعد.');
-  await snap('2-decision');
-  await page.getByRole('button', { name: 'اعتماد القرار' }).click();
-  await page.waitForSelector('.outcome');
+  await page.getByRole('button', { name: 'ابدأ المحادثة' }).click();
+  await page.waitForSelector('.minutes .bubble');
+  await page.fill('#say', 'أفهم أن تعطل التقارير في نهاية الشهر يؤثر على اجتماع إدارتكم. أخبرني: أي التقارير تتعطل ومتى؟ وسأتواصل معك بتحديث يوم الأحد بعد مراجعة الفريق، ونبحث حلًا مؤقتًا.');
+  await snap('2-chat');
+  await page.getByRole('button', { name: 'إرسال' }).click();
+  await page.waitForSelector('.bubble.me');
+  await page.getByRole('button', { name: 'إنهاء المحادثة' }).click();
+  await page.waitForSelector('.outcome', { timeout: 15000 });
+  const chatOutcome = await page.locator('.outcome h3').textContent();
+  if (!chatOutcome.includes('نتيجة المحادثة')) errors.push(`[${tag}] نتيجة محادثة غير متوقعة: ${chatOutcome}`);
 
   // مستند: تحليل التقارير
   await page.goto(`${BASE}#/inbox`);
@@ -71,7 +76,7 @@ async function run(viewport, tag) {
   async function playMeeting(title, text, expected, shotPrefix) {
     await page.goto(`${BASE}#/meetings`);
     await page.locator('.item', { hasText: title }).click();
-    await page.getByRole('button', { name: 'ادخل الاجتماع' }).click();
+    await page.getByRole('button', { name: /ادخل الاجتماع|ابدأ المحادثة/ }).click();
     await page.waitForSelector('.minutes .bubble');
     if (shotPrefix) await snap(`${shotPrefix}-open`);
     await page.fill('#say', text);
@@ -79,7 +84,7 @@ async function run(viewport, tag) {
     await page.waitForSelector('.bubble.me');
     await page.waitForSelector('.concern.ok');
     if (shotPrefix) await snap(`${shotPrefix}-round`);
-    await page.getByRole('button', { name: 'اختتام الاجتماع' }).click();
+    await page.getByRole('button', { name: /اختتام الاجتماع|إنهاء المحادثة/ }).click();
     await page.waitForSelector('.outcome', { timeout: 15000 });
     const outcome = await page.locator('.outcome h3').textContent();
     if (!outcome.includes(expected)) errors.push(`[${tag}] نتيجة غير متوقعة في «${title}»: ${outcome}`);
