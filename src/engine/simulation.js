@@ -16,8 +16,9 @@ export class Simulation {
    * @param {object} opts.scenario  سيناريو الدور (data/scenarios/*.json)
    * @param {number} [opts.seed]    بذرة العالم — نفس البذرة = نفس الأحداث العشوائية
    */
-  constructor({ company, scenario, seed = 1 }) {
+  constructor({ company, scenario, seed = 1, occupations = null }) {
     this.seed = seed;
+    this.occupations = occupations;
     this.companyData = company;
     this.scenario = scenario;
     this.rngEvents = createRng(seed * 7919 + 1);

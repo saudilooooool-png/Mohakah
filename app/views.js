@@ -1,4 +1,5 @@
 // شاشات بيئة العمل. كل دالة تعيد HTML من حالة المحرك الحالية.
+import { roleOccupation } from '../src/occupations.js';
 import {
   esc, fmt, sar, delta, words, PRIORITY, TYPE, STATUS, dueLabel, avatar, icon, typeIcon,
   lineChart, ring, bar, weekday, weekOf,
@@ -92,6 +93,7 @@ export function welcome(world, hasSave) {
         </div>
         <dl>
           <dt>الوظيفة</dt><dd>${esc(sc.role)}</dd>
+          ${occupationRow(world.occupations, sc.roleId)}
           <dt>المدير المباشر</dt><dd>${esc(mgr?.name)} — ${esc(mgr?.title)}</dd>
           <dt>فريقك</dt><dd>${esc(team.join('، '))}</dd>
           <dt>المدة</dt><dd>${sc.lengthDays} يوم عمل (${Math.ceil(sc.lengthDays / 5)} أسابيع، من الأحد إلى الخميس) · كل يوم جلسة عمل واحدة</dd>
@@ -481,6 +483,7 @@ export function report(session) {
         <div class="muted small">MOHAKI · Professional Record</div>
         <h2 style="font-size:20px;margin:2px 0 4px">${esc(r.role)}</h2>
         <p class="muted" style="margin:0 0 12px">${esc(r.company)} · بذرة العالم <span class="num">${session.seed}</span></p>
+        ${r.occupation ? occupationBlock(r.occupation) : ''}
         <p style="margin:0 0 6px"><b>نقاط القوة:</b> ${r.strengths.map(esc).join('، ')}</p>
         <p style="margin:0 0 6px"><b>للتطوير:</b> ${r.toImprove.map(esc).join('، ')}</p>
         <p style="margin:0" class="small"><b>توصية التطور:</b> ${esc(r.recommendation)}</p>
@@ -627,4 +630,29 @@ function meetingRoom(session, item, ui) {
         ${ui.meetingNote ? `<span class="muted small">${esc(ui.meetingNote)}</span>` : ''}
       </div>
     </form>`}`;
+}
+
+// ——— التصنيف السعودي الموحد للمهن ———
+
+function occupationRow(data, roleId) {
+  const o = data && roleId ? roleOccupation(data, roleId) : null;
+  if (!o) return '';
+  return `<dt>التصنيف السعودي</dt><dd>${occupationLabel(o)}</dd>`;
+}
+
+function occupationLabel(o) {
+  const name = o.code ? `<span class="num">${esc(o.code)}</span> ${esc(o.titleAr ?? '')}` : `المجموعة <span class="num">${esc(o.unitGroup)}</span>`;
+  return `${name} <span class="pill ${o.status === 'official' ? 's-done' : 'p-high'}">${esc(o.statusLabel)}</span>`;
+}
+
+function occupationBlock(o) {
+  return `<div class="occupation">
+    <div class="small"><b>وفق التصنيف السعودي الموحد للمهن:</b> ${occupationLabel(o)}</div>
+    <details class="small"><summary>المصدر وملاحظات التصنيف</summary>
+      <p>المجموعة الأولية <span class="num">${esc(o.unitGroup)}</span> (ISCO-08: ${esc(o.unitGroupTitle ?? '')}).</p>
+      ${o.source ? `<p>المصدر: ${o.source.url ? `<a href="${esc(o.source.url)}" target="_blank" rel="noopener">${esc(o.source.title)}</a>` : esc(o.source.title)}${o.source.decision ? ` · ${esc(o.source.decision)}` : ''}${o.source.official ? '' : ' (غير رسمي)'}</p>` : ''}
+      ${o.note ? `<p>${esc(o.note)}</p>` : ''}
+      ${o.saudization ? `<p>التوطين: <span class="num">${Math.round(o.saudization.rate * 100)}%</span> ابتداءً من <span class="num">${esc(o.saudization.effective)}</span>.</p>` : ''}
+    </details>
+  </div>`;
 }

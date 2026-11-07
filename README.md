@@ -22,11 +22,13 @@
 | [`docs/06-reference-projects.md`](docs/06-reference-projects.md) | ما تعلمناه من المشاريع المشابهة على GitHub |
 | [`docs/07-roadmap.md`](docs/07-roadmap.md) | خطة بناء الـMVP والخطوات التالية |
 | [`docs/08-ai-agents.md`](docs/08-ai-agents.md) | وكلاء الذكاء الاصطناعي والاجتماعات الحوارية |
+| [`docs/10-occupations.md`](docs/10-occupations.md) | ربط الوظائف بالتصنيف السعودي الموحد للمهن، مع حالة التحقق والمصادر الرسمية |
 | [`docs/09-saudi-market-validation.md`](docs/09-saudi-market-validation.md) | التحقق من الواقع السعودي، والمصادر والقنوات القابلة للدمج، والمتطلبات النظامية |
 | `data/companies/nova-tech.json` | بيانات الشركة (حالة أولية قابلة للتعديل دون برمجة) |
 | `data/scenarios/pm-first-30-days.json` | أحداث وقرارات ومخرجات أول 30 يومًا |
 | `src/engine/` | محرك المحاكاة (JavaScript دون أي اعتماديات خارجية) |
 | `app/` | واجهة العمل الداخلية (HTML/CSS/JS دون أي اعتماديات أو خطوة بناء) |
+| `data/occupations/ssco.json` | رموز التصنيف السعودي الموحد للمهن لوظائف محاكي، مع المصادر وحالة التحقق |
 | `src/agents/` | وكلاء الذكاء الاصطناعي: منطق الاجتماع الحواري، وتعليمات الوكلاء، والاتصال بـClaude |
 
 ## التشغيل

@@ -1,12 +1,12 @@
 // عرض توضيحي: متدرب افتراضي يعيش أول 30 يومًا كمدير منتجات في NOVA TECH.
 // الاستخدام: npm run demo  [-- --seed 7 --quiet]
-import { Simulation, loadCompany, loadScenario } from '../src/index.js';
+import { Simulation, loadCompany, loadScenario, loadOccupations } from '../src/index.js';
 
 const args = process.argv.slice(2);
 const seed = Number(args[args.indexOf('--seed') + 1]) || 7;
 const quiet = args.includes('--quiet');
 
-const sim = new Simulation({ company: loadCompany('nova-tech'), scenario: loadScenario('pm-first-30-days'), seed });
+const sim = new Simulation({ company: loadCompany('nova-tech'), scenario: loadScenario('pm-first-30-days'), seed, occupations: loadOccupations() });
 
 // مستندات نموذجية يسلّمها المتدرب (في المنتج الحقيقي يكتبها في محرر المستندات)
 const DOCS = {
@@ -85,6 +85,10 @@ const r = sim.report();
 const { you, baselineNoActions: base } = r.companyOutcome;
 console.log(`\n════ MOHAKI · السجل المهني ════`);
 console.log(`${r.role} · ${r.company} · ${r.daysWorked} يوم عمل · بذرة العالم ${seed}`);
+if (r.occupation) {
+  const o = r.occupation;
+  console.log(`التصنيف السعودي الموحد للمهن: ${o.code ?? `المجموعة ${o.unitGroup}`}${o.titleAr ? ` — ${o.titleAr}` : ''} (${o.statusLabel})`);
+}
 console.log(`التقييم الإجمالي: ${r.overall}/100\n`);
 for (const s of r.skills) console.log(`  ${s.label.padEnd(24)} ${s.score === null ? '—' : s.score + '%'}`);
 console.log(`\nنقاط القوة: ${r.strengths.join('، ')}`);

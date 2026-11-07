@@ -10,11 +10,12 @@ export async function loadWorld() {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario] = await Promise.all([
+  const [company, scenario, occupations] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
+    get('../data/occupations/ssco.json'),
   ]);
-  return { company, scenario };
+  return { company, scenario, occupations };
 }
 
 function readSave() {
@@ -31,7 +32,7 @@ export class Session {
     this.seed = save.seed;
     this.startedAt = save.startedAt;
     this.log = [];
-    this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed });
+    this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
     }

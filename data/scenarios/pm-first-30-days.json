@@ -2,6 +2,7 @@
  "id": "pm-first-30-days",
  "company": "nova-tech",
  "role": "Product Manager — المستوى المبتدئ",
+ "roleId": "product-manager",
  "manager": "cpo",
  "team": [
   "ux",

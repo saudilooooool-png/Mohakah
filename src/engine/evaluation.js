@@ -1,6 +1,7 @@
 // التقييم المهني: كل درجة مرتبطة بأدلة (بنود صندوق العمل، القرارات، المخرجات، ومؤشرات الشركة).
 // لا توجد درجة يصدرها نموذج لغوي دون دليل محفوظ يمكن الرجوع إليه.
 import { snapshot } from './economy.js';
+import { roleOccupation } from '../occupations.js';
 
 const pct = (x) => Math.round(Math.max(0, Math.min(1, x)) * 100);
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
@@ -69,6 +70,8 @@ export function buildReport(sim, runBaseline) {
 
   return {
     role: sim.scenario.role,
+    // الوظيفة وفق التصنيف السعودي الموحد للمهن (مع حالة التحقق ومصدرها)
+    occupation: sim.occupations && sim.scenario.roleId ? roleOccupation(sim.occupations, sim.scenario.roleId) : null,
     company: sim.companyData.name,
     daysWorked: sim.history.length - 1,
     overall,
