@@ -1,5 +1,6 @@
 // شاشات بيئة العمل. كل دالة تعيد HTML من حالة المحرك الحالية.
 import { roleOccupation } from '../src/occupations.js';
+import { canMessage, DAILY_LIMIT } from '../src/agents/colleague.js';
 import {
   esc, fmt, sar, delta, words, PRIORITY, TYPE, STATUS, dueLabel, avatar, icon, typeIcon,
   lineChart, ring, bar, weekday, weekOf,
@@ -334,10 +335,11 @@ export function team(session) {
       ${t !== undefined ? `<div class="barrow"><span>ثقته بك</span><span class="num">${Math.round(t)}</span>${bar(t)}</div>`
         : '<div class="muted small">لم تتعامل معه مباشرة بعد.</div>'}
       <div class="tag-list" style="margin-top:10px">${(p.cares ?? []).map((c) => `<span class="pill t-pill">${esc(c)}</span>`).join('')}</div>
+      ${canMessage(p) ? `<div class="actions" style="margin-top:12px"><a class="btn sm" href="#/team/${esc(p.id)}">راسل ${esc(firstName(p))}${session.thread(p.id).length ? ` <span class="muted num">(${session.thread(p.id).length})</span>` : ''}</a></div>` : ''}
     </div></section>`;
   };
   return `
-  <div class="page-h"><div><h1>فريقي</h1><p>كل شخص في الشركة له أولوياته. الثقة تُبنى بالقرارات وتُفقد بالتجاهل والوعود غير المنفذة.</p></div></div>
+  <div class="page-h"><div><h1>فريقي</h1><p>كل شخص في الشركة له أولوياته. الثقة تُبنى بالقرارات وتُفقد بالتجاهل والوعود غير المنفذة. ويمكنك مراسلة أي زميل في أي وقت لتسأله عمّا يعرفه.</p></div></div>
   <h2 class="section-t">مديرك وفريقك المباشر</h2>
   <div class="grid g-2">${direct.map(card).join('')}</div>
   <h2 class="section-t" style="margin-top:24px">بقية الشركة</h2>
@@ -674,5 +676,55 @@ function occupationBlock(o, skills = []) {
       ${o.note ? `<p>${esc(o.note)}</p>` : ''}
       ${o.saudization ? `<p>التوطين: <span class="num">${Math.round(o.saudization.rate * 100)}%</span> ابتداءً من <span class="num">${esc(o.saudization.effective)}</span>.</p>` : ''}
     </details>
+  </div>`;
+}
+
+// ——— مراسلة زميل ———
+
+const firstName = (p) => (p.name || '').replace(/^(م\.|أ\.)\s*/, '').split(' ')[0];
+
+export function colleagueChat(session, person, ui = {}) {
+  const sim = session.sim;
+  if (!canMessage(person)) return `<section class="card"><div class="empty"><b>لا يمكن مراسلة هذا الشخص</b><a href="#/team">العودة إلى فريقي</a></div></section>`;
+  const thread = session.thread(person.id);
+  const left = DAILY_LIMIT - session.sentToday(person.id);
+  const pending = ui.pendingColleague === person.id;
+  const disabled = pending || left <= 0 || sim.finished;
+  const t = sim.state.player.trust[person.id];
+  const topics = [...new Set((person.knowledge ?? []).map((k) => k.keywords[0]))].slice(0, 5);
+  let lastDay = null;
+  const bubbles = thread.map((m) => {
+    const sep = m.day !== lastDay ? `<div class="day-sep"><span>يوم العمل ${m.day}</span></div>` : '';
+    lastDay = m.day;
+    const me = m.speaker === 'trainee';
+    return `${sep}<div class="bubble ${me ? 'me' : ''}">${me ? '<span class="avatar sm me-av" aria-hidden="true">أنت</span>' : avatar(person, 'sm')}
+      <div><div class="who">${me ? 'أنت' : esc(person.name)}</div><div class="said">${esc(m.text)}</div></div></div>`;
+  }).join('');
+  return `
+  <div class="page-h"><div><a href="#/team" class="small" style="text-decoration:none">→ فريقي</a><h1>مراسلة ${esc(person.name)}</h1><p>${esc(person.title)}</p></div>
+    <span class="pill ${ui.agentMode === 'claude' ? 'p-normal' : 't-pill'}">${ui.agentMode === 'claude' ? 'وكلاء Claude' : 'الوضع المحلي'}</span></div>
+  <div class="grid g-main">
+    <section class="card detail">
+      <div class="minutes chat-thread" data-minutes>
+        ${bubbles || `<div class="empty" style="padding:28px 12px"><b>ابدأ المراسلة</b>${esc(firstName(person))} يجيب مما يعرفه عن الشركة الآن.</div>`}
+        ${pending ? `<div class="bubble typing" aria-live="polite"><span class="dots"><i></i><i></i><i></i></span><span class="muted small">${esc(firstName(person))} يكتب…</span></div>` : ''}
+      </div>
+      <form data-form="colleague" data-person="${esc(person.id)}">
+        <div class="field">
+          <label for="msg">رسالتك <span class="muted small">· ${sim.finished ? 'انتهت فترة العمل' : left > 0 ? `متبقٍ اليوم: ${left} من ${DAILY_LIMIT}` : 'انتهت رسائل اليوم، تابع غدًا'}</span></label>
+          <textarea id="msg" name="message" rows="3" maxlength="800" data-draft="colleague:${esc(person.id)}" ${disabled ? 'disabled' : ''}
+            placeholder="${esc(topics.length ? `اسأل سؤالًا محددًا. ${firstName(person)} يعرف عن: ${topics.join('، ')}.` : 'اسأل سؤالًا محددًا.')}">${esc(ui.drafts?.[`colleague:${person.id}`] ?? '')}</textarea>
+        </div>
+        ${topics.length ? `<div class="tag-list" style="margin:8px 0">${topics.map((x) => `<button type="button" class="pill t-pill chip" data-act="suggest" data-text="${esc(`أريد أن أعرف عن ${x}`)}" ${disabled ? 'disabled' : ''}>${esc(x)}</button>`).join('')}</div>` : ''}
+        <div class="actions"><button class="btn primary" type="submit" ${disabled ? 'disabled' : ''}>إرسال</button>
+          ${ui.colleagueNote ? `<span class="muted small">${esc(ui.colleagueNote)}</span>` : ''}</div>
+      </form>
+    </section>
+    <section class="card person">${avatar(person)}<div style="flex:1;min-width:0">
+      <div class="nm">${esc(person.name)}</div><div class="ti">${esc(person.title)}</div>
+      <div class="pe">${esc(person.persona)}</div>
+      ${t !== undefined ? `<div class="barrow"><span>ثقته بك</span><span class="num">${Math.round(t)}</span>${bar(t)}</div>` : ''}
+      <p class="small muted" style="margin:12px 0 0">المراسلة لجمع المعلومات: لا تغيّر نتائج الشركة ولا تُقيَّم. القرارات تُتخذ في مهامك واجتماعاتك.</p>
+    </div></section>
   </div>`;
 }

@@ -3,6 +3,7 @@ import { Session, loadWorld } from './lib/session.js';
 import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
 import { agentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
+import { colleagueReply } from './lib/colleague-client.js';
 import { meetingResult, mustClose } from '../src/agents/meeting.js';
 
 const app = document.getElementById('app');
@@ -41,7 +42,9 @@ function render() {
   let body;
   switch (route.page) {
     case 'inbox': body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
-    case 'team': body = V.team(session); break;
+    case 'team': body = route.itemId
+      ? V.colleagueChat(session, session.person(route.itemId), { ...ui, drafts })
+      : V.team(session); break;
     case 'meetings': body = V.meetings(session); break;
     case 'files': body = V.files(session); break;
     case 'company': body = V.company(session); break;
@@ -113,6 +116,10 @@ const actions = {
     saveMeetings();
     render();
   },
+  suggest(e) {
+    const ta = app.querySelector('#msg');
+    if (ta && !ta.disabled) { ta.value = e.target.closest('[data-text]').dataset.text; ta.focus(); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+  },
   'close-meeting'(e) { closeMeeting(e.target.closest('[data-item]').dataset.item); },
   backdrop(e) { if (e.target.classList.contains('modal-back')) closeModal(); },
   'go-report'() { closeModal(); location.hash = '#/report'; },
@@ -181,6 +188,22 @@ async function meetingStep(itemId, message, { closing = false } = {}) {
   else app.querySelector('#say')?.focus();
 }
 
+async function sendToColleague(personId, message) {
+  const person = session.person(personId);
+  const day = session.sim.day;
+  session.addMessages(personId, [{ speaker: 'trainee', text: message, day }]);
+  delete drafts[`colleague:${personId}`]; saveDrafts();
+  ui.pendingColleague = personId;
+  ui.colleagueNote = '';
+  render();
+  const out = await colleagueReply(session, person, message);
+  session.addMessages(personId, [{ speaker: personId, text: out.reply, day, mode: out.mode }]);
+  if (out.fellBack) ui.colleagueNote = 'تعذر الوصول إلى Claude، فأجاب الوضع المحلي.';
+  ui.pendingColleague = null;
+  render();
+  app.querySelector('#msg')?.focus();
+}
+
 function closeMeeting(itemId) {
   meetingStep(itemId, '', { closing: true }).catch((err) => { console.error(err); toast(err.message, 'bad'); render(); });
 }
@@ -190,6 +213,13 @@ app.addEventListener('submit', (e) => {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'colleague') {
+    const personId = form.dataset.person;
+    const message = String(new FormData(form).get('message') || '').trim();
+    if (!message) return;
+    sendToColleague(personId, message).catch((err) => { console.error(err); toast(err.message, 'bad'); ui.pendingColleague = null; render(); });
+    return;
+  }
   if (form.dataset.form === 'meeting') {
     const message = String(new FormData(form).get('message') || '').trim();
     if (message.split(/\s+/).filter(Boolean).length < 3) { toast('اكتب ردًا أوضح للحاضرين.', 'bad'); return; }

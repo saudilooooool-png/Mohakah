@@ -252,6 +252,12 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 @media (max-width: 860px) { .bubble { max-width: 100%; } .att:last-child { margin-inline-start: 0; } }
 
+.chat-thread { min-height: 260px; }
+.day-sep { text-align: center; margin: 6px 0; }
+.day-sep span { font-size: 12px; color: var(--ink-3); background: #f1f4f8; padding: 2px 10px; border-radius: 99px; }
+.chip { border: 0; cursor: pointer; }
+.chip:hover { background: var(--teal-soft); color: var(--teal-ink); }
+
 /* ——— سجل الشركة ——— */
 .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .feed li { display: grid; grid-template-columns: 52px 18px 1fr; gap: 8px; align-items: baseline; padding: 6px 4px; font-size: 14px; border-bottom: 1px dashed var(--line); }

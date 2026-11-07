@@ -60,6 +60,20 @@ async function run(viewport, tag) {
   const dayText = await page.locator('.day b').textContent();
   if (!dayText.includes('2')) errors.push(`[${tag}] لم يُستعد اليوم بعد إعادة التحميل: ${dayText}`);
 
+  // مراسلة زميل من صفحة فريقي
+  await page.goto(`${BASE}#/team`);
+  await page.getByRole('link', { name: /راسل فهد/ }).click();
+  await page.waitForSelector('#msg');
+  await page.fill('#msg', 'كم نسبة استخدام التقارير الآن؟');
+  await page.getByRole('button', { name: 'إرسال' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.chat-thread .bubble:not(.me):not(.typing)').length >= 1);
+  const answer = await page.locator('.chat-thread .bubble:not(.me) .said').last().textContent();
+  if (!answer.includes('58%')) errors.push(`[${tag}] رد فهد لا يحمل بيانات الاستخدام: ${answer}`);
+  await snap('6-colleague');
+  await page.reload();
+  await page.waitForSelector('.chat-thread');
+  if ((await page.locator('.chat-thread .bubble').count()) < 2) errors.push(`[${tag}] لم تُحفظ المراسلة بعد إعادة التحميل`);
+
   for (const p of ['team', 'meetings', 'files', 'company', 'feed', 'report']) {
     await page.goto(`${BASE}#/${p}`);
     await page.waitForSelector('.page-h');

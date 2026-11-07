@@ -33,6 +33,8 @@ export class Session {
     this.seed = save.seed;
     this.startedAt = save.startedAt;
     this.log = [];
+    // مراسلات الزملاء: معلومات فقط، لا تؤثر على المحرك، فتُحفظ كما هي دون إعادة تشغيل
+    this.threads = save.threads ?? {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -66,6 +68,19 @@ export class Session {
     return this._do({ t: 'endDay' });
   }
 
+  thread(personId) { return this.threads[personId] ?? []; }
+
+  /** عدد رسائل المتدرب لزميل في يوم العمل الحالي. */
+  sentToday(personId) {
+    const day = this.sim.day;
+    return this.thread(personId).filter((m) => m.speaker === 'trainee' && m.day === day).length;
+  }
+
+  addMessages(personId, messages) {
+    this.threads[personId] = [...this.thread(personId), ...messages].slice(-200);
+    this._persist();
+  }
+
   person(id) {
     return this.world.company.people.find((p) => p.id === id)
       ?? { id, name: id, title: '' };
@@ -90,6 +105,6 @@ export class Session {
   }
 
   _persist() {
-    writeSave({ seed: this.seed, startedAt: this.startedAt, log: this.log });
+    writeSave({ seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads });
   }
 }

@@ -2,8 +2,9 @@
 // مواصفات الاجتماع والخيارات تُقرأ من ملفات السيناريو على الخادم، لا مما يرسله المتصفح.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { claudeMeetingTurn, createClaudeClient, AgentError, DEFAULT_MODEL } from './claude.js';
+import { claudeMeetingTurn, claudeColleagueReply, createClaudeClient, AgentError, DEFAULT_MODEL } from './claude.js';
 import { MAX_MESSAGE_CHARS } from './meeting.js';
+import { knowledgeFor, canMessage, MAX_COLLEAGUE_MESSAGE } from './colleague.js';
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 10) / 10 : undefined);
 const str = (v, n = 120) => (typeof v === 'string' ? v.slice(0, n) : undefined);
@@ -12,7 +13,7 @@ const str = (v, n = 120) => (typeof v === 'string' ? v.slice(0, n) : undefined);
 export function cleanContext(raw = {}) {
   const trust = {};
   for (const [k, v] of Object.entries(raw.trust ?? {}).slice(0, 20)) if (/^[a-z_]{1,24}$/.test(k) && num(v) !== undefined) trust[k] = num(v);
-  const fields = ['day', 'mrr', 'customers', 'cash', 'runwayMonths', 'productQuality', 'avgHealth', 'supportBacklog', 'morale', 'keyAccountsActive'];
+  const fields = ['day', 'mrr', 'customers', 'cash', 'runwayMonths', 'productQuality', 'avgHealth', 'supportBacklog', 'morale', 'keyAccountsActive', 'seatPrice', 'marketingBudget'];
   const out = Object.fromEntries(fields.map((f) => [f, num(raw[f])]).filter(([, v]) => v !== undefined));
   out.trust = trust;
   const r = raw.roadmap ?? {};
@@ -24,6 +25,8 @@ export function cleanContext(raw = {}) {
   out.features = Object.fromEntries(Object.entries(raw.features ?? {}).slice(0, 10)
     .map(([k, v]) => [str(k, 40), num(v)]).filter(([k, v]) => k && v !== undefined));
   out.accountsAtRisk = (Array.isArray(raw.accountsAtRisk) ? raw.accountsAtRisk : []).slice(0, 8).map((x) => str(x)).filter(Boolean);
+  out.competitors = (Array.isArray(raw.competitors) ? raw.competitors : []).slice(0, 5)
+    .map((c) => ({ name: str(c?.name, 40), seatPrice: num(c?.seatPrice) })).filter((c) => c.name && c.seatPrice !== undefined);
   out.recentDecisions = (Array.isArray(raw.recentDecisions) ? raw.recentDecisions : []).slice(0, 10).map((x) => str(x, 200)).filter(Boolean);
   return out;
 }
@@ -39,7 +42,7 @@ function cleanMeeting(raw, spec) {
   return { transcript, addressed, round, maxRounds };
 }
 
-export function createAgentApi({ root, env = process.env, client = createClaudeClient(env), turn = claudeMeetingTurn }) {
+export function createAgentApi({ root, env = process.env, client = createClaudeClient(env), turn = claudeMeetingTurn, colleagueTurn = claudeColleagueReply }) {
   const company = JSON.parse(readFileSync(join(root, 'data/companies/nova-tech.json'), 'utf8'));
   const scenario = JSON.parse(readFileSync(join(root, 'data/scenarios/pm-first-30-days.json'), 'utf8'));
   const model = env.MOHAKI_AGENT_MODEL || DEFAULT_MODEL;
@@ -67,6 +70,24 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
     });
   }
 
+  async function colleagueReply(body) {
+    if (!client) throw new AgentError('وكلاء Claude غير مفعّلين على هذا الخادم', 'offline');
+    const person = company.people.find((p) => p.id === body?.personId);
+    if (!canMessage(person)) throw new AgentError('لا يمكن مراسلة هذا الشخص', 'bad_request');
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (!message) throw new AgentError('الرسالة فارغة', 'bad_request');
+    if (message.length > MAX_COLLEAGUE_MESSAGE) throw new AgentError('الرسالة أطول من المسموح', 'bad_request');
+    const context = cleanContext(body.context);
+    const day = Math.max(1, Math.min(scenario.lengthDays, Number(context.day) || 1));
+    const thread = (Array.isArray(body.thread) ? body.thread : []).slice(-12)
+      .filter((m) => m && ['trainee', person.id].includes(m.speaker) && typeof m.text === 'string')
+      .map((m) => ({ speaker: m.speaker, text: m.text.slice(0, MAX_COLLEAGUE_MESSAGE) }));
+    return colleagueTurn(client, {
+      person, people: company.people, knowledge: knowledgeFor(person, context, day),
+      context, thread, message, saudiContext: company.saudiContext ?? null, model,
+    });
+  }
+
   /** معالج HTTP. يعيد true إذا عالج الطلب. */
   return async function handle(req, res) {
     const path = new URL(req.url, 'http://x').pathname;
@@ -75,14 +96,15 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
       res.end(JSON.stringify(data));
     };
     if (path === '/api/agents/status' && req.method === 'GET') { send(200, status()); return true; }
-    if (path === '/api/meeting/turn' && req.method === 'POST') {
+    const routes = { '/api/meeting/turn': meetingTurn, '/api/colleague/reply': colleagueReply };
+    if (routes[path] && req.method === 'POST') {
       let raw = '';
       for await (const chunk of req) {
         raw += chunk;
         if (raw.length > 100_000) { send(413, { error: 'الطلب كبير جدًا' }); return true; }
       }
       try {
-        send(200, await meetingTurn(JSON.parse(raw || '{}')));
+        send(200, await routes[path](JSON.parse(raw || '{}')));
       } catch (err) {
         const code = err instanceof AgentError ? (err.code === 'bad_request' ? 400 : 502) : 500;
         if (!(err instanceof AgentError)) console.error(err);

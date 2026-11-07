@@ -1,7 +1,8 @@
 // وكلاء الاجتماع عبر Claude (يعمل على الخادم فقط — مفتاح API لا يصل إلى المتصفح).
 import Anthropic from '@anthropic-ai/sdk';
-import { MEETING_SYSTEM, meetingUserPrompt } from './prompts.js';
+import { MEETING_SYSTEM, meetingUserPrompt, COLLEAGUE_SYSTEM, colleagueUserPrompt } from './prompts.js';
 import { turnSchema, sanitizeTurn } from './meeting.js';
+import { colleagueSchema, sanitizeColleagueReply } from './colleague.js';
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
@@ -25,6 +26,45 @@ export function createClaudeClient(env = process.env) {
   }
 }
 
+/** طلب واحد إلى Claude بمخرجات منظمة، مع معالجة الرفض والأخطاء. يعيد { raw, model }. */
+async function structuredCall(client, { model, effort, system, user, schema }) {
+  let response;
+  try {
+    response = await client.beta.messages.create({
+      model,
+      max_tokens: 16000,
+      // عند رفض مصنّفات الأمان، يعيد الخادم الطلب على النموذج البديل الموصى به
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort, format: { type: 'json_schema', schema } },
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: user }],
+    });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw new AgentError('بيانات اعتماد Claude غير صالحة', 'auth');
+    if (err instanceof Anthropic.RateLimitError) throw new AgentError('تجاوز حد الطلبات', 'rate_limit');
+    if (err instanceof Anthropic.APIError) throw new AgentError(`خطأ من واجهة Claude (${err.status ?? 'اتصال'})`, 'api');
+    throw err;
+  }
+  if (response.stop_reason === 'refusal') throw new AgentError('رفض النموذج إكمال الرد', 'refusal');
+  if (response.stop_reason === 'max_tokens') throw new AgentError('انقطع رد النموذج', 'max_tokens');
+  const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+  try { return { raw: JSON.parse(text), model: response.model }; } catch { throw new AgentError('رد النموذج ليس JSON صالحًا', 'invalid_json'); }
+}
+
+/** رد زميل على رسالة المتدرب (مراسلة من صفحة فريقي). */
+export async function claudeColleagueReply(client, {
+  person, people, knowledge, context, thread, message, saudiContext = null,
+  model = process.env.MOHAKI_AGENT_MODEL || DEFAULT_MODEL,
+  effort = process.env.MOHAKI_AGENT_EFFORT || 'low',
+}) {
+  const { raw, model: served } = await structuredCall(client, {
+    model, effort, system: COLLEAGUE_SYSTEM, schema: colleagueSchema(),
+    user: colleagueUserPrompt({ person, people, knowledge, context, thread, message, saudiContext }),
+  });
+  try { return { ...sanitizeColleagueReply(raw), model: served }; } catch (err) { throw new AgentError(err.message, 'invalid_turn'); }
+}
+
 /**
  * جولة اجتماع واحدة. يعيد ردًا تم التحقق منه بمواصفات السيناريو.
  * @param {Anthropic} client
@@ -35,39 +75,12 @@ export async function claudeMeetingTurn(client, {
   effort = process.env.MOHAKI_AGENT_EFFORT || 'low',
 }) {
   const optionIds = options.map((o) => o.id);
-  let response;
+  const { raw, model: served } = await structuredCall(client, {
+    model, effort, system: MEETING_SYSTEM, schema: turnSchema(spec, optionIds, { closing }),
+    user: meetingUserPrompt({ spec, options, people, context, meeting, message, closing, saudiContext }),
+  });
   try {
-    response = await client.beta.messages.create({
-      model,
-      max_tokens: 16000,
-      // عند رفض مصنّفات الأمان، يعيد الخادم الطلب على النموذج البديل الموصى به
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      // الحوار تفاعلي ويحتاج سرعة: جهد منخفض يكفي لأداء الشخصيات والحكم بالمعيار
-      output_config: {
-        effort,
-        format: { type: 'json_schema', schema: turnSchema(spec, optionIds, { closing }) },
-      },
-      system: [{ type: 'text', text: MEETING_SYSTEM, cache_control: { type: 'ephemeral' } }],
-      messages: [{
-        role: 'user',
-        content: meetingUserPrompt({ spec, options, people, context, meeting, message, closing, saudiContext }),
-      }],
-    });
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new AgentError('بيانات اعتماد Claude غير صالحة', 'auth');
-    if (err instanceof Anthropic.RateLimitError) throw new AgentError('تجاوز حد الطلبات', 'rate_limit');
-    if (err instanceof Anthropic.APIError) throw new AgentError(`خطأ من واجهة Claude (${err.status ?? 'اتصال'})`, 'api');
-    throw err;
-  }
-
-  if (response.stop_reason === 'refusal') throw new AgentError('رفض النموذج إكمال الرد', 'refusal');
-  if (response.stop_reason === 'max_tokens') throw new AgentError('انقطع رد النموذج', 'max_tokens');
-  const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-  let raw;
-  try { raw = JSON.parse(text); } catch { throw new AgentError('رد النموذج ليس JSON صالحًا', 'invalid_json'); }
-  try {
-    return { ...sanitizeTurn(spec, optionIds, raw, { closing }), model: response.model };
+    return { ...sanitizeTurn(spec, optionIds, raw, { closing }), model: served };
   } catch (err) {
     throw new AgentError(err.message, 'invalid_turn');
   }
