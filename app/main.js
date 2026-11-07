@@ -4,6 +4,7 @@ import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
 import { agentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
 import { colleagueReply } from './lib/colleague-client.js';
+import { account, debouncedSaver } from './lib/account.js';
 import { meetingResult, mustClose } from '../src/agents/meeting.js';
 
 const app = document.getElementById('app');
@@ -12,6 +13,17 @@ const toastRoot = document.getElementById('toast-root');
 
 let world = null;
 let session = null;
+let user = null;
+const saver = debouncedSaver();
+let verifyState = { loading: true };
+
+/** يربط الجلسة بالحساب: كل حفظ محلي يُرفع إلى الخادم (مؤجلًا). */
+function attach(s) {
+  if (!s) return s;
+  s.user = user;
+  s.onSave = user ? (data) => saver.save(data) : null;
+  return s;
+}
 const DRAFT_KEY = 'mohaki.drafts.v1';
 let drafts = {};
 try { drafts = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); } catch { drafts = {}; }
@@ -29,16 +41,25 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  return { page: V.NAV.some((n) => n.id === page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
+  const extra = ['account', 'verify'];
+  return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
 function render() {
+  const route = parseRoute();
+  // صفحة التحقق عامة: تعمل دون حساب ودون جلسة
+  if (route.page === 'verify') {
+    app.innerHTML = V.verifyPage(verifyState);
+    document.title = verifyState.record?.name ? `سجل ${verifyState.record.name} — محاكي` : 'التحقق من سجل — محاكي';
+    return;
+  }
   if (!session) {
-    app.innerHTML = V.welcome(world, Session.hasSave());
+    app.innerHTML = route.page === 'account' && user
+      ? `<div class="content" style="margin:0 auto">${V.accountPage(null, user)}<p><a href="#/desk">← العودة</a></p></div>`
+      : V.welcome(world, Session.hasSave(), user);
     document.title = 'محاكي — ابدأ يومك الوظيفي';
     return;
   }
-  const route = parseRoute();
   let body;
   switch (route.page) {
     case 'inbox': body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
@@ -50,6 +71,7 @@ function render() {
     case 'company': body = V.company(session); break;
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session); break;
+    case 'account': body = V.accountPage(session, user); break;
     default: body = V.desk(session);
   }
   const keepScroll = route.page === 'inbox' ? window.scrollY : 0;
@@ -73,7 +95,7 @@ function toast(text, tone = 'info') {
 
 function openModal(html) {
   modalRoot.innerHTML = `<div class="modal-back" data-act="backdrop"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
-  modalRoot.querySelector('.modal button, .modal a')?.focus();
+  (modalRoot.querySelector('.modal input:not([type=checkbox]), .modal textarea') ?? modalRoot.querySelector('.modal button, .modal a'))?.focus();
 }
 function closeModal() { modalRoot.innerHTML = ''; }
 
@@ -87,21 +109,69 @@ function nextOpenItemHref() {
 const actions = {
   start() {
     Session.clear();
+    session = null;
     drafts = {}; saveDrafts();
     for (const k of Object.keys(meetings)) delete meetings[k];
     saveMeetings();
-    session = Session.start(world);
+    session = attach(Session.start(world));
+    if (user) saver.save(session.saveData());
     location.hash = '#/desk';
     render();
   },
   resume() {
-    session = Session.resume(world);
+    session = attach(Session.resume(world));
     if (!location.hash) location.hash = '#/desk';
     render();
   },
   reset() { openModal(V.resetConfirm()); },
   'confirm-reset'() { closeModal(); session = null; actions.start(); },
-  'end-day'() { openModal(V.endDayConfirm(session)); },
+  'end-day'() {
+    // الضيف يجرب يومه الأول، ثم يُطلب منه إنشاء حساب ليكمل (تقدمه محفوظ وينتقل للحساب)
+    if (!user && session.sim.day >= 2) { openModal(V.guestWall()); return; }
+    openModal(V.endDayConfirm(session));
+  },
+  'open-auth'(e) { openModal(V.authModal(e.target.closest('[data-mode]').dataset.mode)); },
+  async logout() {
+    await account.logout().catch(() => {});
+    user = null;
+    Session.clear(); // جهاز مشترك: لا يبقى تقدم الحساب في المتصفح بعد الخروج
+    session = null;
+    location.hash = '';
+    render();
+    toast('سُجّل خروجك.');
+  },
+  'delete-account'() { openModal(V.deleteConfirm()); },
+  async 'confirm-delete'() {
+    await account.remove();
+    closeModal();
+    user = null; Session.clear(); session = null;
+    location.hash = '';
+    render();
+    toast('حُذف حسابك وبياناتك.', 'good');
+  },
+  async 'toggle-sharing'(e) {
+    try {
+      user = await account.update({ consents: { employerSharing: e.target.checked } });
+      if (session) session.user = user;
+      toast(e.target.checked ? 'فُعّلت مشاركة سجلك مع جهات التوظيف الشريكة.' : 'سُحبت موافقة المشاركة.', 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+    render();
+  },
+  async 'issue-record'() {
+    try {
+      await saver.flush();
+      await account.saveProgress(session.saveData());
+      const rec = await account.issueRecord();
+      session.issuedRecord = rec;
+      user = await account.me(); session.user = user;
+      toast(`صدر سجلك الموثّق ${rec.code}`, 'good');
+      render();
+    } catch (err) { toast(err.message, 'bad'); }
+  },
+  async 'copy-verify'(e) {
+    const url = `${location.origin}${location.pathname}#/verify/${e.target.closest('[data-code]').dataset.code}`;
+    try { await navigator.clipboard.writeText(url); toast('نُسخ رابط التحقق.', 'good'); } catch { toast(url); }
+  },
   'confirm-end-day'() {
     const day = session.sim.day;
     session.endDay();
@@ -188,6 +258,25 @@ async function meetingStep(itemId, message, { closing = false } = {}) {
   else app.querySelector('#say')?.focus();
 }
 
+async function submitAuth(form) {
+  const f = new FormData(form);
+  const register = form.dataset.mode === 'register';
+  user = register
+    ? await account.register({
+      name: f.get('name'), email: f.get('email'), password: f.get('password'),
+      profile: { university: f.get('university'), major: f.get('major'), graduationYear: f.get('graduationYear'), city: f.get('city') },
+      consents: { processing: f.get('processing') === 'on', employerSharing: f.get('employerSharing') === 'on' },
+    })
+    : await account.login(f.get('email'), f.get('password'));
+  closeModal();
+  // الدخول لحساب له تقدم سابق: يُعتمد تقدم الحساب. وإلا يُرفع تقدم الضيف الحالي إلى الحساب.
+  const remote = register ? null : await account.progress().catch(() => null);
+  if (remote) session = attach(Session.fromSave(world, remote));
+  else if (session) { attach(session); await account.saveProgress(session.saveData()); }
+  toast(register ? `أهلًا ${user.name}! حسابك جاهز وتقدمك محفوظ.` : `مرحبًا بعودتك ${user.name}.`, 'good');
+  render();
+}
+
 async function sendToColleague(personId, message) {
   const person = session.person(personId);
   const day = session.sim.day;
@@ -208,11 +297,22 @@ function closeMeeting(itemId) {
   meetingStep(itemId, '', { closing: true }).catch((err) => { console.error(err); toast(err.message, 'bad'); render(); });
 }
 
-app.addEventListener('submit', (e) => {
+function onSubmit(e) {
   const form = e.target.closest('form[data-form]');
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'auth') {
+    submitAuth(form).catch((err) => openModal(V.authModal(form.dataset.mode, err.message)));
+    return;
+  }
+  if (form.dataset.form === 'profile') {
+    const f = new FormData(form);
+    account.update({ name: f.get('name'), profile: { university: f.get('university'), major: f.get('major'), graduationYear: f.get('graduationYear'), city: f.get('city') } })
+      .then((u) => { user = u; if (session) session.user = u; toast('حُفظ ملفك.', 'good'); render(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'colleague') {
     const personId = form.dataset.person;
     const message = String(new FormData(form).get('message') || '').trim();
@@ -250,16 +350,45 @@ app.addEventListener('submit', (e) => {
     toast(err.message, 'bad');
     render();
   }
-});
+}
+app.addEventListener('submit', onSubmit);
+modalRoot.addEventListener('submit', onSubmit);
 
-window.addEventListener('hashchange', () => { if (session) render(); });
+async function loadVerify() {
+  const route = parseRoute();
+  if (route.page !== 'verify') return;
+  verifyState = { loading: true };
+  render();
+  try { verifyState = { record: await account.record(route.itemId) }; } catch (err) { verifyState = { error: err.message }; }
+  render();
+}
+
+// إغلاق الصفحة أو إخفاؤها (الجوال): يُرسل الحفظ المؤجل فورًا
+window.addEventListener('pagehide', () => saver.flush({ keepalive: true }));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saver.flush({ keepalive: true }); });
+
+window.addEventListener('hashchange', () => {
+  if (parseRoute().page === 'verify') { loadVerify(); return; }
+  render();
+});
 
 // ——— الإقلاع ———
 (async function boot() {
   try {
     world = await loadWorld();
     agentStatus().then((st) => { ui.agentMode = st.mode; if (session) render(); });
-    if (Session.hasSave() && location.hash) session = Session.resume(world);
+    if (parseRoute().page === 'verify') { await loadVerify(); return; }
+    user = await account.me();
+    if (user) {
+      const remote = await account.progress().catch(() => null);
+      const local = Session.localSave();
+      // تُعتمد النسخة الأكثر تقدمًا: قد تكون نسخة المتصفح أحدث إذا أُغلقت الصفحة قبل اكتمال الرفع
+      const localIsAhead = local && (!remote || (local.seed === remote.seed && (local.log?.length ?? 0) > (remote.log?.length ?? 0)));
+      if (localIsAhead) { session = attach(Session.resume(world)); await account.saveProgress(session.saveData()).catch(() => {}); }
+      else if (remote) session = attach(Session.fromSave(world, remote));
+    } else if (Session.hasSave() && location.hash) {
+      session = attach(Session.resume(world));
+    }
     render();
   } catch (err) {
     console.error(err);

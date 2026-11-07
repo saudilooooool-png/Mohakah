@@ -2,6 +2,7 @@
 // الحفظ لا يخزن حالة الشركة، بل البذرة وسلسلة الأفعال فقط. لأن المحرك حتمي،
 // إعادة تشغيل الأفعال تعيد العالم كما كان بالضبط (وهذا أيضًا سجل تدقيق كامل).
 import { Simulation } from '../../src/engine/simulation.js';
+import { applyAction } from '../../src/replay.js';
 
 const KEY = 'mohaki.session.v1';
 
@@ -42,11 +43,22 @@ export class Session {
   }
 
   static hasSave() { return !!readSave(); }
+  static localSave() { return readSave(); }
 
   static resume(world) {
     const save = readSave();
     return save ? new Session(world, save) : null;
   }
+
+  /** من حفظ خادمي (حساب مسجل). */
+  static fromSave(world, save) {
+    const s = new Session(world, save);
+    s._persist();
+    return s;
+  }
+
+  /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [] });
@@ -93,18 +105,11 @@ export class Session {
     return result;
   }
 
-  _apply(a) {
-    if (a.t === 'respond') {
-      return this.sim.respond(a.itemId, a.optionId, {
-        rationale: a.rationale, transcript: a.transcript ?? null, addressed: a.addressed ?? null, mode: a.mode ?? null,
-      });
-    }
-    if (a.t === 'deliver') return this.sim.submitDeliverable(a.itemId, a.text);
-    if (a.t === 'endDay') return this.sim.endDay();
-    throw new Error(`فعل غير معروف: ${a.t}`);
-  }
+  _apply(a) { return applyAction(this.sim, a); }
 
   _persist() {
-    writeSave({ seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads });
+    const data = this.saveData();
+    writeSave(data);
+    this.onSave?.(data);
   }
 }

@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 export { Simulation } from './engine/simulation.js';
 export { scoreDeliverable } from './engine/deliverables.js';
 export * as economy from './engine/economy.js';
+export { replay, applyAction } from './replay.js';
+export { computePoints, POINT_WEIGHTS, BANDS, RECOMMENDATION_RULES } from './points.js';
 export { roleOccupation, validateOccupationData, isValidCode } from './occupations.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');

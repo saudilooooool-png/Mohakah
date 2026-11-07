@@ -17,6 +17,14 @@ async function run(viewport, tag) {
   const snap = async (name) => shots && page.screenshot({ path: `${shots}/${tag}-${name}.png`, fullPage: true });
 
   await page.goto(BASE);
+  // التسجيل: المسار الطبيعي لإكمال أكثر من يوم
+  await page.getByRole('button', { name: 'أنشئ حسابًا وابدأ' }).click();
+  await page.fill('#a-name', 'متدرب الفحص');
+  await page.fill('#a-email', `smoke-${tag}-${Date.now()}@example.com`);
+  await page.fill('#a-pass', 'secret-123');
+  await page.locator('input[name="processing"]').check();
+  await page.getByRole('button', { name: 'إنشاء الحساب' }).click();
+  await page.waitForFunction(() => !document.querySelector('.modal'));
   await page.getByRole('button', { name: 'ابدأ يومك الوظيفي' }).click();
   await page.waitForSelector('.hero');
   await snap('1-desk');

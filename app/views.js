@@ -1,6 +1,7 @@
 // شاشات بيئة العمل. كل دالة تعيد HTML من حالة المحرك الحالية.
 import { roleOccupation } from '../src/occupations.js';
 import { canMessage, DAILY_LIMIT } from '../src/agents/colleague.js';
+import { computePoints, RECOMMENDATION_RULES } from '../src/points.js';
 import {
   esc, fmt, sar, delta, words, PRIORITY, TYPE, STATUS, dueLabel, avatar, icon, typeIcon,
   lineChart, ring, bar, weekday, weekOf,
@@ -43,9 +44,12 @@ export function shell(session, route, content) {
         </a>`).join('')}
       </nav>
       <div class="side-foot">
-        <div class="me">${esc(sim.scenario.role)}</div>
-        <div>المدير المباشر: ${esc(session.person(sim.scenario.manager).name)}</div>
-        <button type="button" data-act="reset">ابدأ من جديد</button>
+        <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
+        <div>${esc(sim.scenario.role)}</div>
+        ${session.user
+          ? `<a href="#/account" class="side-link">حسابي</a> · <button type="button" data-act="logout">خروج</button>`
+          : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
+        <div><button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
     </aside>
     <div class="main">
@@ -67,7 +71,7 @@ export function shell(session, route, content) {
 
 // ——— شاشة البداية ———
 
-export function welcome(world, hasSave) {
+export function welcome(world, hasSave, user = null) {
   const sc = world.scenario;
   const co = world.company;
   const mgr = co.people.find((p) => p.id === sc.manager);
@@ -100,10 +104,13 @@ export function welcome(world, hasSave) {
           <dt>المدة</dt><dd>${sc.lengthDays} يوم عمل (${Math.ceil(sc.lengthDays / 5)} أسابيع، من الأحد إلى الخميس) · كل يوم جلسة عمل واحدة</dd>
         </dl>
       </div>
+      ${user ? `<p class="small" style="margin:0">مرحبًا ${esc(user.name)}. تقدمك محفوظ في حسابك.</p>` : ''}
       <div class="actions">
         ${hasSave ? '<button class="btn primary" data-act="resume">أكمل يوم عملك</button><button class="btn" data-act="start">ابدأ من جديد</button>'
-          : '<button class="btn primary" data-act="start">ابدأ يومك الوظيفي</button>'}
+          : user ? '<button class="btn primary" data-act="start">ابدأ يومك الوظيفي</button>'
+          : '<button class="btn primary" data-act="open-auth" data-mode="register">أنشئ حسابًا وابدأ</button><button class="btn" data-act="open-auth" data-mode="login">لدي حساب</button><button class="btn ghost" data-act="start">جرّب يومك الأول كضيف</button>'}
       </div>
+      ${user ? '' : '<p class="small muted" style="margin:0">الحساب يحفظ تقدمك على أي جهاز، وهو شرط لإصدار سجل الأداء الموثّق في النهاية.</p>'}
       <p class="disclaimer">NOVA TECH شركة افتراضية، وكل شخصياتها وعملائها خيالية. محاكي تمنحك أدلة عملية على مهاراتك، ولا تعادل خبرة وظيفية لدى شركة حقيقية.</p>
     </section>
   </div>`;
@@ -139,6 +146,17 @@ export function desk(session) {
     </div>
     ${open.length ? `<div class="actions" style="position:relative;z-index:1"><a class="btn teal" href="#/inbox/${encodeURIComponent(open[0].id)}">ابدأ بالأهم: ${esc(open[0].title)}</a></div>` : ''}
   </section>
+
+  ${first ? `<section class="card guide" style="margin-top:16px">
+    <h2>كيف تعمل محاكي</h2>
+    <ol>
+      <li><b>صندوق العمل</b> فيه رسائل وشكاوى ومستندات واجتماعات. كل شيء تكتبه بحرية: محادثات، ومستندات، واجتماعات حوارية.</li>
+      <li><b>لكل بند مهلة.</b> ما تتركه حتى تنتهي مهلته يُغلق، وله عواقب على الشركة وثقة زملائك.</li>
+      <li><b>"إنهاء يوم العمل"</b> يجعل الشركة تعمل بقية اليوم: تظهر نتائج قراراتك، ويبدأ يوم جديد. أسبوع العمل من الأحد إلى الخميس، ومدة التجربة 30 يوم عمل.</li>
+      <li><b>اسأل زملاءك</b> من صفحة "فريقي" عن البيانات قبل أن تقرر.</li>
+      <li>في النهاية تحصل على <b>نقاط من 1000</b> و<b>سجل أداء موثّق</b> يمكن التحقق منه، ويمكنك أن تختار مشاركته مع جهات توظيف شريكة.</li>
+    </ol>
+  </section>` : ''}
 
   <div class="grid g-4" style="margin-top:16px">
     ${kpi('الإيراد الشهري المتكرر', sar(now.mrr), delta(now.mrr, prev.mrr), 'منذ أمس')}
@@ -473,14 +491,15 @@ export function report(session) {
     <section class="card"><div class="empty"><b>لا توجد أدلة بعد</b>سجلك المهني يُبنى من قراراتك ومستنداتك ونتائج الشركة. ابدأ بمهامك.</div></section>`;
   }
   const r = sim.report();
+  const pts = computePoints(r, { finished: sim.finished });
   const { you, baselineNoActions: base } = r.companyOutcome;
   const row = (label, a, b, f = fmt) => `<tr><td>${label}</td><td class="num"><b>${f(a)}</b></td><td class="num muted">${f(b)}</td><td>${delta(a, b)}</td></tr>`;
   return `
-  <div class="page-h"><div><h1>تطورك المهني</h1><p>${sim.finished ? 'التقرير النهائي لشهرك الأول.' : `تقرير حتى الآن · بعد ${r.daysWorked} ${r.daysWorked === 1 ? 'يوم' : 'أيام'} عمل.`} كل درجة مرتبطة بدليل محفوظ.</p></div>
+  <div class="page-h"><div><h1>تطورك المهني</h1><p>${sim.finished ? 'التقرير النهائي لفترة عملك.' : `تقرير حتى الآن · بعد ${r.daysWorked} ${r.daysWorked === 1 ? 'يوم' : 'أيام'} عمل.`} كل درجة مرتبطة بدليل محفوظ.</p></div>
     ${sim.finished ? '<button class="btn" data-act="print">طباعة / حفظ PDF</button>' : ''}</div>
   <section class="card">
     <div class="report-head">
-      <div class="score-ring">${ring(r.overall)}<div style="text-align:center;position:relative"><b>${r.overall}</b><br><span>من 100</span></div></div>
+      <div class="score-ring">${ring(pts.points / 10)}<div style="text-align:center;position:relative"><b>${pts.points}</b><br><span>نقطة من 1000</span></div></div>
       <div>
         <div class="muted small">MOHAKI · Professional Record</div>
         <h2 style="font-size:20px;margin:2px 0 4px">${esc(r.role)}</h2>
@@ -492,6 +511,7 @@ export function report(session) {
       </div>
     </div>
   </section>
+  ${pointsCard(session, r)}
   <div class="grid g-2" style="margin-top:16px">
     <section class="card"><h2>المهارات</h2>
       <div class="grid" style="gap:14px">${r.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score === null ? '—' : `${s.score}%`}</span>${s.score === null ? '<div class="bar"></div>' : bar(s.score)}</div>`).join('')}</div>
@@ -727,4 +747,144 @@ export function colleagueChat(session, person, ui = {}) {
       <p class="small muted" style="margin:12px 0 0">المراسلة لجمع المعلومات: لا تغيّر نتائج الشركة ولا تُقيَّم. القرارات تُتخذ في مهامك واجتماعاتك.</p>
     </div></section>
   </div>`;
+}
+
+// ——— النقاط والسجل الموثّق ———
+
+function pointsCard(session, r) {
+  const sim = session.sim;
+  const p = computePoints(r, { finished: sim.finished });
+  const user = session.user;
+  const issued = session.issuedRecord;
+  let action;
+  if (!sim.finished) {
+    action = `<p class="small muted" style="margin:0">يُصدر سجل الأداء الموثّق بعد إكمال ${sim.lastDay} يوم عمل. متبقٍ: <span class="num">${sim.lastDay - sim.day + 1}</span>.</p>`;
+  } else if (!user) {
+    action = `<div class="actions"><button class="btn teal" data-act="open-auth" data-mode="register">أنشئ حسابًا لإصدار سجلك الموثّق</button></div>`;
+  } else if (issued) {
+    action = `<div class="actions"><a class="btn teal" href="#/verify/${esc(issued.code)}">عرض السجل الموثّق <span class="num">${esc(issued.code)}</span></a><button class="btn" data-act="copy-verify" data-code="${esc(issued.code)}">نسخ رابط التحقق</button></div>`;
+  } else {
+    action = `<div class="actions"><button class="btn teal" data-act="issue-record">إصدار سجل الأداء الموثّق</button>
+      <span class="small muted">يعيد الخادم تشغيل كل قراراتك ويحسب النتيجة بنفسه قبل الإصدار.</span></div>`;
+  }
+  let rec = '';
+  if (sim.finished) {
+    if (p.recommendable && user?.consents?.employerSharing) rec = '<div class="outcome good"><b>مؤهل للتوصية:</b> سيظهر سجلك لجهات التوظيف الشريكة، لأنك وافقت على ذلك. يمكنك سحب الموافقة في أي وقت من حسابك.</div>';
+    else if (p.recommendable) rec = '<div class="outcome info"><b>أنت مؤهل للتوصية لجهات التوظيف.</b> لن يُشارك سجلك إلا إذا فعّلت الموافقة من <a href="#/account">حسابي</a>.</div>';
+    else rec = `<div class="outcome info"><b>للتأهل للتوصية:</b> <span class="num">${RECOMMENDATION_RULES.minPoints}</span> نقطة على الأقل، وألا تقل أي مهارة عن <span class="num">${RECOMMENDATION_RULES.minSkill}%</span>.${p.weakest ? ` أضعف مهارة لديك: ${esc(p.weakest.label)} (<span class="num">${p.weakest.score}%</span>).` : ''}</div>`;
+  }
+  return `<section class="card points-card" style="margin-top:16px">
+    <h2>كيف تُحسب نقاطك <span class="pill ${p.band.id === 'developing' ? 'p-high' : 's-done'}">${esc(p.band.label)}</span></h2>
+    <div class="points-head">
+      <div class="small muted">كل مهارة بنسبتها مضروبة في وزنها المعلن. الشرائح: <b>متميز</b> 850+ · <b>جاهز لسوق العمل</b> 700+ · <b>واعد</b> 550+ · <b>قيد التطوير</b> دون ذلك.</div>
+      <div class="breakdown">${p.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)} <span class="muted small">(وزن ${b.weight}%)</span></span><span class="num">${b.points}</span>${bar(b.score)}</div>`).join('')}</div>
+    </div>
+    ${rec}
+    ${action}
+  </section>`;
+}
+
+// ——— التسجيل والدخول ———
+
+export function authModal(mode = 'register', error = '') {
+  const reg = mode === 'register';
+  return `
+  <div class="modal-h"><div class="eyebrow">${reg ? 'حساب جديد' : 'تسجيل الدخول'}</div><h2>${reg ? 'أنشئ حسابك في محاكي' : 'مرحبًا بعودتك'}</h2></div>
+  <form class="modal-b auth-form" data-form="auth" data-mode="${mode}">
+    ${error ? `<div class="outcome bad" style="margin-bottom:12px">${esc(error)}</div>` : ''}
+    ${reg ? `<div class="field"><label for="a-name">الاسم كما تريد أن يظهر في سجلك</label><input id="a-name" name="name" required minlength="3" autocomplete="name"></div>` : ''}
+    <div class="field"><label for="a-email">البريد الإلكتروني</label><input id="a-email" name="email" type="email" required autocomplete="email" dir="ltr"></div>
+    <div class="field"><label for="a-pass">كلمة المرور ${reg ? '<span class="muted small">(8 أحرف على الأقل)</span>' : ''}</label><input id="a-pass" name="password" type="password" required minlength="${reg ? 8 : 1}" autocomplete="${reg ? 'new-password' : 'current-password'}" dir="ltr"></div>
+    ${reg ? `
+    <details class="optional"><summary>معلومات إضافية (اختيارية، تظهر لجهات التوظيف إن وافقت)</summary>
+    <div class="grid g-2" style="gap:10px;margin-top:8px">
+      <div class="field"><label for="a-uni">الجامعة</label><input id="a-uni" name="university"></div>
+      <div class="field"><label for="a-major">التخصص</label><input id="a-major" name="major"></div>
+      <div class="field"><label for="a-year">سنة التخرج</label><input id="a-year" name="graduationYear" type="number" min="1990" max="2040" dir="ltr"></div>
+      <div class="field"><label for="a-city">المدينة</label><input id="a-city" name="city"></div>
+    </div></details>
+    <label class="consent"><input type="checkbox" name="processing" required>
+      <span><b>أوافق على معالجة بياناتي لأغراض التدريب والتقييم داخل محاكي</b> (مطلوب). تُحفظ قراراتك ومحادثاتك ونتائجك لحساب سجلك المهني. لا نطلب رقم الهوية أو الجوال.</span></label>
+    <label class="consent"><input type="checkbox" name="employerSharing">
+      <span><b>أوافق على مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة لمحاكي</b> (اختياري). لا يُشارك إلا إذا استوفيت شروط التوصية، ويمكنك سحب الموافقة في أي وقت.</span></label>` : ''}
+    <div class="actions">
+      <button class="btn primary" type="submit">${reg ? 'إنشاء الحساب' : 'دخول'}</button>
+      <button class="btn ghost" type="button" data-act="open-auth" data-mode="${reg ? 'login' : 'register'}">${reg ? 'لدي حساب' : 'ليس لدي حساب'}</button>
+      <button class="btn ghost" type="button" data-act="close-modal">إلغاء</button>
+    </div>
+  </form>`;
+}
+
+export function guestWall() {
+  return `
+  <div class="modal-h"><div class="eyebrow">تقدمك محفوظ</div><h2>أنشئ حسابًا لتكمل أسبوعك</h2></div>
+  <div class="modal-b"><p style="margin-top:0">جربت يومك الأول كضيف. لتكمل بقية الأيام، أنشئ حسابًا مجانيًا. سيُنقل تقدمك كما هو، وستتمكن من المتابعة على أي جهاز، وإصدار سجلك الموثّق في النهاية.</p></div>
+  <div class="modal-f"><button class="btn primary" data-act="open-auth" data-mode="register">إنشاء حساب</button><button class="btn" data-act="open-auth" data-mode="login">لدي حساب</button><button class="btn ghost" data-act="close-modal">لاحقًا</button></div>`;
+}
+
+// ——— حسابي ———
+
+export function accountPage(session, user) {
+  if (!user) return `<section class="card"><div class="empty"><b>لست مسجلًا</b><button class="btn primary" data-act="open-auth" data-mode="register">أنشئ حسابًا</button></div></section>`;
+  const p = user.profile ?? {};
+  return `
+  <div class="page-h"><div><h1>حسابي</h1><p>${esc(user.email)}</p></div></div>
+  <div class="grid g-2">
+    <section class="card">
+      <h2>الملف الشخصي</h2>
+      <form data-form="profile" class="grid" style="gap:10px">
+        <div class="field"><label for="p-name">الاسم كما يظهر في السجل</label><input id="p-name" name="name" value="${esc(user.name)}" required minlength="3"></div>
+        <div class="field"><label for="p-uni">الجامعة</label><input id="p-uni" name="university" value="${esc(p.university ?? '')}"></div>
+        <div class="field"><label for="p-major">التخصص</label><input id="p-major" name="major" value="${esc(p.major ?? '')}"></div>
+        <div class="grid g-2" style="gap:10px">
+          <div class="field"><label for="p-year">سنة التخرج</label><input id="p-year" name="graduationYear" type="number" min="1990" max="2040" value="${esc(p.graduationYear ?? '')}" dir="ltr"></div>
+          <div class="field"><label for="p-city">المدينة</label><input id="p-city" name="city" value="${esc(p.city ?? '')}"></div>
+        </div>
+        <div class="actions"><button class="btn primary" type="submit">حفظ</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>الموافقات</h2>
+      <label class="consent"><input type="checkbox" checked disabled><span><b>معالجة البيانات لأغراض التدريب</b>: مطلوبة لاستخدام المنصة. لسحبها احذف حسابك.</span></label>
+      <label class="consent"><input type="checkbox" data-act="toggle-sharing" ${user.consents?.employerSharing ? 'checked' : ''}><span><b>مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة</b>: يمكنك تفعيلها أو سحبها في أي وقت، ويُسجَّل تاريخ كل تغيير.</span></label>
+      <h2 style="margin-top:18px">سجلاتي الموثّقة</h2>
+      ${user.records?.length ? `<ul class="feed">${user.records.map((c) => `<li><span class="d"></span><span class="dot"></span><a href="#/verify/${esc(c)}" class="num">${esc(c)}</a></li>`).join('')}</ul>` : '<p class="small muted">لم تُصدر سجلًا بعد. يُصدر بعد إكمال التجربة.</p>'}
+      <h2 style="margin-top:18px">الحساب</h2>
+      <div class="actions"><button class="btn" data-act="logout">تسجيل الخروج</button><button class="btn danger" data-act="delete-account">حذف الحساب وبياناتي</button></div>
+    </section>
+  </div>`;
+}
+
+export function deleteConfirm() {
+  return `
+  <div class="modal-h"><div class="eyebrow">حذف الحساب</div><h2>هل تريد حذف حسابك وبياناتك نهائيًا؟</h2></div>
+  <div class="modal-b"><p style="margin-top:0">سيُحذف حسابك وتقدمك ومحادثاتك، <b>وتُلغى سجلاتك الموثّقة</b> فلا تعود صالحة للتحقق. لا يمكن التراجع.</p></div>
+  <div class="modal-f"><button class="btn danger" data-act="confirm-delete">نعم، احذف</button><button class="btn" data-act="close-modal">إلغاء</button></div>`;
+}
+
+// ——— صفحة التحقق العامة ———
+
+export function verifyPage(state) {
+  const frame = (inner) => `<div class="verify-wrap"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}
+    <p class="disclaimer verify-note">يوثّق هذا السجل أداءً في بيئة محاكاة افتراضية. <b>ليس شهادة خبرة أو شهادة خدمة لدى جهة عمل</b>، ولا شهادة تدريب معتمدة. NOVA TECH شركة افتراضية.</p></div>`;
+  if (state.loading) return frame('<section class="card"><div class="empty">جارٍ التحقق…</div></section>');
+  if (state.error) return frame(`<section class="card"><div class="empty"><b>لا يوجد سجل بهذا الرمز</b>${esc(state.error)}</div></section>`);
+  const r = state.record;
+  if (r.revoked) return frame(`<section class="card"><div class="outcome bad"><h3>السجل <span class="num">${esc(r.code)}</span> ملغى</h3><p>أُلغي هذا السجل بطلب صاحبه أو بحذف حسابه، فلم يعد صالحًا للتحقق.</p></div></section>`);
+  const d = (iso) => (iso ? new Date(iso).toLocaleDateString('ar-SA-u-ca-gregory', { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
+  return frame(`
+  <section class="card certificate">
+    <div class="cert-top"><span class="pill s-done">✓ سجل موثّق ومتحقق منه</span><span class="num muted">${esc(r.code)}</span></div>
+    <div class="muted small">سجل الأداء المهني الموثّق</div>
+    <h1>${esc(r.name)}</h1>
+    <p class="cert-role">أكمل تجربة محاكاة عمل بدور <b>${esc(r.role)}</b> في شركة <b>${esc(r.company)}</b> الافتراضية، لمدة <span class="num">${r.days}</span> يوم عمل.</p>
+    ${r.occupation ? `<p class="small">المهنة وفق التصنيف السعودي الموحد للمهن: <span class="num">${esc(r.occupation.code)}</span> ${esc(r.occupation.titleAr)}</p>` : ''}
+    <div class="cert-score">
+      <div><div class="points"><span class="num">${r.points}</span><small> / 1000</small></div><span class="pill s-done">${esc(r.band.label)}</span></div>
+      <div class="breakdown">${r.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.score}%</span>${bar(b.score)}</div>`).join('')}</div>
+    </div>
+    <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
+    <p class="small muted">تاريخ الإصدار: ${d(r.issuedAt)} · احتُسبت النتيجة بإعادة تشغيل كل القرارات على خادم محاكي · بصمة سجل الأفعال: <span class="num" style="word-break:break-all">${esc(r.logHash.slice(0, 16))}…</span></p>
+    <div class="actions no-print"><button class="btn" data-act="print">طباعة / حفظ PDF</button><a class="btn ghost" href="#/desk">إلى محاكي</a></div>
+  </section>`);
 }
