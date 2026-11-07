@@ -254,3 +254,57 @@ test('السبرنت: مخطط Claude يقيّد القرار بالبنود ا�
   assert.deepEqual(schema.properties.replies.items.properties.speaker.enum, ['eng_lead', 'sales_head', 'cs_lead', 'dev2']);
   assert.match(calls[0].messages[0].content, /تخطيط السبرنت/);
 });
+
+// ——— اجتماع تخفيض الميزانيات (اليوم 15) ———
+
+function simAtBudget(seed = 3) {
+  const sim = new Simulation({ company, scenario, seed });
+  while (sim.day < 15) sim.endDay();
+  const item = sim.inbox().find((i) => i.eventId === 'd15_budget_cut');
+  return { sim, item };
+}
+
+test('الميزانيات: إيقاف التعاقدات برقم واضح مع حماية النمو والفريق يجيب الاعتراضات الثلاثة', () => {
+  const { sim, item } = simAtBudget();
+  assert.ok(item.dialogue);
+  const r = meetingResult(playOffline(item, [
+    'أقترح أن نوقف التعاقدات الخارجية غير الحرجة، وهذا يوفر قرابة 20 ألف ريال شهريًا ويطيل المدرج. '
+    + 'لا نمس ميزانية الإعلانات حتى لا نخسر العملاء الجدد ونحافظ على النمو، '
+    + 'ولا نلغي أدوات التطوير حتى لا تتأثر سعة الفريق في السبرنت.',
+  ]));
+  assert.equal(r.optionId, 'pause_contractors');
+  assert.deepEqual(r.addressed.sort(), ['delivery', 'growth', 'savings']);
+  const payroll = sim.state.company.costs.payrollMonthly;
+  sim.respond(item.id, r.optionId, { rationale: r.rationale, transcript: r.transcript, addressed: r.addressed, mode: r.mode });
+  assert.equal(sim.state.company.costs.payrollMonthly, payroll - 20000);
+});
+
+test('النفي: "لا نلغي الأدوات، نوقف التعاقدات" تعني إيقاف التعاقدات لا إلغاء الأدوات', () => {
+  const { item } = simAtBudget();
+  const r = meetingResult(playOffline(item, ['لا نلغي الأدوات، بل نوقف التعاقدات الخارجية.']));
+  assert.equal(r.optionId, 'pause_contractors');
+});
+
+test('النفي يعمل في كل الاجتماعات: "لن نبدأ بإصلاح التقارير، نبدأ بواتساب"', () => {
+  const { item } = simAtSprint();
+  assert.equal(meetingResult(playOffline(item, ['لن نبدأ بإصلاح التقارير، نبدأ بواتساب.'])).optionId, 'whatsapp');
+  assert.equal(meetingResult(playOffline(item, ['ليس واتساب أولا بل نبدأ بإصلاح التقارير.'])).optionId, 'reports_fix');
+});
+
+test('الميزانيات: تخفيض الإعلانات يُحسم كذلك ويطبّق أثره على ميزانية التسويق', () => {
+  const { sim, item } = simAtBudget();
+  const r = meetingResult(playOffline(item, ['نخفض الإعلانات المدفوعة مرة أخرى ونحافظ على الفريق كما هو.']));
+  assert.equal(r.optionId, 'cut_ads');
+  const budget = sim.state.company.marketing.monthlyBudget;
+  sim.respond(item.id, r.optionId, { addressed: r.addressed, transcript: r.transcript });
+  assert.equal(Math.round(sim.state.company.marketing.monthlyBudget), Math.round(budget * 0.85));
+});
+
+test('الميزانيات: غياب اقتراح واضح يترك القرار للمالية فتلغي أدوات التطوير', () => {
+  const { sim, item } = simAtBudget();
+  const r = meetingResult(playOffline(item, ['الوضع صعب على الجميع، وسأفكر في الموضوع أكثر.']));
+  assert.equal(r.optionId, 'cut_tools');
+  const cap = sim.state.company.team.devCapacityPerDay;
+  sim.respond(item.id, r.optionId, { addressed: r.addressed, transcript: r.transcript });
+  assert.ok(sim.state.company.team.devCapacityPerDay < cap);
+});

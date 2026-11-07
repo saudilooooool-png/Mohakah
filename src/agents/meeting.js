@@ -137,14 +137,33 @@ function detectConcerns(spec, text) {
   }));
 }
 
-/** يعيد الموقف الذي ذكره المتدرب أولًا في رسالته (لا أول موقف في القائمة). */
+// النفي يُبطل عبارة الموقف إذا جاء قبلها في الجملة نفسها ("لن نبدأ بإصلاح التقارير"،
+// "لا نلغي الأدوات")، ولا يتجاوز علامات الترقيم أو أدوات الاستدراك ("لا، نبدأ بـ..."، "ليس كذا بل ...").
+const NEGATION = /(?:^|\s)(?:لا|لن|لم|ليس|بدون|دون|غير|بلا)(?=\s|$)/;
+const CLAUSE_BREAK = /[،,.؛;!?:\n]|(?:^|\s)(?:بل|لكن|ولكن|انما|وانما|ثم)(?=\s)/g;
+
+function isNegated(body, at) {
+  const before = body.slice(Math.max(0, at - 30), at);
+  let start = 0;
+  for (const m of before.matchAll(CLAUSE_BREAK)) start = m.index + m[0].length;
+  return NEGATION.test(before.slice(start));
+}
+
+/**
+ * يعيد الموقف الذي ذكره المتدرب أولًا في رسالته (لا أول موقف في القائمة)،
+ * متجاهلًا العبارات المسبوقة بنفي.
+ */
 function detectStance(spec, text) {
   const body = normalize(text);
   let best = null;
   for (const [stance, words] of Object.entries(spec.stanceKeywords ?? {})) {
     for (const w of words) {
-      const at = body.indexOf(normalize(w));
-      if (at !== -1 && (!best || at < best.at)) best = { stance, at };
+      const needle = normalize(w);
+      for (let at = body.indexOf(needle); at !== -1; at = body.indexOf(needle, at + 1)) {
+        if (isNegated(body, at)) continue;
+        if (!best || at < best.at) best = { stance, at };
+        break;
+      }
     }
   }
   return best?.stance ?? null;

@@ -62,7 +62,7 @@ async function run(viewport, tag) {
   }
 
   // الاجتماعات الحوارية: تخطيط السبرنت (اليوم 3) ثم اجتماع الإدارة (اليوم 5)
-  const dayIs = async (n) => (await page.locator('.day b').textContent()).includes(String(n));
+  const dayIs = async (n) => (await page.locator('.day b').textContent()).trim().endsWith(` ${n}`);
   const endDay = async () => {
     await page.locator('[data-act="end-day"]').click();
     await page.locator('.modal [data-act="confirm-end-day"]').click();
@@ -97,6 +97,11 @@ async function run(viewport, tag) {
   await playMeeting('اجتماع الإدارة',
     'نوصي بإصلاح التقارير أولًا لأنه يحمي الإيرادات: الأفق تدفع 18500 ريال شهريًا. سنقيس النجاح بمؤشر الاستخدام ونسبة الإلغاء في مراجعة بعد أسبوعين. لعملاء واتساب نعطي موعدًا واضحًا بعد الإصلاح ولا تضيع الصفقات. والإصلاح 22 نقطة جهد أي نحو أسبوعين بسعة الفريق، أولوية واحدة.',
     'دافع بالأرقام', '8-mgmt');
+
+  while (!(await dayIs(15))) await endDay();
+  await playMeeting('تخفيض الميزانيات',
+    'أقترح أن نوقف التعاقدات الخارجية غير الحرجة، وهذا يوفر قرابة 20 ألف ريال شهريًا ويطيل المدرج. لا نمس ميزانية الإعلانات حتى لا نخسر العملاء الجدد ونحافظ على النمو، ولا نلغي أدوات التطوير حتى لا تتأثر سعة الفريق في السبرنت.',
+    'أوقف التعاقدات الخارجية', '9-budget');
 
   // لا تمرير أفقي على أي شاشة
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
