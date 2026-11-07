@@ -2,6 +2,8 @@
 import { Session, loadWorld } from './lib/session.js';
 import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
+import { agentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
+import { meetingResult, mustClose } from '../src/agents/meeting.js';
 
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
@@ -13,6 +15,13 @@ const DRAFT_KEY = 'mohaki.drafts.v1';
 let drafts = {};
 try { drafts = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); } catch { drafts = {}; }
 const saveDrafts = () => { try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch { /* */ } };
+
+// الاجتماعات الجارية (تبقى عند التنقل أو إعادة التحميل حتى تُختتم)
+const MEETING_KEY = 'mohaki.meetings.v1';
+let meetings = {};
+try { meetings = JSON.parse(sessionStorage.getItem(MEETING_KEY) || '{}'); } catch { meetings = {}; }
+const saveMeetings = () => { try { sessionStorage.setItem(MEETING_KEY, JSON.stringify(meetings)); } catch { /* */ } };
+const ui = { meetings, pendingMeeting: null, agentMode: 'offline', meetingNote: '', drafts };
 
 function parseRoute() {
   const raw = location.hash.replace(/^#\/?/, '');
@@ -31,7 +40,7 @@ function render() {
   const route = parseRoute();
   let body;
   switch (route.page) {
-    case 'inbox': body = V.inbox(session, route, drafts); break;
+    case 'inbox': body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
     case 'team': body = V.team(session); break;
     case 'meetings': body = V.meetings(session); break;
     case 'files': body = V.files(session); break;
@@ -45,6 +54,8 @@ function render() {
   const nav = V.NAV.find((n) => n.id === route.page);
   document.title = `${nav?.label ?? 'مكتبي'} · NOVA TECH — محاكي`;
   window.scrollTo(0, keepScroll);
+  const box = app.querySelector('[data-minutes]');
+  if (box) box.scrollTop = box.scrollHeight;
 }
 
 function toast(text, tone = 'info') {
@@ -74,6 +85,8 @@ const actions = {
   start() {
     Session.clear();
     drafts = {}; saveDrafts();
+    for (const k of Object.keys(meetings)) delete meetings[k];
+    saveMeetings();
     session = Session.start(world);
     location.hash = '#/desk';
     render();
@@ -93,6 +106,14 @@ const actions = {
     openModal(V.daySummary(session, day));
   },
   'close-modal'() { closeModal(); },
+  'join-meeting'(e) {
+    const id = e.target.closest('[data-item]').dataset.item;
+    const item = session.sim.items.find((i) => i.id === id);
+    meetings[id] = openMeeting(item);
+    saveMeetings();
+    render();
+  },
+  'close-meeting'(e) { closeMeeting(e.target.closest('[data-item]').dataset.item); },
   backdrop(e) { if (e.target.classList.contains('modal-back')) closeModal(); },
   'go-report'() { closeModal(); location.hash = '#/report'; },
   print() { window.print(); },
@@ -129,11 +150,50 @@ app.addEventListener('input', (e) => {
   }
 });
 
+async function meetingStep(itemId, message, { closing = false } = {}) {
+  const item = session.sim.items.find((i) => i.id === itemId);
+  if (!item || item.status !== 'open' || !meetings[itemId]) return;
+  ui.pendingMeeting = itemId;
+  ui.meetingNote = '';
+  render();
+  try {
+    const out = await runTurn(session.sim, item, meetings[itemId], message, { closing });
+    meetings[itemId] = out.meeting;
+    if (out.fellBack) ui.meetingNote = 'تعذر الوصول إلى Claude، فأكمل الوضع المحلي هذه الجولة.';
+    if (message && drafts[itemId]) { delete drafts[itemId].say; saveDrafts(); }
+    saveMeetings();
+  } finally {
+    ui.pendingMeeting = null;
+  }
+  if (meetings[itemId].closed) {
+    const r = meetingResult(meetings[itemId]);
+    const opt = session.respond(itemId, r.optionId, r.rationale, { transcript: r.transcript, addressed: r.addressed, mode: r.mode });
+    delete meetings[itemId]; saveMeetings();
+    delete drafts[itemId]; saveDrafts();
+    toast(`انتهى الاجتماع: ${opt.label}`, r.addressed.length >= 2 ? 'good' : 'bad');
+    render();
+    return;
+  }
+  render();
+  if (mustClose(meetings[itemId])) closeMeeting(itemId);
+  else app.querySelector('#say')?.focus();
+}
+
+function closeMeeting(itemId) {
+  meetingStep(itemId, '', { closing: true }).catch((err) => { console.error(err); toast(err.message, 'bad'); render(); });
+}
+
 app.addEventListener('submit', (e) => {
   const form = e.target.closest('form[data-form]');
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'meeting') {
+    const message = String(new FormData(form).get('message') || '').trim();
+    if (message.split(/\s+/).filter(Boolean).length < 3) { toast('اكتب ردًا أوضح للحاضرين.', 'bad'); return; }
+    meetingStep(itemId, message).catch((err) => { console.error(err); toast(err.message, 'bad'); render(); });
+    return;
+  }
   try {
     if (form.dataset.form === 'respond') {
       const data = new FormData(form);
@@ -166,6 +226,7 @@ window.addEventListener('hashchange', () => { if (session) render(); });
 (async function boot() {
   try {
     world = await loadWorld();
+    agentStatus().then((st) => { ui.agentMode = st.mode; if (session) render(); });
     if (Session.hasSave() && location.hash) session = Session.resume(world);
     render();
   } catch (err) {
@@ -175,4 +236,4 @@ window.addEventListener('hashchange', () => { if (session) render(); });
 }());
 
 // للاختبار الآلي وأدوات المطور
-window.__mohaki = { get session() { return session; }, nextOpenItemHref };
+window.__mohaki = { get session() { return session; }, nextOpenItemHref, meetings };

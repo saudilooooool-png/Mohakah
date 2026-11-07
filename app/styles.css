@@ -224,6 +224,34 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .empty { text-align: center; padding: 48px 20px; color: var(--ink-3); }
 .empty b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
 
+/* ——— غرفة الاجتماع ——— */
+.roster { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 12px 14px; background: #f6f8fb; border-radius: 12px; margin-bottom: 14px; }
+.att { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+.att small { display: block; font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
+.att:last-child { margin-inline-start: auto; }
+.concerns { display: grid; gap: 6px; margin-bottom: 16px; }
+.concern { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; font-size: 14px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.concern .st { color: var(--amber-ink); font-weight: 700; text-align: center; }
+.concern.ok { background: var(--green-soft); border-color: transparent; }
+.concern.ok .st { color: var(--green); }
+.minutes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; max-height: 520px; overflow-y: auto; padding: 4px 2px; }
+.minutes.full { max-height: none; overflow: visible; }
+.bubble { display: flex; gap: 10px; align-items: flex-start; max-width: 88%; }
+.bubble > div { background: #f3f5f9; border-radius: 4px 14px 14px 14px; padding: 9px 13px; }
+.bubble .who { font-size: 12.5px; font-weight: 700; margin-bottom: 2px; }
+.bubble .said { font-size: 15px; white-space: pre-wrap; }
+.bubble.me { align-self: flex-end; flex-direction: row-reverse; }
+.bubble.me > div { background: var(--navy); color: #fff; border-radius: 14px 4px 14px 14px; }
+.bubble.me .who { color: var(--teal); }
+.me-av { background: var(--teal) !important; color: var(--navy) !important; font-size: 10px !important; }
+.typing { align-items: center; gap: 8px; }
+.dots { display: inline-flex; gap: 4px; padding: 10px 12px; background: #f3f5f9; border-radius: 12px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; }
+.dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (max-width: 860px) { .bubble { max-width: 100%; } .att:last-child { margin-inline-start: 0; } }
+
 /* ——— سجل الشركة ——— */
 .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .feed li { display: grid; grid-template-columns: 52px 18px 1fr; gap: 8px; align-items: baseline; padding: 6px 4px; font-size: 14px; border-bottom: 1px dashed var(--line); }

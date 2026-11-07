@@ -59,16 +59,27 @@ export class Simulation {
       .sort((a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority] || a.dueDay - b.dueDay);
   }
 
-  /** الرد على بند في صندوق العمل باختيار أحد الخيارات المسموح بها. */
-  respond(itemId, optionId, { rationale = '' } = {}) {
+  /**
+   * الرد على بند في صندوق العمل باختيار أحد الخيارات المسموح بها.
+   * في الاجتماعات الحوارية: `transcript` محضر الاجتماع، و`addressed` معرّفات الاعتراضات
+   * التي حكم الوكيل بأنها أُجيبت. المحرك يقبل فقط المعرّفات المعرّفة في السيناريو،
+   * ويطبّق آثارها كما يحددها السيناريو.
+   */
+  respond(itemId, optionId, { rationale = '', transcript = null, addressed = null, mode = null } = {}) {
     const item = this._openItem(itemId);
     const option = item.options.find((o) => o.id === optionId);
     if (!option) throw new Error(`الخيار ${optionId} غير متاح في ${itemId}`);
-    this._recordAction(item, { kind: 'decision', optionId, rationale, quality: option.quality ?? null });
+    const concerns = item.dialogue?.concerns ?? [];
+    const valid = addressed ? concerns.filter((c) => addressed.includes(c.id)) : [];
+    this._recordAction(item, {
+      kind: 'decision', optionId, rationale, quality: option.quality ?? null,
+      ...(item.dialogue ? { transcript, addressed: valid.map((c) => c.id), concernsTotal: concerns.length, mode } : {}),
+    });
     item.status = 'done';
     item.resolution = { optionId, day: this.day };
     if (option.result) this.log(option.result, option.tone ?? 'info');
     applyEffects(this.state, option.effects, { sim: this });
+    for (const c of valid) applyEffects(this.state, c.onAddressed, { sim: this });
     return option;
   }
 
@@ -216,6 +227,7 @@ export class Simulation {
       dueDay: this.day + (def.dueInDays ?? 1) - 1,
       options: def.options ?? [],
       deliverable: def.deliverable ?? null,
+      dialogue: def.dialogue ?? null,
       onExpire: def.onExpire ?? null,
       skills: def.skills ?? [],
       status: 'open',

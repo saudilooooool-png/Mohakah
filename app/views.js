@@ -201,7 +201,7 @@ function feedList(entries) {
 
 // ——— مهامي ———
 
-export function inbox(session, { itemId, filter = 'open' }, drafts) {
+export function inbox(session, { itemId, filter = 'open' }, drafts, ui = {}) {
   const sim = session.sim;
   const all = [...sim.items].reverse();
   const lists = {
@@ -220,11 +220,11 @@ export function inbox(session, { itemId, filter = 'open' }, drafts) {
       ${list.length ? `<div class="items">${list.map((i) => itemRow(session, i, selected?.id)).join('')}</div>`
         : `<div class="empty"><b>${filter === 'open' ? 'لا توجد بنود مفتوحة' : 'لا شيء هنا بعد'}</b>${filter === 'open' ? 'أنجزت ما عليك اليوم.' : ''}</div>`}
     </section>
-    <section class="card detail">${selected ? `<a class="back-link" href="#/inbox?f=${filter}">→ العودة إلى القائمة</a>` : ''}${selected ? itemDetail(session, selected, drafts) : '<div class="empty"><b>اختر بندًا</b>لعرض تفاصيله والتصرف فيه.</div>'}</section>
+    <section class="card detail">${selected ? `<a class="back-link" href="#/inbox?f=${filter}">→ العودة إلى القائمة</a>` : ''}${selected ? itemDetail(session, selected, drafts, ui) : '<div class="empty"><b>اختر بندًا</b>لعرض تفاصيله والتصرف فيه.</div>'}</section>
   </div>`;
 }
 
-export function itemDetail(session, item, drafts = {}) {
+export function itemDetail(session, item, drafts = {}, ui = {}) {
   const sim = session.sim;
   const from = session.person(item.from);
   const due = dueLabel(item, sim.day);
@@ -255,6 +255,8 @@ export function itemDetail(session, item, drafts = {}) {
       </div>
     </form>`;
   }
+
+  if (item.status === 'open' && item.dialogue) return `${head}${meetingRoom(session, item, ui)}`;
 
   if (item.status === 'open') {
     const d = drafts[item.id] ?? {};
@@ -295,6 +297,18 @@ function closedOutcome(session, item) {
     <details style="margin-top:12px"><summary class="small">عرض المستند المسلّم</summary><p style="white-space:pre-wrap" class="small">${esc(act.text)}</p></details>`;
   }
   const opt = item.options.find((o) => o.id === item.resolution?.optionId);
+  if (act?.transcript) {
+    const concerns = item.dialogue.concerns;
+    return `<div class="outcome ${opt?.tone === 'bad' || act.addressed.length < 2 ? 'bad' : 'good'}">
+      <h3>نتيجة الاجتماع يوم ${item.resolution?.day}: ${esc(opt?.label)}</h3>
+      ${opt?.result ? `<p>${esc(opt.result)}</p>` : ''}
+      <p class="small">أجبت <b class="num">${act.addressed.length}</b> من <b class="num">${concerns.length}</b> اعتراضات.</p>
+      <ul class="check">${concerns.map((c) => `<li class="${act.addressed.includes(c.id) ? '' : 'miss'}">${esc(session.person(c.owner).name)}: ${esc(c.label)}</li>`).join('')}</ul>
+      <p class="small muted">${modeLabel(act.mode)}</p>
+    </div>
+    <h2 class="section-t" style="margin-top:18px">محضر الاجتماع</h2>
+    ${minutes(session, act.transcript, { full: true })}`;
+  }
   return `<div class="outcome ${opt?.tone === 'bad' ? 'bad' : 'info'}">
     <h3>قرارك يوم ${item.resolution?.day}: ${esc(opt?.label)}</h3>
     ${opt?.result ? `<p>${esc(opt.result)}</p>` : '<p class="muted">سُجّل القرار. ستظهر آثاره في نتائج الشركة.</p>'}
@@ -559,4 +573,58 @@ export function resetConfirm() {
   <div class="modal-h"><div class="eyebrow">ابدأ من جديد</div><h2>هل تريد بدء الشهر من اليوم الأول؟</h2></div>
   <div class="modal-b"><p style="margin-top:0">ستُحذف كل قراراتك ومستنداتك في هذه التجربة، ويبدأ عالم جديد بأحداث عشوائية مختلفة.</p></div>
   <div class="modal-f"><button class="btn primary" data-act="confirm-reset">نعم، ابدأ من جديد</button><button class="btn" data-act="close-modal">إلغاء</button></div>`;
+}
+
+// ——— غرفة الاجتماع ———
+
+export function modeLabel(mode) {
+  return {
+    claude: 'أدار الحوار وكلاء ذكاء اصطناعي (Claude)',
+    offline: 'أدار الحوار الوضع المحلي القائم على القواعد',
+    mixed: 'أدار الحوار Claude مع تحويل جزئي إلى الوضع المحلي',
+  }[mode] ?? '';
+}
+
+function minutes(session, transcript, { pending = false, full = false } = {}) {
+  return `<div class="minutes ${full ? 'full' : ''}" ${full ? '' : 'data-minutes'}>${transcript.map((l) => {
+    const me = l.speaker === 'trainee';
+    const p = me ? { id: 'me', name: 'أنت' } : session.person(l.speaker);
+    return `<div class="bubble ${me ? 'me' : ''}">${me ? '<span class="avatar sm me-av" aria-hidden="true">أنت</span>' : avatar(p, 'sm')}
+      <div><div class="who">${esc(p.name)}${!me && p.title ? ` <span class="muted">· ${esc(p.title)}</span>` : ''}</div><div class="said">${esc(l.text)}</div></div></div>`;
+  }).join('')}${pending ? '<div class="bubble typing" aria-live="polite"><span class="dots"><i></i><i></i><i></i></span><span class="muted small">المشاركون يردّون…</span></div>' : ''}</div>`;
+}
+
+function meetingRoom(session, item, ui) {
+  const spec = item.dialogue;
+  const m = ui.meetings?.[item.id];
+  const people = spec.participants.map((id) => session.person(id));
+  const badge = ui.agentMode === 'claude'
+    ? '<span class="pill p-normal">وكلاء Claude</span>'
+    : '<span class="pill t-pill">الوضع المحلي</span>';
+  const roster = `<div class="roster">${people.map((p) => `<div class="att">${avatar(p, 'sm')}<span>${esc(p.name.replace(/^م\.\s*/, ''))}<small>${esc(p.title)}</small></span></div>`).join('')}<div class="att">${badge}</div></div>`;
+  if (!m) {
+    return `${roster}
+    <div class="actions"><button class="btn primary" type="button" data-act="join-meeting" data-item="${esc(item.id)}">ادخل الاجتماع</button>
+    <span class="muted small">ستتحدث بحرية. لديك ${spec.maxRounds ?? 3} جولات للرد، ثم يحسم رئيس الاجتماع القرار.</span></div>`;
+  }
+  const pending = ui.pendingMeeting === item.id;
+  const left = m.maxRounds - m.round;
+  return `${roster}
+    <div class="concerns">${spec.concerns.map((c) => `<div class="concern ${m.addressed[c.id] ? 'ok' : ''}">
+      <span class="st">${m.addressed[c.id] ? '✓' : '•'}</span>
+      <span><b>${esc(session.person(c.owner).name)}</b> — ${esc(c.label)}</span>
+      <span class="pill ${m.addressed[c.id] ? 's-done' : 'p-high'}">${m.addressed[c.id] ? 'أُجيب' : 'مفتوح'}</span></div>`).join('')}</div>
+    ${minutes(session, m.transcript, { pending })}
+    ${m.closed ? '' : `<form data-form="meeting" data-item="${esc(item.id)}" class="meeting-form">
+      <div class="field">
+        <label for="say">ردك في الاجتماع <span class="muted small">· ${left > 0 ? `الجولة ${m.round + 1} من ${m.maxRounds}` : 'انتهت الجولات'}</span></label>
+        <textarea id="say" name="message" rows="4" maxlength="1500" data-draft="${esc(item.id)}" data-draft-field="say" ${pending || left <= 0 ? 'disabled' : ''}
+          placeholder="تحدث إلى الحاضرين: ما الدليل؟ ما المؤشر الذي سيتحسن؟ ماذا تقول للعملاء المنتظرين؟ هل الجدول واقعي؟">${esc(ui.drafts?.[item.id]?.say ?? '')}</textarea>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit" ${pending || left <= 0 ? 'disabled' : ''}>إرسال</button>
+        <button class="btn" type="button" data-act="close-meeting" data-item="${esc(item.id)}" ${pending || m.round < 1 ? 'disabled' : ''}>اختتام الاجتماع</button>
+        ${ui.meetingNote ? `<span class="muted small">${esc(ui.meetingNote)}</span>` : ''}
+      </div>
+    </form>`}`;
 }

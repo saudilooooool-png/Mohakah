@@ -12,5 +12,8 @@
     "test": "node --test",
     "demo": "node scripts/demo.js"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0"
+  }
 }

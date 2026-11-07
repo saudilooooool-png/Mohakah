@@ -61,6 +61,28 @@ async function run(viewport, tag) {
     await snap(`6-${p}`);
   }
 
+  // اجتماع الإدارة الحواري (اليوم 5)
+  while (!(await page.locator('.day b').textContent()).includes('5')) {
+    await page.locator('[data-act="end-day"]').click();
+    await page.locator('.modal [data-act="confirm-end-day"]').click();
+    await page.locator('.modal [data-act="close-modal"]').click();
+  }
+  await page.goto(`${BASE}#/meetings`);
+  await page.locator('.item', { hasText: 'اجتماع الإدارة' }).click();
+  await page.getByRole('button', { name: 'ادخل الاجتماع' }).click();
+  await page.waitForSelector('.minutes .bubble');
+  await snap('7-meeting-open');
+  await page.fill('#say', 'نوصي بإصلاح التقارير أولًا لأنه يحمي الإيرادات: الأفق تدفع 18500 ريال شهريًا. سنقيس النجاح بمؤشر الاستخدام ونسبة الإلغاء في مراجعة بعد أسبوعين. لعملاء واتساب نعطي موعدًا واضحًا بعد الإصلاح ولا تضيع الصفقات. والإصلاح 22 نقطة جهد أي نحو أسبوعين بسعة الفريق، أولوية واحدة.');
+  await page.getByRole('button', { name: 'إرسال' }).click();
+  await page.waitForSelector('.bubble.me');
+  await page.waitForSelector('.concern.ok');
+  await snap('8-meeting-round');
+  await page.getByRole('button', { name: 'اختتام الاجتماع' }).click();
+  await page.waitForSelector('.outcome', { timeout: 15000 });
+  const outcome = await page.locator('.outcome h3').textContent();
+  if (!outcome.includes('دافع بالأرقام')) errors.push(`[${tag}] نتيجة اجتماع غير متوقعة: ${outcome}`);
+  await snap('9-meeting-minutes');
+
   // لا تمرير أفقي على أي شاشة
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   if (overflow > 1) errors.push(`[${tag}] تمرير أفقي بمقدار ${overflow}px`);

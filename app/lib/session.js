@@ -52,8 +52,8 @@ export class Session {
 
   static clear() { try { localStorage.removeItem(KEY); } catch { /* */ } }
 
-  respond(itemId, optionId, rationale) {
-    return this._do({ t: 'respond', itemId, optionId, rationale });
+  respond(itemId, optionId, rationale, extra = {}) {
+    return this._do({ t: 'respond', itemId, optionId, rationale, ...extra });
   }
 
   deliver(itemId, text) {
@@ -77,7 +77,11 @@ export class Session {
   }
 
   _apply(a) {
-    if (a.t === 'respond') return this.sim.respond(a.itemId, a.optionId, { rationale: a.rationale });
+    if (a.t === 'respond') {
+      return this.sim.respond(a.itemId, a.optionId, {
+        rationale: a.rationale, transcript: a.transcript ?? null, addressed: a.addressed ?? null, mode: a.mode ?? null,
+      });
+    }
     if (a.t === 'deliver') return this.sim.submitDeliverable(a.itemId, a.text);
     if (a.t === 'endDay') return this.sim.endDay();
     throw new Error(`فعل غير معروف: ${a.t}`);

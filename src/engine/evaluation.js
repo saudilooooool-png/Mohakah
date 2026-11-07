@@ -35,7 +35,10 @@ export function buildReport(sim, runBaseline) {
   const comms = handled.filter((a) => a.kind === 'decision' && ['message', 'meeting', 'complaint'].includes(a.category));
   const missedComms = missedDecisions.filter((a) => ['message', 'meeting', 'complaint'].includes(a.category));
   const communication = avg([
-    ...comms.map((d) => Math.min(1, d.rationale.trim().split(/\s+/).filter(Boolean).length / 20)),
+    // في الاجتماع الحواري: نسبة الاعتراضات التي أجابها المتدرب فعلًا (دليل أقوى من طول التبرير)
+    ...comms.map((d) => (d.addressed
+      ? d.addressed.length / Math.max(1, d.concernsTotal)
+      : Math.min(1, d.rationale.trim().split(/\s+/).filter(Boolean).length / 20))),
     ...missedComms.map(() => 0),
   ]);
 
