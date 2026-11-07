@@ -2,9 +2,11 @@
 // مواصفات الاجتماع والخيارات تُقرأ من ملفات السيناريو على الخادم، لا مما يرسله المتصفح.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { claudeMeetingTurn, claudeColleagueReply, createClaudeClient, AgentError, DEFAULT_MODEL } from './claude.js';
+import { claudeMeetingTurn, claudeColleagueReply, createClaudeClient, AgentError } from './claude.js';
 import { MAX_MESSAGE_CHARS } from './meeting.js';
 import { knowledgeFor, canMessage, MAX_COLLEAGUE_MESSAGE } from './colleague.js';
+import { resolveRoutes, ROUTES } from './profiles.js';
+import { createMeter, BudgetError } from './meter.js';
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 10) / 10 : undefined);
 const str = (v, n = 120) => (typeof v === 'string' ? v.slice(0, n) : undefined);
@@ -42,22 +44,50 @@ function cleanMeeting(raw, spec) {
   return { transcript, addressed, round, maxRounds };
 }
 
-export function createAgentApi({ root, env = process.env, client = createClaudeClient(env), turn = claudeMeetingTurn, colleagueTurn = claudeColleagueReply }) {
+export function createAgentApi({
+  root, env = process.env, client = createClaudeClient(env), turn = claudeMeetingTurn, colleagueTurn = claudeColleagueReply,
+  meter = createMeter({ env }),
+  // من يطلب؟ يُستبدل في الخادم بقراءة جلسة الحساب. الضيف لا يستدعي Claude إلا إذا سُمح بذلك.
+  identify = () => ({ userKey: 'anonymous', isGuest: true }),
+}) {
   const company = JSON.parse(readFileSync(join(root, 'data/companies/nova-tech.json'), 'utf8'));
   const scenario = JSON.parse(readFileSync(join(root, 'data/scenarios/pm-first-30-days.json'), 'utf8'));
-  const model = env.MOHAKI_AGENT_MODEL || DEFAULT_MODEL;
+  // MOHAKI_AGENT_MODEL (قديم) يفرض نموذجًا واحدًا لكل المسارات إن عُيّن
+  const { profile, routes } = resolveRoutes(env.MOHAKI_AGENT_MODEL && !env.MOHAKI_AI_PROFILE
+    ? { ...env, MOHAKI_MODEL_MEETING: env.MOHAKI_AGENT_MODEL, MOHAKI_MODEL_CHAT: env.MOHAKI_AGENT_MODEL, MOHAKI_MODEL_COLLEAGUE: env.MOHAKI_AGENT_MODEL }
+    : env);
+  const guestsUseAi = env.MOHAKI_AI_GUESTS === 'claude';
+  const adminToken = env.MOHAKI_ADMIN_TOKEN || null;
 
-  const status = () => ({ mode: client ? 'claude' : 'offline', model: client ? model : null });
+  /** المسار متاح عبر Claude لهذا الطالب؟ */
+  const online = (route, who) => !!client && routes[route].model !== 'offline' && (!who.isGuest || guestsUseAi);
 
-  async function meetingTurn(body) {
-    if (!client) throw new AgentError('وكلاء Claude غير مفعّلين على هذا الخادم', 'offline');
-    const def = scenario.events.find((e) => e.id === body?.eventId && e.dialogue);
+  const status = (req) => {
+    const who = identify(req);
+    const r = Object.fromEntries(ROUTES.map((k) => [k, online(k, who) ? 'claude' : 'offline']));
+    return { mode: Object.values(r).includes('claude') ? 'claude' : 'offline', profile, routes: r };
+  };
+
+  /** ينفذ استدعاءً عبر Claude ضمن سقف الإنفاق، ويسجل التكلفة الفعلية. */
+  async function metered(route, req, call) {
+    const who = identify(req);
+    if (!online(route, who)) throw new AgentError('هذا المسار يعمل بالوضع المحلي', 'offline');
+    try { meter.check(who.userKey); } catch (err) { if (err instanceof BudgetError) throw new AgentError(err.message, 'budget'); throw err; }
+    const cfg = routes[route];
+    const { usage, ...result } = await call(cfg);
+    meter.record({ userKey: who.userKey, route, model: result.model || cfg.model, usage });
+    return result;
+  }
+
+  async function meetingTurn(body, req) {
+    const def = [...scenario.events, ...(scenario.randomEvents ?? [])].find((e) => e.id === body?.eventId && e.dialogue);
     if (!def) throw new AgentError('اجتماع غير معروف', 'bad_request');
     const closing = body.closing === true;
     const message = typeof body.message === 'string' ? body.message.trim() : '';
     if (!closing && !message) throw new AgentError('الرسالة فارغة', 'bad_request');
     if (message.length > MAX_MESSAGE_CHARS) throw new AgentError('الرسالة أطول من المسموح', 'bad_request');
-    return turn(client, {
+    const route = def.dialogue.mode === 'chat' ? 'chat' : 'meeting';
+    return metered(route, req, (cfg) => turn(client, {
       spec: def.dialogue,
       options: def.options.map((o) => ({ id: o.id, label: o.label })),
       people: company.people,
@@ -66,12 +96,12 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
       meeting: cleanMeeting(body.meeting, def.dialogue),
       message,
       closing,
-      model,
-    });
+      model: cfg.model,
+      effort: cfg.effort,
+    }));
   }
 
-  async function colleagueReply(body) {
-    if (!client) throw new AgentError('وكلاء Claude غير مفعّلين على هذا الخادم', 'offline');
+  async function colleagueReply(body, req) {
     const person = company.people.find((p) => p.id === body?.personId);
     if (!canMessage(person)) throw new AgentError('لا يمكن مراسلة هذا الشخص', 'bad_request');
     const message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -82,10 +112,10 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
     const thread = (Array.isArray(body.thread) ? body.thread : []).slice(-12)
       .filter((m) => m && ['trainee', person.id].includes(m.speaker) && typeof m.text === 'string')
       .map((m) => ({ speaker: m.speaker, text: m.text.slice(0, MAX_COLLEAGUE_MESSAGE) }));
-    return colleagueTurn(client, {
+    return metered('colleague', req, (cfg) => colleagueTurn(client, {
       person, people: company.people, knowledge: knowledgeFor(person, context, day),
-      context, thread, message, saudiContext: company.saudiContext ?? null, model,
-    });
+      context, thread, message, saudiContext: company.saudiContext ?? null, model: cfg.model, effort: cfg.effort,
+    }));
   }
 
   /** معالج HTTP. يعيد true إذا عالج الطلب. */
@@ -95,18 +125,23 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(data));
     };
-    if (path === '/api/agents/status' && req.method === 'GET') { send(200, status()); return true; }
-    const routes = { '/api/meeting/turn': meetingTurn, '/api/colleague/reply': colleagueReply };
-    if (routes[path] && req.method === 'POST') {
+    if (path === '/api/agents/status' && req.method === 'GET') { send(200, status(req)); return true; }
+    if (path === '/api/admin/usage' && req.method === 'GET') {
+      if (!adminToken || req.headers?.authorization !== `Bearer ${adminToken}`) { send(401, { error: 'غير مصرح' }); return true; }
+      send(200, { profile, routes, guestsUseAi, ...meter.report() });
+      return true;
+    }
+    const handlers = { '/api/meeting/turn': meetingTurn, '/api/colleague/reply': colleagueReply };
+    if (handlers[path] && req.method === 'POST') {
       let raw = '';
       for await (const chunk of req) {
         raw += chunk;
         if (raw.length > 100_000) { send(413, { error: 'الطلب كبير جدًا' }); return true; }
       }
       try {
-        send(200, await routes[path](JSON.parse(raw || '{}')));
+        send(200, await handlers[path](JSON.parse(raw || '{}'), req));
       } catch (err) {
-        const code = err instanceof AgentError ? (err.code === 'bad_request' ? 400 : 502) : 500;
+        const code = err instanceof AgentError ? ({ bad_request: 400, budget: 429, offline: 409 }[err.code] ?? 502) : 500;
         if (!(err instanceof AgentError)) console.error(err);
         send(code, { error: err.message, code: err.code ?? 'internal' });
       }

@@ -2,7 +2,7 @@
 import { Session, loadWorld } from './lib/session.js';
 import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
-import { agentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
+import { agentStatus, resetAgentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
 import { colleagueReply } from './lib/colleague-client.js';
 import { account, debouncedSaver } from './lib/account.js';
 import { meetingResult, mustClose } from '../src/agents/meeting.js';
@@ -36,7 +36,12 @@ const MEETING_KEY = 'mohaki.meetings.v1';
 let meetings = {};
 try { meetings = JSON.parse(sessionStorage.getItem(MEETING_KEY) || '{}'); } catch { meetings = {}; }
 const saveMeetings = () => { try { sessionStorage.setItem(MEETING_KEY, JSON.stringify(meetings)); } catch { /* */ } };
-const ui = { meetings, pendingMeeting: null, agentMode: 'offline', meetingNote: '', drafts };
+const ui = { meetings, pendingMeeting: null, agentMode: 'offline', agentRoutes: {}, meetingNote: '', drafts };
+
+function refreshAgents() {
+  resetAgentStatus();
+  return agentStatus().then((st) => { ui.agentMode = st.mode; ui.agentRoutes = st.routes ?? {}; if (session) render(); });
+}
 
 function parseRoute() {
   const raw = location.hash.replace(/^#\/?/, '');
@@ -138,6 +143,7 @@ const actions = {
   async logout() {
     await account.logout().catch(() => {});
     user = null;
+    refreshAgents();
     Session.clear(); // جهاز مشترك: لا يبقى تقدم الحساب في المتصفح بعد الخروج
     session = null;
     location.hash = '';
@@ -284,6 +290,7 @@ async function submitAuth(form) {
   const remote = register ? null : await account.progress().catch(() => null);
   if (remote) session = attach(Session.fromSave(world, remote));
   else if (session) { attach(session); await account.saveProgress(session.saveData()); }
+  refreshAgents();
   toast(register ? `أهلًا ${user.name}! حسابك جاهز وتقدمك محفوظ.` : `مرحبًا بعودتك ${user.name}.`, 'good');
   render();
 }
@@ -328,6 +335,7 @@ function onSubmit(e) {
         Session.clear(); session = null; // حساب جديد على هذا الجهاز: يُحمّل التقدم من الخادم
         const remote = await account.progress().catch(() => null);
         if (remote) session = attach(Session.fromSave(world, remote));
+        refreshAgents();
         resetState = { done: true }; render();
       })
       .catch((err) => { resetState = { error: err.message }; render(); });
@@ -421,7 +429,7 @@ window.addEventListener('hashchange', () => {
 (async function boot() {
   try {
     world = await loadWorld();
-    agentStatus().then((st) => { ui.agentMode = st.mode; if (session) render(); });
+    refreshAgents();
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }

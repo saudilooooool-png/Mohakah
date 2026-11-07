@@ -4,12 +4,17 @@ import {
 } from '../../src/agents/meeting.js';
 
 let statusPromise = null;
+const OFFLINE = { mode: 'offline', routes: { meeting: 'offline', chat: 'offline', colleague: 'offline' } };
+/** حالة الوكلاء لهذا المستخدم: لكل مسار (اجتماع، محادثة، زميل) Claude أو محلي. */
 export function agentStatus() {
-  statusPromise ??= fetch('/api/agents/status')
-    .then((r) => (r.ok ? r.json() : { mode: 'offline' }))
-    .catch(() => ({ mode: 'offline' }));
+  statusPromise ??= fetch('/api/agents/status', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : OFFLINE))
+    .catch(() => OFFLINE);
   return statusPromise;
 }
+/** تتغير الحالة عند الدخول أو الخروج (الضيف يعمل محليًا). */
+export function resetAgentStatus() { statusPromise = null; }
+export const routeOf = (spec) => (spec?.mode === 'chat' ? 'chat' : 'meeting');
 
 /** لقطة الحالة التي يحتاجها الوكلاء ليتحدثوا عن الشركة بأرقامها الحقيقية. */
 export function meetingContext(sim) {
@@ -48,7 +53,7 @@ export async function runTurn(sim, item, meeting, message, { closing = false } =
   const spec = item.dialogue;
   const optionIds = item.options.map((o) => o.id);
   const status = await agentStatus();
-  if (status.mode === 'claude') {
+  if (status.routes?.[routeOf(spec)] === 'claude') {
     try {
       const res = await fetch('/api/meeting/turn', {
         method: 'POST',

@@ -11,7 +11,7 @@ export async function colleagueReply(session, person, message) {
   const thread = all.slice(0, all.length - 1).map((m) => ({ speaker: m.speaker, text: m.text }));
   const status = await agentStatus();
   const offline = () => offlineColleagueReply({ person, people: session.world.company.people, ctx, day: Math.min(sim.day, sim.lastDay), message });
-  if (status.mode === 'claude') {
+  if (status.routes?.colleague === 'claude') {
     try {
       const res = await fetch('/api/colleague/reply', {
         method: 'POST',

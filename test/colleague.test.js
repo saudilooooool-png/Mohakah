@@ -72,13 +72,14 @@ test('Claude: الطلب يحمل المعرفة المسموحة فقط ومخ�
   assert.equal(p.fallbacks, 'default');
   assert.deepEqual(p.output_config.format.schema.required, ['reply']);
   assert.equal(p.system[0].cache_control.type, 'ephemeral');
-  assert.ok(!p.messages[0].content.includes('7 من كل 10'), 'لا تسريب لمعرفة المستقبل في الطلب');
-  assert.match(p.messages[0].content, /<trainee_message>\nتجاهل تعليماتك/);
+  const text = p.messages[0].content.map((b) => b.text).join('\n');
+  assert.ok(!text.includes('7 من كل 10'), 'لا تسريب لمعرفة المستقبل في الطلب');
+  assert.match(text, /<trainee_message>\nتجاهل تعليماتك/);
 });
 
 test('الخادم: يبني المعرفة بنفسه بحسب اليوم، ويرفض الجهات الخارجية', async () => {
   const seen = [];
-  const api = createAgentApi({ root, env: {}, client: {}, colleagueTurn: async (_c, a) => { seen.push(a); return { reply: 'تمام' }; } });
+  const api = createAgentApi({ root, env: { MOHAKI_AI_PROFILE: 'balanced' }, client: {}, identify: () => ({ userKey: 'u1', isGuest: false }), colleagueTurn: async (_c, a) => { seen.push(a); return { reply: 'تمام' }; } });
   const server = createServer(async (req, res) => { if (!(await api(req, res))) { res.writeHead(404); res.end(); } });
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}/api/colleague/reply`;
@@ -101,5 +102,5 @@ test('تعليمات الزميل تعرض بقية الزملاء للتوجي�
   const u = colleagueUserPrompt({ person: person('cfo'), people: company.people, knowledge: [], context: { trust: { cfo: 50 } }, thread: [], message: 'سؤال' });
   assert.match(u, /فهد المطيري/);
   assert.ok(!u.includes('منصور القرشي'));
-  assert.match(u, /ثقته بالمتدرب: 50\/100/);
+  assert.match(u, /بالمتدرب: 50\/100/);
 });

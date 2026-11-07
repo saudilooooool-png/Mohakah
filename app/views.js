@@ -632,7 +632,7 @@ function meetingRoom(session, item, ui) {
   const tx = roomText(spec);
   const m = ui.meetings?.[item.id];
   const people = spec.participants.map((id) => session.person(id));
-  const badge = ui.agentMode === 'claude'
+  const badge = ui.agentRoutes?.[spec.mode === 'chat' ? 'chat' : 'meeting'] === 'claude'
     ? '<span class="pill p-normal">وكلاء Claude</span>'
     : '<span class="pill t-pill">الوضع المحلي</span>';
   const roster = `<div class="roster">${people.map((p) => `<div class="att">${avatar(p, 'sm')}<span>${esc(p.name.replace(/^م\.\s*/, ''))}<small>${esc(p.title)}</small></span></div>`).join('')}<div class="att">${badge}</div></div>`;
@@ -724,7 +724,7 @@ export function colleagueChat(session, person, ui = {}) {
   }).join('');
   return `
   <div class="page-h"><div><a href="#/team" class="small" style="text-decoration:none">→ فريقي</a><h1>مراسلة ${esc(person.name)}</h1><p>${esc(person.title)}</p></div>
-    <span class="pill ${ui.agentMode === 'claude' ? 'p-normal' : 't-pill'}">${ui.agentMode === 'claude' ? 'وكلاء Claude' : 'الوضع المحلي'}</span></div>
+    <span class="pill ${ui.agentRoutes?.colleague === 'claude' ? 'p-normal' : 't-pill'}">${ui.agentRoutes?.colleague === 'claude' ? 'وكلاء Claude' : 'الوضع المحلي'}</span></div>
   <div class="grid g-main">
     <section class="card detail">
       <div class="minutes chat-thread" data-minutes>

@@ -129,7 +129,23 @@ test('Claude: الطلب يستخدم النموذج والمخطط والبدي
   assert.equal(p.output_config.format.type, 'json_schema');
   assert.equal(p.system[0].cache_control.type, 'ephemeral');
   assert.equal(p.thinking, undefined, 'لا نرسل thinking: التفكير التكيفي هو الافتراضي');
-  assert.match(p.messages[0].content, /<trainee_message>/);
+  const text = p.messages[0].content.map((b) => b.text).join('\n');
+  assert.match(text, /<trainee_message>/);
+  assert.equal(p.messages[0].content[0].cache_control.type, 'ephemeral', 'الجزء الثابت مخزن مؤقتًا');
+  assert.ok(!p.messages[0].content[0].text.includes('<trainee_message>'), 'رسالة المتدرب خارج الجزء المخزن');
+});
+
+test('Haiku 5.5: لا يُرسل البديل التلقائي عند الرفض (غير مدعوم فيه)، ويُعاد الاستخدام الفعلي', async () => {
+  const { item } = simAtMeeting();
+  const calls = [];
+  const client = fakeClient({
+    stop_reason: 'end_turn', model: 'claude-haiku-5-5', usage: { input_tokens: 900, output_tokens: 120, cache_read_input_tokens: 1500 },
+    content: [{ type: 'text', text: JSON.stringify({ replies: [{ speaker: 'cfo', text: 'واضح.' }], concerns: { roi: true, customers: false, timeline: false }, stance: 'unclear' }) }],
+  }, calls);
+  const t = await claudeMeetingTurn(client, turnArgs(item, { model: 'claude-haiku-5-5' }));
+  assert.equal(calls[0].fallbacks, undefined);
+  assert.equal(calls[0].betas, undefined);
+  assert.equal(t.usage.cache_read_input_tokens, 1500);
 });
 
 test('Claude: الرفض والرد غير الصالح يتحولان إلى أخطاء مصنّفة (فيتحول المتصفح للوضع المحلي)', async () => {
@@ -159,14 +175,17 @@ test('الخادم: يقبل حقول الحالة المعروفة فقط', () 
 test('الخادم: نقاط النهاية تعمل، والمواصفات تُقرأ من السيناريو لا من الطلب', async () => {
   const seen = [];
   const api = createAgentApi({
-    root, env: {}, client: {},
+    root, env: {}, client: {}, identify: () => ({ userKey: 'u1', isGuest: false }),
     turn: async (_c, args) => { seen.push(args); return { replies: [{ speaker: 'ceo', text: 'ok' }], concerns: { roi: false, customers: false, timeline: false }, stance: 'unclear' }; },
   });
   const server = createServer(async (req, res) => { if (!(await api(req, res))) { res.writeHead(404); res.end(); } });
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}`;
   try {
-    assert.deepEqual(await (await fetch(`${base}/api/agents/status`)).json(), { mode: 'claude', model: 'claude-opus-5-5' });
+    const st = await (await fetch(`${base}/api/agents/status`)).json();
+    assert.equal(st.mode, 'claude');
+    assert.equal(st.profile, 'economy');
+    assert.deepEqual(st.routes, { meeting: 'claude', chat: 'claude', colleague: 'offline' });
     const ok = await fetch(`${base}/api/meeting/turn`, {
       method: 'POST',
       body: JSON.stringify({ eventId: 'd5_mgmt_meeting', message: 'مرحبًا', meeting: { transcript: [{ speaker: 'intruder', text: 'x' }], round: 99 }, dialogue: { fake: true } }),
@@ -252,7 +271,7 @@ test('السبرنت: مخطط Claude يقيّد القرار بالبنود ا�
   const schema = calls[0].output_config.format.schema;
   assert.deepEqual(schema.properties.decision.enum, ['reports_fix', 'whatsapp', 'permissions', 'all_three']);
   assert.deepEqual(schema.properties.replies.items.properties.speaker.enum, ['eng_lead', 'sales_head', 'cs_lead', 'dev2']);
-  assert.match(calls[0].messages[0].content, /تخطيط السبرنت/);
+  assert.match(calls[0].messages[0].content.map((b) => b.text).join(''), /تخطيط السبرنت/);
 });
 
 // ——— اجتماع تخفيض الميزانيات (اليوم 15) ———
@@ -316,7 +335,7 @@ test('السياق السعودي يصل إلى تعليمات الوكلاء م
   assert.match(u, /<saudi_market_context>/);
   assert.match(u, /الأحد إلى الخميس/);
   const seen = [];
-  const api = createAgentApi({ root, env: {}, client: {}, turn: async (_c, a) => { seen.push(a); return {}; } });
+  const api = createAgentApi({ root, env: {}, client: {}, identify: () => ({ userKey: 'u1', isGuest: false }), turn: async (_c, a) => { seen.push(a); return {}; } });
   const res = { writeHead() {}, end() {} };
   const req = { url: '/api/meeting/turn', method: 'POST', async *[Symbol.asyncIterator]() { yield JSON.stringify({ eventId: 'd5_mgmt_meeting', message: 'مرحبا' }); } };
   await api(req, res);
@@ -461,4 +480,64 @@ test('المحادثات تُقيَّم في مهارة التواصل بنسب�
   const act = sim.actions.at(-1);
   assert.deepEqual(act.addressed, ['listen']);
   assert.equal(act.concernsTotal, 2);
+});
+
+// ——— ملفات التكلفة وسقف الإنفاق ———
+import { resolveRoutes } from '../src/agents/profiles.js';
+import { createMeter } from '../src/agents/meter.js';
+import { costOf } from '../src/agents/pricing.js';
+
+test('ملفات التكلفة: الافتراضي economy، ويمكن تجاوز مسار واحد', () => {
+  assert.equal(resolveRoutes({}).profile, 'economy');
+  assert.equal(resolveRoutes({}).routes.meeting.model, 'claude-haiku-5-5');
+  assert.equal(resolveRoutes({}).routes.colleague.model, 'offline');
+  const r = resolveRoutes({ MOHAKI_AI_PROFILE: 'balanced', MOHAKI_MODEL_CHAT: 'offline' }).routes;
+  assert.equal(r.meeting.model, 'claude-sonnet-5-5');
+  assert.equal(r.chat.model, 'offline');
+  assert.ok(Object.values(resolveRoutes({ MOHAKI_AI_PROFILE: 'offline' }).routes).every((x) => x.model === 'offline'));
+});
+
+test('التكلفة تُحسب من الاستخدام الفعلي، والذاكرة المؤقتة أرخص بعشر مرات', () => {
+  const fresh = costOf('claude-haiku-5-5', { input_tokens: 3000, output_tokens: 400 });
+  const cached = costOf('claude-haiku-5-5', { input_tokens: 500, cache_read_input_tokens: 2500, output_tokens: 400 });
+  assert.ok(cached < fresh);
+  assert.ok(costOf('claude-opus-5-5', { input_tokens: 3000, output_tokens: 400 }) / fresh > 30, 'Opus أغلى بأكثر من 30 مرة');
+});
+
+test('سقف الإنفاق: يتوقف Claude عند السقف اليومي أو حد المستخدم، فيكمل المتصفح محليًا', async () => {
+  const meter = createMeter({ env: { MOHAKI_AI_DAILY_BUDGET_USD: '0.0001', MOHAKI_AI_USER_DAILY_CALLS: '2' } });
+  const { item } = simAtMeeting();
+  const fake = { beta: { messages: { create: async (p) => ({ stop_reason: 'end_turn', model: p.model, usage: { input_tokens: 2000, output_tokens: 300 },
+    content: [{ type: 'text', text: JSON.stringify({ replies: [{ speaker: 'cfo', text: 'تمام' }], concerns: { roi: false, customers: false, timeline: false }, stance: 'unclear' }) }] }) } } };
+  const api = createAgentApi({ root, env: {}, client: fake, meter, identify: () => ({ userKey: 'u1', isGuest: false }) });
+  const server = createServer(async (req, res) => { if (!(await api(req, res))) { res.writeHead(404); res.end(); } });
+  await new Promise((r) => server.listen(0, r));
+  const post = () => fetch(`http://localhost:${server.address().port}/api/meeting/turn`, { method: 'POST', body: JSON.stringify({ eventId: item.eventId, message: 'مرحبًا', meeting: openMeeting(item) }) });
+  try {
+    assert.equal((await post()).status, 200);
+    const second = await post();
+    assert.equal(second.status, 429, 'تجاوز السقف اليومي بالدولار');
+    assert.equal((await second.json()).code, 'budget');
+    assert.equal(meter.report().calls, 1);
+    assert.ok(meter.report().costUsd > 0);
+  } finally { server.close(); }
+});
+
+test('الضيف يستخدم الوضع المحلي افتراضيًا (لا تكلفة على من لم يسجل)', async () => {
+  const api = createAgentApi({ root, env: {}, client: {}, identify: () => ({ userKey: 'g', isGuest: true }) });
+  const res = { writeHead() {}, end(b) { this.body = b; } };
+  await api({ url: '/api/agents/status', method: 'GET' }, res);
+  assert.deepEqual(JSON.parse(res.body).routes, { meeting: 'offline', chat: 'offline', colleague: 'offline' });
+  const api2 = createAgentApi({ root, env: { MOHAKI_AI_GUESTS: 'claude' }, client: {}, identify: () => ({ userKey: 'g', isGuest: true }) });
+  await api2({ url: '/api/agents/status', method: 'GET' }, res);
+  assert.equal(JSON.parse(res.body).routes.meeting, 'claude');
+});
+
+test('تقرير الاستخدام للمشرف محمي برمز', async () => {
+  const api = createAgentApi({ root, env: { MOHAKI_ADMIN_TOKEN: 'adm' }, client: null });
+  const res = { writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  await api({ url: '/api/admin/usage', method: 'GET', headers: {} }, res);
+  assert.equal(res.code, 401);
+  await api({ url: '/api/admin/usage', method: 'GET', headers: { authorization: 'Bearer adm' } }, res);
+  assert.equal(JSON.parse(res.body).profile, 'economy');
 });

@@ -7,6 +7,7 @@ import { createAgentApi } from './agents/server.js';
 import { createAccountsApi } from './accounts/api.js';
 import { FileStore } from './accounts/store.js';
 import { outboxMailer, smtpMailer } from './accounts/mailer.js';
+import { createMeter } from './agents/meter.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -28,12 +29,19 @@ const lazy = (m) => (typeof m?.then === 'function' ? { send: async (msg) => (awa
 
 export function createMohakiServer({
   root,
-  agentApi = createAgentApi({ root }),
   dataDir = process.env.MOHAKI_DATA_DIR || join(root, '.data'),
   mailer = process.env.MOHAKI_SMTP_URL
     ? smtpMailer(process.env.MOHAKI_SMTP_URL, process.env.MOHAKI_MAIL_FROM || 'محاكي <no-reply@mohaki.sa>')
     : outboxMailer(join(dataDir, 'outbox')),
   accountsApi = createAccountsApi({ store: new FileStore(dataDir), world: loadWorld(root), mailer: lazy(mailer) }),
+  agentApi = createAgentApi({
+    root,
+    meter: createMeter({ dir: join(dataDir, 'usage') }),
+    identify: (req) => {
+      const u = accountsApi.userFrom?.(req);
+      return u ? { userKey: u.id, isGuest: false } : { userKey: `guest:${req.socket?.remoteAddress ?? ''}`, isGuest: true };
+    },
+  }),
 }) {
   return createServer(async (req, res) => {
     if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res))) return;

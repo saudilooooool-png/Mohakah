@@ -344,7 +344,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       .sort((a, b) => b.points - a.points);
   }
 
-  return async function handle(req, res) {
+  async function handle(req, res) {
     const url = new URL(req.url, 'http://x');
     const send = (code, data) => {
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -382,5 +382,8 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       else { console.error(err); send(500, { error: 'خطأ في الخادم' }); }
     }
     return true;
-  };
+  }
+  // يتيح للخادم معرفة صاحب الطلب (لسقف الاستخدام وتفعيل الذكاء الاصطناعي للمسجلين)
+  handle.userFrom = userFrom;
+  return handle;
 }

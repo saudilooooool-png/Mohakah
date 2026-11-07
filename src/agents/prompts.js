@@ -41,37 +41,53 @@ export function personaLines(people, ids, trust) {
  * @param {string} a.message   رسالة المتدرب في هذه الجولة (فارغة في الختام)
  * @param {boolean} a.closing  جولة الختام
  */
-export function meetingUserPrompt({ spec, options, people, context, meeting, message, closing, saudiContext = null }) {
+/**
+ * أجزاء رسالة المستخدم: stable لا يتغير بين جولات الحوار نفسه (يُخزن مؤقتًا)، وvolatile يتغير كل جولة.
+ * @param {object} a
+ * @param {object} a.spec      مواصفات الحوار من السيناريو
+ * @param {Array}  a.options   خيارات البند (المعرّفات والتسميات)
+ * @param {Array}  a.people    شخصيات الشركة
+ * @param {object} a.context   لقطة الحالة القادمة من المحرك
+ * @param {object} a.meeting   حالة الحوار (المحضر، الاعتراضات المجابة، الجولة)
+ * @param {string} a.message   رسالة المتدرب في هذه الجولة (فارغة في الختام)
+ * @param {boolean} a.closing  جولة الختام
+ */
+export function meetingPromptParts({ spec, options, people, context, meeting, message, closing, saudiContext = null }) {
   const nameOf = (id) => (id === 'trainee' ? 'المتدرب (مدير المنتجات)' : people.find((p) => p.id === id)?.name ?? id);
   const transcript = meeting.transcript.map((l) => `${nameOf(l.speaker)}: ${l.text}`).join('\n');
-  const concerns = spec.concerns.map((c) =>
-    `- ${c.id} (صاحبه ${c.owner}) — ${c.label}. المعيار: ${c.criteria} الحالة: ${meeting.addressed[c.id] ? 'أُجيب سابقًا' : 'لم يُجب بعد'}.`).join('\n');
+  const concerns = spec.concerns.map((c) => `- ${c.id} (صاحبه ${c.owner}) — ${c.label}. المعيار: ${c.criteria}`).join('\n');
+  const status = spec.concerns.map((c) => `- ${c.id}: ${meeting.addressed[c.id] ? 'أُجيب سابقًا' : 'لم يُجب بعد'}`).join('\n');
   const outcomes = options.map((o) => `- ${o.id}: ${o.label}. الدليل: ${spec.outcomes?.[o.id]?.guide ?? ''}`).join('\n');
-  return `<company_context>
-${JSON.stringify(context, null, 1)}
-</company_context>
+  const stable = `<meeting type="${spec.mode === 'chat' ? 'محادثة مكتوبة' : 'اجتماع'}">
+الموضوع: ${spec.topic}
+${spec.mode === 'chat' ? 'الطرف الآخر' : 'رئيس الاجتماع'}: ${spec.chair}
+عدد الجولات: ${meeting.maxRounds}
+</meeting>
 ${saudiContext ? `
 <saudi_market_context>
 ${Object.values(saudiContext).map((v) => `- ${v}`).join('\n')}
 </saudi_market_context>
 ` : ''}
-<meeting type="${spec.mode === 'chat' ? 'محادثة مكتوبة' : 'اجتماع'}">
-الموضوع: ${spec.topic}
-${spec.mode === 'chat' ? 'الطرف الآخر' : 'رئيس الاجتماع'}: ${spec.chair}
-الجولة: ${meeting.round + (closing ? 0 : 1)} من ${meeting.maxRounds}
-</meeting>
-
-<participants>
-${personaLines(people, spec.participants, context.trust)}
-</participants>
-
 <concerns>
 ${concerns}
 </concerns>
 
 <allowed_outcomes>
 ${outcomes}
-</allowed_outcomes>
+</allowed_outcomes>`;
+  const volatile = `<company_context>
+${JSON.stringify(context, null, 1)}
+</company_context>
+
+<participants>
+${personaLines(people, spec.participants, context.trust)}
+</participants>
+
+<concerns_status>
+${status}
+</concerns_status>
+
+<round>${meeting.round + (closing ? 0 : 1)} من ${meeting.maxRounds}</round>
 
 <transcript>
 ${transcript}
@@ -84,6 +100,12 @@ ${message}
 </trainee_message>
 
 <task>اكتب ردود المشاركين على رسالة المتدرب، واحكم على الاعتراضات بحسب هذه الرسالة، وحدد stance.</task>`}`;
+  return { stable, volatile };
+}
+
+export function meetingUserPrompt(args) {
+  const { stable, volatile } = meetingPromptParts(args);
+  return `${stable}\n\n${volatile}`;
 }
 
 // ——— مراسلة الزملاء ———
@@ -101,22 +123,14 @@ export const COLLEAGUE_SYSTEM = `أنت محرك المراسلات في "محا
 
 أعد JSON فقط وفق المخطط.`;
 
-export function colleagueUserPrompt({ person, people, knowledge, context, thread, message, saudiContext = null }) {
+export function colleaguePromptParts({ person, people, knowledge, context, thread, message, saudiContext = null }) {
   const nameOf = (id) => (id === 'trainee' ? 'المتدرب' : people.find((p) => p.id === id)?.name ?? id);
   const colleagues = people.filter((p) => !p.external && p.id !== person.id)
     .map((p) => `- ${p.name}، ${p.title}. يهمه: ${(p.cares ?? []).join('، ')}.`).join('\n');
   const trust = context.trust?.[person.id];
-  return `<colleague>
-${person.name}، ${person.title}. ${person.persona}${trust !== undefined ? ` ثقته بالمتدرب: ${Math.round(trust)}/100.` : ''}
+  const stable = `<colleague>
+${person.name}، ${person.title}. ${person.persona}
 </colleague>
-
-<knowledge>
-${knowledge.map((k) => `- ${k.text}`).join('\n') || '- لا توجد معلومات مخزنة.'}
-</knowledge>
-
-<company_context>
-${JSON.stringify({ day: context.day, mrr: context.mrr, customers: context.customers, productQuality: context.productQuality }, null, 1)}
-</company_context>
 ${saudiContext ? `
 <saudi_market_context>
 ${Object.values(saudiContext).map((v) => `- ${v}`).join('\n')}
@@ -124,8 +138,15 @@ ${Object.values(saudiContext).map((v) => `- ${v}`).join('\n')}
 ` : ''}
 <colleagues>
 ${colleagues}
-</colleagues>
+</colleagues>`;
+  const volatile = `<knowledge>
+${knowledge.map((k) => `- ${k.text}`).join('\n') || '- لا توجد معلومات مخزنة.'}
+</knowledge>
 
+<company_context>
+${JSON.stringify({ day: context.day, mrr: context.mrr, customers: context.customers, productQuality: context.productQuality }, null, 1)}
+</company_context>
+${trust !== undefined ? `\n<trust>ثقة ${person.name} بالمتدرب: ${Math.round(trust)}/100.</trust>\n` : ''}
 <thread>
 ${thread.map((m) => `${nameOf(m.speaker)}: ${m.text}`).join('\n') || '(بداية المراسلة)'}
 </thread>
@@ -135,4 +156,10 @@ ${message}
 </trainee_message>
 
 <task>اكتب رد ${person.name} على رسالة المتدرب.</task>`;
+  return { stable, volatile };
+}
+
+export function colleagueUserPrompt(args) {
+  const { stable, volatile } = colleaguePromptParts(args);
+  return `${stable}\n\n${volatile}`;
 }
