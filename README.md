@@ -91,8 +91,10 @@ MOHAKI_DATA_DIR=/tmp/mohaki MOHAKI_EMPLOYER_TOKEN=t npm start
 ```
 
 ```bash
-node scripts/ui-accounts.js
+MOHAKI_DATA_DIR=/tmp/mohaki node scripts/ui-accounts.js
 ```
+
+دون `MOHAKI_SMTP_URL` تُحفظ رسائل تأكيد البريد واستعادة كلمة المرور في `.data/outbox/`، ويُطبع رابطها في سجل الخادم.
 
 فحص آلي للواجهة في متصفح حقيقي على سطح المكتب والجوال (يتطلب Playwright، وأن يكون الخادم يعمل):
 

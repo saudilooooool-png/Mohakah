@@ -64,7 +64,9 @@ export function shell(session, route, content) {
           ? '<a class="btn teal" href="#/report">السجل المهني</a>'
           : `<button class="btn primary" type="button" data-act="end-day">${icon('clock').replace('<svg', '<svg width="16" height="16"')}<span>إنهاء يوم العمل</span></button>`}
       </header>
-      <main class="content" id="content">${content}</main>
+      <main class="content" id="content">${session.user && !session.user.emailVerified ? `<div class="verify-banner">
+        <span>أرسلنا رابط تأكيد إلى <b dir="ltr">${esc(session.user.email)}</b>. أكّد بريدك لتتمكن من إصدار سجلك الموثّق ومشاركته مع جهات التوظيف.</span>
+        <button class="btn sm" data-act="resend-verification">إعادة الإرسال</button></div>` : ''}${content}</main>
     </div>
   </div>`;
 }
@@ -761,6 +763,8 @@ function pointsCard(session, r) {
     action = `<p class="small muted" style="margin:0">يُصدر سجل الأداء الموثّق بعد إكمال ${sim.lastDay} يوم عمل. متبقٍ: <span class="num">${sim.lastDay - sim.day + 1}</span>.</p>`;
   } else if (!user) {
     action = `<div class="actions"><button class="btn teal" data-act="open-auth" data-mode="register">أنشئ حسابًا لإصدار سجلك الموثّق</button></div>`;
+  } else if (!user.emailVerified) {
+    action = `<div class="actions"><span class="small">أكّد بريدك الإلكتروني أولًا لإصدار السجل الموثّق.</span><button class="btn sm" data-act="resend-verification">إعادة إرسال رابط التأكيد</button></div>`;
   } else if (issued) {
     action = `<div class="actions"><a class="btn teal" href="#/verify/${esc(issued.code)}">عرض السجل الموثّق <span class="num">${esc(issued.code)}</span></a><button class="btn" data-act="copy-verify" data-code="${esc(issued.code)}">نسخ رابط التحقق</button></div>`;
   } else {
@@ -810,6 +814,7 @@ export function authModal(mode = 'register', error = '') {
     <div class="actions">
       <button class="btn primary" type="submit">${reg ? 'إنشاء الحساب' : 'دخول'}</button>
       <button class="btn ghost" type="button" data-act="open-auth" data-mode="${reg ? 'login' : 'register'}">${reg ? 'لدي حساب' : 'ليس لدي حساب'}</button>
+      ${reg ? '' : '<button class="btn ghost" type="button" data-act="open-forgot">نسيت كلمة المرور؟</button>'}
       <button class="btn ghost" type="button" data-act="close-modal">إلغاء</button>
     </div>
   </form>`;
@@ -828,7 +833,7 @@ export function accountPage(session, user) {
   if (!user) return `<section class="card"><div class="empty"><b>لست مسجلًا</b><button class="btn primary" data-act="open-auth" data-mode="register">أنشئ حسابًا</button></div></section>`;
   const p = user.profile ?? {};
   return `
-  <div class="page-h"><div><h1>حسابي</h1><p>${esc(user.email)}</p></div></div>
+  <div class="page-h"><div><h1>حسابي</h1><p><span dir="ltr">${esc(user.email)}</span> ${user.emailVerified ? '<span class="pill s-done">بريد مؤكد</span>' : '<span class="pill p-high">بريد غير مؤكد</span> <button class="btn sm" data-act="resend-verification">إعادة إرسال التأكيد</button>'}</p></div></div>
   <div class="grid g-2">
     <section class="card">
       <h2>الملف الشخصي</h2>
@@ -886,5 +891,43 @@ export function verifyPage(state) {
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
     <p class="small muted">تاريخ الإصدار: ${d(r.issuedAt)} · احتُسبت النتيجة بإعادة تشغيل كل القرارات على خادم محاكي · بصمة سجل الأفعال: <span class="num" style="word-break:break-all">${esc(r.logHash.slice(0, 16))}…</span></p>
     <div class="actions no-print"><button class="btn" data-act="print">طباعة / حفظ PDF</button><a class="btn ghost" href="#/desk">إلى محاكي</a></div>
+  </section>`);
+}
+
+// ——— تأكيد البريد واستعادة كلمة المرور ———
+
+const publicFrame = (inner) => `<div class="verify-wrap"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}</div>`;
+
+export function forgotModal(message = '', error = '') {
+  return `
+  <div class="modal-h"><div class="eyebrow">استعادة الحساب</div><h2>نسيت كلمة المرور؟</h2></div>
+  <form class="modal-b" data-form="forgot">
+    ${message ? `<div class="outcome good" style="margin-bottom:12px">${esc(message)}</div>` : '<p style="margin-top:0">أدخل بريدك، وسنرسل لك رابطًا لتعيين كلمة مرور جديدة.</p>'}
+    ${error ? `<div class="outcome bad" style="margin-bottom:12px">${esc(error)}</div>` : ''}
+    <div class="field"><label for="f-email">البريد الإلكتروني</label><input id="f-email" name="email" type="email" required autocomplete="email" dir="ltr"></div>
+    <div class="actions"><button class="btn primary" type="submit">إرسال الرابط</button><button class="btn ghost" type="button" data-act="open-auth" data-mode="login">العودة للدخول</button></div>
+  </form>`;
+}
+
+export function confirmEmailPage(state) {
+  if (state.loading) return publicFrame('<section class="card"><div class="empty">جارٍ تأكيد بريدك…</div></section>');
+  if (state.error) return publicFrame(`<section class="card"><div class="outcome bad"><h3>تعذر تأكيد البريد</h3><p>${esc(state.error)}</p></div>
+    <div class="actions"><a class="btn primary" href="#/account">اطلب رابطًا جديدًا من حسابي</a></div></section>`);
+  return publicFrame(`<section class="card"><div class="outcome good"><h3>تم تأكيد بريدك ✓</h3><p>يمكنك الآن إصدار سجل الأداء الموثّق عند إكمال التجربة، ومشاركته مع جهات التوظيف إن وافقت.</p></div>
+    <div class="actions"><a class="btn primary" href="#/desk">إلى محاكي</a></div></section>`);
+}
+
+export function resetPasswordPage(state = {}) {
+  if (state.done) return publicFrame(`<section class="card"><div class="outcome good"><h3>تم تعيين كلمة المرور ✓</h3><p>سُجّل دخولك، وأُخرجت أي جلسات أخرى مفتوحة على حسابك.</p></div>
+    <div class="actions"><a class="btn primary" href="#/desk">إلى محاكي</a></div></section>`);
+  return publicFrame(`<section class="card">
+    <h1 style="font-size:22px;margin-top:0">تعيين كلمة مرور جديدة</h1>
+    ${state.error ? `<div class="outcome bad" style="margin-bottom:12px">${esc(state.error)}</div>` : ''}
+    <form data-form="reset" class="grid" style="gap:10px">
+      <div class="field"><label for="r-pass">كلمة المرور الجديدة <span class="muted small">(8 أحرف على الأقل)</span></label><input id="r-pass" name="password" type="password" minlength="8" required autocomplete="new-password" dir="ltr"></div>
+      <div class="field"><label for="r-pass2">تأكيد كلمة المرور</label><input id="r-pass2" name="password2" type="password" minlength="8" required autocomplete="new-password" dir="ltr"></div>
+      <div class="actions"><button class="btn primary" type="submit">حفظ كلمة المرور</button></div>
+    </form>
+    <p class="small muted">بعد الحفظ تُنهى كل الجلسات المفتوحة على حسابك في الأجهزة الأخرى.</p>
   </section>`);
 }

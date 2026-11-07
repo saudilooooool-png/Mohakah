@@ -10,6 +10,7 @@ export class FileStore {
     this.users = this._read('users.json', {});
     this.sessions = this._read('sessions.json', {});
     this.records = this._read('records.json', {});
+    this.tokens = this._read('tokens.json', {});
   }
 
   _read(name, fallback) {
@@ -27,6 +28,7 @@ export class FileStore {
   saveUsers() { this._write('users.json', this.users); }
   saveSessions() { this._write('sessions.json', this.sessions); }
   saveRecords() { this._write('records.json', this.records); }
+  saveTokens() { this._write('tokens.json', this.tokens); }
 
   progress(userId) { return this._read(join('progress', `${userId}.json`), null); }
   saveProgress(userId, data) { this._write(join('progress', `${userId}.json`), data); }

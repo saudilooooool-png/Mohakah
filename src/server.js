@@ -6,6 +6,7 @@ import { extname, join, normalize } from 'node:path';
 import { createAgentApi } from './agents/server.js';
 import { createAccountsApi } from './accounts/api.js';
 import { FileStore } from './accounts/store.js';
+import { outboxMailer, smtpMailer } from './accounts/mailer.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -22,10 +23,17 @@ const types = {
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
 };
 
+// smtpMailer غير متزامن (يحمّل nodemailer عند الحاجة)؛ هذا الغلاف يجعل الاستخدام موحدًا
+const lazy = (m) => (typeof m?.then === 'function' ? { send: async (msg) => (await m).send(msg) } : m);
+
 export function createMohakiServer({
   root,
   agentApi = createAgentApi({ root }),
-  accountsApi = createAccountsApi({ store: new FileStore(process.env.MOHAKI_DATA_DIR || join(root, '.data')), world: loadWorld(root) }),
+  dataDir = process.env.MOHAKI_DATA_DIR || join(root, '.data'),
+  mailer = process.env.MOHAKI_SMTP_URL
+    ? smtpMailer(process.env.MOHAKI_SMTP_URL, process.env.MOHAKI_MAIL_FROM || 'محاكي <no-reply@mohaki.sa>')
+    : outboxMailer(join(dataDir, 'outbox')),
+  accountsApi = createAccountsApi({ store: new FileStore(dataDir), world: loadWorld(root), mailer: lazy(mailer) }),
 }) {
   return createServer(async (req, res) => {
     if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res))) return;

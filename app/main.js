@@ -16,6 +16,8 @@ let session = null;
 let user = null;
 const saver = debouncedSaver();
 let verifyState = { loading: true };
+let confirmState = { loading: true };
+let resetState = {};
 
 /** يربط الجلسة بالحساب: كل حفظ محلي يُرفع إلى الخادم (مؤجلًا). */
 function attach(s) {
@@ -41,7 +43,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -53,6 +55,8 @@ function render() {
     document.title = verifyState.record?.name ? `سجل ${verifyState.record.name} — محاكي` : 'التحقق من سجل — محاكي';
     return;
   }
+  if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
+  if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
   if (!session) {
     app.innerHTML = route.page === 'account' && user
       ? `<div class="content" style="margin:0 auto">${V.accountPage(null, user)}<p><a href="#/desk">← العودة</a></p></div>`
@@ -141,6 +145,13 @@ const actions = {
     toast('سُجّل خروجك.');
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
+  'open-forgot'() { openModal(V.forgotModal()); },
+  async 'resend-verification'() {
+    try {
+      const r = await account.resendVerification();
+      toast(r.alreadyVerified ? 'بريدك مؤكد بالفعل.' : `أرسلنا رابط التأكيد إلى ${user.email}.`, 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+  },
   async 'confirm-delete'() {
     await account.remove();
     closeModal();
@@ -302,6 +313,26 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'forgot') {
+    account.requestReset(String(new FormData(form).get('email') || ''))
+      .then((r) => openModal(V.forgotModal(r.message)))
+      .catch((err) => openModal(V.forgotModal('', err.message)));
+    return;
+  }
+  if (form.dataset.form === 'reset') {
+    const f = new FormData(form);
+    if (f.get('password') !== f.get('password2')) { resetState = { error: 'كلمتا المرور غير متطابقتين.' }; render(); return; }
+    account.resetPassword(parseRoute().itemId, String(f.get('password')))
+      .then(async (u) => {
+        user = u;
+        Session.clear(); session = null; // حساب جديد على هذا الجهاز: يُحمّل التقدم من الخادم
+        const remote = await account.progress().catch(() => null);
+        if (remote) session = attach(Session.fromSave(world, remote));
+        resetState = { done: true }; render();
+      })
+      .catch((err) => { resetState = { error: err.message }; render(); });
+    return;
+  }
   if (form.dataset.form === 'auth') {
     submitAuth(form).catch((err) => openModal(V.authModal(form.dataset.mode, err.message)));
     return;
@@ -367,8 +398,22 @@ async function loadVerify() {
 window.addEventListener('pagehide', () => saver.flush({ keepalive: true }));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saver.flush({ keepalive: true }); });
 
+async function loadConfirm() {
+  confirmState = { loading: true };
+  render();
+  try {
+    const r = await account.confirmEmail(parseRoute().itemId);
+    if (user && r.user && user.id === r.user.id) { user = r.user; if (session) session.user = user; }
+    confirmState = { ok: true };
+  } catch (err) { confirmState = { error: err.message }; }
+  render();
+}
+
 window.addEventListener('hashchange', () => {
+  closeModal(); // الانتقال لصفحة أخرى يغلق أي نافذة مفتوحة
   if (parseRoute().page === 'verify') { loadVerify(); return; }
+  if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
+  if (parseRoute().page === 'reset-password') resetState = {};
   render();
 });
 
@@ -379,6 +424,7 @@ window.addEventListener('hashchange', () => {
     agentStatus().then((st) => { ui.agentMode = st.mode; if (session) render(); });
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
+    if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
     if (user) {
       const remote = await account.progress().catch(() => null);
       const local = Session.localSave();

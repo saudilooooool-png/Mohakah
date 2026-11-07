@@ -9,10 +9,14 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { replay } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
+import { renderEmail } from './mailer.js';
 
 const SESSION_DAYS = 30;
 const COOKIE = 'mohaki_session';
 const MAX_LOG = 3000;
+const VERIFY_TTL = 48 * 3600e3; // رابط تأكيد البريد: 48 ساعة
+const RESET_TTL = 3600e3;       // رابط استعادة كلمة المرور: ساعة واحدة
+const GENERIC_RESET = 'إذا كان البريد مسجلًا لدينا، فستصلك رسالة فيها رابط لتعيين كلمة مرور جديدة خلال دقائق.';
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -55,13 +59,60 @@ export function cleanProfile(raw = {}) {
   };
 }
 
-export function createAccountsApi({ store, world, env = process.env, now: clock = now }) {
+export function createAccountsApi({ store, world, env = process.env, now: clock = now, mailer = null, publicUrl = env.MOHAKI_PUBLIC_URL || 'http://localhost:4173' }) {
   const secureCookie = env.MOHAKI_SECURE_COOKIE === '1';
   const employerToken = env.MOHAKI_EMPLOYER_TOKEN || null;
   const attempts = new Map(); // email -> [timestamps] لحماية بسيطة من التخمين
+  const resetRequests = new Map(); // email -> [timestamps]
+  // روابط البريد مبنية من عنوان مُعدّ مسبقًا، لا من ترويسة Host في الطلب (حماية من تزوير روابط الاستعادة)
+  const appUrl = (path) => `${publicUrl.replace(/\/$/, '')}/app/#/${path}`;
+
+  // رموز لمرة واحدة: يُخزن مجزأً مع الغرض والصلاحية، ويُبطل بعد الاستخدام
+  function issueToken(userId, purpose, ttl) {
+    const raw = randomBytes(32).toString('base64url');
+    const t = Date.now();
+    for (const [k, v] of Object.entries(store.tokens)) {
+      if (new Date(v.expiresAt).getTime() < t || (v.userId === userId && v.purpose === purpose)) delete store.tokens[k];
+    }
+    store.tokens[sha256(raw)] = { userId, purpose, expiresAt: new Date(t + ttl).toISOString() };
+    store.saveTokens();
+    return raw;
+  }
+
+  function consumeToken(raw, purpose) {
+    const key = sha256(String(raw ?? ''));
+    const t = store.tokens[key];
+    if (!t || t.purpose !== purpose || new Date(t.expiresAt) < new Date() || !store.users[t.userId]) {
+      throw new HttpError(400, 'الرابط غير صالح أو انتهت صلاحيته. اطلب رابطًا جديدًا.');
+    }
+    delete store.tokens[key];
+    store.saveTokens();
+    return store.users[t.userId];
+  }
+
+  async function sendMail(to, subject, body, link) {
+    if (!mailer) return;
+    try { await mailer.send({ to, subject, ...renderEmail(body), link }); } catch (err) { console.error('تعذر إرسال البريد', err); }
+  }
+
+  async function sendVerification(user) {
+    const sent = (user.verifySent ?? []).filter((t) => Date.now() - new Date(t).getTime() < 864e5);
+    if (sent.length && Date.now() - new Date(sent.at(-1)).getTime() < 60e3) throw new HttpError(429, 'أُرسل رابط قبل أقل من دقيقة. تحقق من بريدك.');
+    if (sent.length >= 5) throw new HttpError(429, 'وصلت إلى الحد اليومي لرسائل التأكيد. حاول غدًا.');
+    user.verifySent = [...sent, clock()];
+    store.saveUsers();
+    const link = appUrl(`confirm-email/${issueToken(user.id, 'verify', VERIFY_TTL)}`);
+    await sendMail(user.email, 'أكّد بريدك في محاكي', {
+      title: 'أكّد بريدك الإلكتروني',
+      greeting: `مرحبًا ${user.name}،`,
+      lines: ['شكرًا لانضمامك إلى محاكي. أكّد بريدك حتى نتمكن من إصدار سجل الأداء الموثّق باسمك، ومن مشاركته مع جهات التوظيف إن وافقت على ذلك.'],
+      action: { label: 'تأكيد البريد', url: link },
+      note: 'الرابط صالح لمدة 48 ساعة. إذا لم تنشئ حسابًا في محاكي، تجاهل هذه الرسالة.',
+    }, link);
+  }
 
   const publicUser = (u) => u && {
-    id: u.id, name: u.name, email: u.email, profile: u.profile, consents: u.consents, createdAt: u.createdAt,
+    id: u.id, name: u.name, email: u.email, emailVerified: !!u.emailVerifiedAt, profile: u.profile, consents: u.consents, createdAt: u.createdAt,
     records: Object.values(store.records).filter((r) => r.userId === u.id && !r.revoked).map((r) => r.code),
   };
 
@@ -93,7 +144,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
   }
 
   const routes = {
-    'POST /api/auth/register': (req, res, body) => {
+    'POST /api/auth/register': async (req, res, body) => {
       const name = str(body.name, 80);
       const email = str(body.email, 120).toLowerCase();
       const password = typeof body.password === 'string' ? body.password : '';
@@ -107,7 +158,55 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       store.users[user.id] = user;
       store.saveUsers();
       startSession(res, user.id);
+      await sendVerification(user).catch(() => {});
       return publicUser(user);
+    },
+
+    'POST /api/auth/verify/send': async (req, res, body, u) => {
+      if (u.emailVerifiedAt) return { ok: true, alreadyVerified: true };
+      await sendVerification(u);
+      return { ok: true };
+    },
+
+    'POST /api/auth/verify': (req, res, body) => {
+      const u = consumeToken(body.token, 'verify');
+      u.emailVerifiedAt ??= clock();
+      store.saveUsers();
+      return { ok: true, user: publicUser(u) };
+    },
+
+    // لا يكشف هل البريد مسجل: الرد نفسه في كل الحالات
+    'POST /api/auth/reset/request': async (req, res, body) => {
+      const email = str(body.email, 120).toLowerCase();
+      const recent = (resetRequests.get(email) ?? []).filter((t) => Date.now() - t < 3600e3);
+      if (recent.length >= 3) return { ok: true, message: GENERIC_RESET };
+      resetRequests.set(email, [...recent, Date.now()]);
+      const user = Object.values(store.users).find((u) => u.email === email);
+      if (user) {
+        const link = appUrl(`reset-password/${issueToken(user.id, 'reset', RESET_TTL)}`);
+        await sendMail(user.email, 'تعيين كلمة مرور جديدة في محاكي', {
+          title: 'تعيين كلمة مرور جديدة',
+          greeting: `مرحبًا ${user.name}،`,
+          lines: ['طلبت تعيين كلمة مرور جديدة لحسابك في محاكي.'],
+          action: { label: 'تعيين كلمة المرور', url: link },
+          note: 'الرابط صالح لمدة ساعة واحدة ولمرة واحدة. إذا لم تطلب ذلك، تجاهل الرسالة؛ كلمة مرورك الحالية لم تتغير.',
+        }, link);
+      }
+      return { ok: true, message: GENERIC_RESET };
+    },
+
+    // تعيين كلمة المرور يُنهي كل الجلسات المفتوحة، ويثبت ملكية البريد
+    'POST /api/auth/reset': (req, res, body) => {
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (password.length < 8) throw new HttpError(400, 'كلمة المرور 8 أحرف على الأقل');
+      const u = consumeToken(body.token, 'reset');
+      u.passwordHash = hashPassword(password);
+      u.emailVerifiedAt ??= clock();
+      u.passwordChangedAt = clock();
+      for (const [k, s] of Object.entries(store.sessions)) if (s.userId === u.id) delete store.sessions[k];
+      store.saveUsers(); store.saveSessions();
+      startSession(res, u.id);
+      return publicUser(u);
     },
 
     'POST /api/auth/login': (req, res, body) => {
@@ -174,6 +273,8 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
     },
 
     'POST /api/records/issue': (req, res, body, u) => {
+      // السجل يحمل اسم صاحبه وقد يُشارك مع جهات توظيف: يجب أن يكون البريد مؤكدًا
+      if (!u.emailVerifiedAt) throw new HttpError(403, 'أكّد بريدك الإلكتروني أولًا لإصدار السجل الموثّق.');
       const p = store.progress(u.id);
       if (!p) throw new HttpError(400, 'لا يوجد تقدم محفوظ');
       let sim;
@@ -235,7 +336,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
     }
     return [...latest.entries()]
       .map(([userId, r]) => ({ user: store.users[userId], r }))
-      .filter(({ user }) => user?.consents?.employerSharing)
+      .filter(({ user }) => user?.consents?.employerSharing && user.emailVerifiedAt)
       .map(({ user, r }) => ({
         name: user.name, email: user.email, ...user.profile,
         code: r.code, role: r.role, points: r.points, band: r.band.label, occupation: r.occupation, issuedAt: r.issuedAt,
@@ -271,7 +372,8 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         }
         try { body = JSON.parse(raw || '{}'); } catch { throw new HttpError(400, 'JSON غير صالح'); }
       }
-      const open = ['POST /api/auth/register', 'POST /api/auth/login', 'POST /api/auth/logout', 'GET /api/me'];
+      const open = ['POST /api/auth/register', 'POST /api/auth/login', 'POST /api/auth/logout', 'GET /api/me',
+        'POST /api/auth/verify', 'POST /api/auth/reset/request', 'POST /api/auth/reset'];
       const user = userFrom(req);
       if (!open.includes(`${req.method} ${url.pathname}`) && !user) throw new HttpError(401, 'سجّل الدخول أولًا');
       send(200, await route(req, res, body, user));

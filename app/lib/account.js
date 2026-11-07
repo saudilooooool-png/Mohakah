@@ -23,6 +23,10 @@ export const account = {
   progress: () => api('GET', '/api/progress').then((d) => d.progress),
   saveProgress: (save, opts) => api('PUT', '/api/progress', save, opts),
   issueRecord: () => api('POST', '/api/records/issue', {}),
+  resendVerification: () => api('POST', '/api/auth/verify/send', {}),
+  confirmEmail: (token) => api('POST', '/api/auth/verify', { token }),
+  requestReset: (email) => api('POST', '/api/auth/reset/request', { email }),
+  resetPassword: (token, password) => api('POST', '/api/auth/reset', { token, password }),
   record: (code) => api('GET', `/api/records/${encodeURIComponent(code)}`),
 };
 

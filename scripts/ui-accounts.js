@@ -1,12 +1,25 @@
 // فحص رحلة الحساب والسجل الموثّق في متصفح حقيقي.
 // الاستخدام: MOHAKI_DATA_DIR=/tmp/x MOHAKI_EMPLOYER_TOKEN=t npm start ثم: node scripts/ui-accounts.js [مجلد_لقطات]
 import { createRequire } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const BASE = process.env.BASE_URL || 'http://localhost:4173/app/';
 const ORIGIN = new URL(BASE).origin;
 const TOKEN = process.env.MOHAKI_EMPLOYER_TOKEN || 't';
 const shots = process.argv[2];
+const DATA = process.env.MOHAKI_DATA_DIR;
+if (!DATA) { console.error('عيّن MOHAKI_DATA_DIR (نفس مجلد الخادم) لقراءة صندوق البريد الصادر'); process.exit(2); }
+/** آخر رابط في صندوق البريد الصادر لبريد معين ونوع معين (كما يفعل المستخدم من بريده). */
+const lastLink = (to, kind) => {
+  const files = readdirSync(join(DATA, 'outbox')).sort();
+  for (const f of files.reverse()) {
+    const m = JSON.parse(readFileSync(join(DATA, 'outbox', f), 'utf8'));
+    if (m.to === to && m.link?.includes(kind)) return m.link;
+  }
+  return null;
+};
 const errors = [];
 const check = (cond, msg) => { if (!cond) errors.push(msg); };
 
@@ -35,7 +48,8 @@ await page.waitForSelector('.modal h2');
 check((await page.locator('.modal h2').textContent()).includes('أنشئ حسابًا'), 'لم يظهر طلب الحساب للضيف في اليوم الثاني');
 await page.locator('.modal [data-act="open-auth"][data-mode="register"]').click();
 await page.fill('#a-name', 'نورة العتيبي');
-await page.fill('#a-email', `noura${Date.now()}@example.com`);
+const EMAIL = `noura${Date.now()}@example.com`;
+await page.fill('#a-email', EMAIL);
 await page.fill('#a-pass', 'secret-123');
 await page.locator('details.optional summary').click();
 await page.fill('#a-uni', 'جامعة الأميرة نورة');
@@ -47,6 +61,7 @@ await page.locator('input[name="processing"]').check();
 await page.getByRole('button', { name: 'إنشاء الحساب' }).click();
 await page.waitForFunction(() => !document.querySelector('.modal'));
 check((await page.locator('.side-foot .me').textContent()).includes('نورة'), 'الاسم لا يظهر بعد التسجيل');
+check(await page.locator('.verify-banner').count() === 1, 'لا يظهر تنبيه تأكيد البريد');
 
 // 3) التقدم انتقل للحساب ويبقى بعد إعادة التحميل
 await page.waitForTimeout(1200);
@@ -73,7 +88,16 @@ await page.goto(`${BASE}#/report`);
 await page.waitForSelector('.points-card');
 await snap('3-points');
 
-// 5) إصدار السجل الموثّق
+// 5) الإصدار يتطلب بريدًا مؤكدًا: يفتح المتدرب رابط التأكيد من بريده
+check(await page.getByRole('button', { name: 'إصدار سجل الأداء الموثّق' }).count() === 0, 'زر الإصدار ظاهر قبل تأكيد البريد');
+const confirmLink = lastLink(EMAIL, 'confirm-email');
+check(!!confirmLink, 'لم تُرسل رسالة تأكيد البريد');
+await page.goto(confirmLink.replace(/^https?:\/\/[^/]+/, ORIGIN));
+await page.waitForSelector('.outcome.good');
+await snap('3b-confirmed');
+await page.goto(`${BASE}#/report`);
+await page.waitForSelector('.points-card');
+check(await page.locator('.verify-banner').count() === 0, 'بقي تنبيه التأكيد بعد تأكيد البريد');
 await page.getByRole('button', { name: 'إصدار سجل الأداء الموثّق' }).click();
 await page.waitForSelector('a[href^="#/verify/"]');
 const href = await page.locator('a[href^="#/verify/"]').first().getAttribute('href');
@@ -103,6 +127,27 @@ await snap('5-account');
 await page.locator('[data-act="logout"]').first().click();
 await page.waitForSelector('.welcome');
 check(!(await page.evaluate(() => localStorage.getItem('mohaki.session.v1'))), 'بقي التقدم في المتصفح بعد الخروج');
+
+// 9) نسيت كلمة المرور: طلب الرابط، وفتحه من البريد، وتعيين كلمة جديدة
+await page.getByRole('button', { name: 'لدي حساب' }).click();
+await page.getByRole('button', { name: 'نسيت كلمة المرور؟' }).click();
+await page.fill('#f-email', EMAIL);
+await page.getByRole('button', { name: 'إرسال الرابط' }).click();
+await page.waitForSelector('.modal .outcome.good');
+const resetLink = lastLink(EMAIL, 'reset-password');
+check(!!resetLink, 'لم تُرسل رسالة الاستعادة');
+await page.goto(resetLink.replace(/^https?:\/\/[^/]+/, ORIGIN));
+await page.fill('#r-pass', 'brand-new-789');
+await page.fill('#r-pass2', 'brand-new-789');
+await snap('6-reset');
+await page.getByRole('button', { name: 'حفظ كلمة المرور' }).click();
+await page.waitForSelector('.outcome.good');
+const login = async (pw) => (await fetch(`${ORIGIN}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: EMAIL, password: pw }) })).status;
+check(await login('secret-123') === 401, 'كلمة المرور القديمة ما زالت تعمل');
+check(await login('brand-new-789') === 200, 'كلمة المرور الجديدة لا تعمل');
+await page.goto(`${BASE}#/desk`);
+await page.waitForSelector('.topbar');
+check((await page.locator('.side-foot .me').textContent()).includes('نورة'), 'لم يُسجّل الدخول بعد تعيين كلمة المرور');
 
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

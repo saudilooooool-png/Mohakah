@@ -36,7 +36,7 @@ async function run(viewport, tag) {
   await page.waitForSelector('.minutes .bubble');
   await page.fill('#say', 'أفهم أن تعطل التقارير في نهاية الشهر يؤثر على اجتماع إدارتكم. أخبرني: أي التقارير تتعطل ومتى؟ وسأتواصل معك بتحديث يوم الأحد بعد مراجعة الفريق، ونبحث حلًا مؤقتًا.');
   await snap('2-chat');
-  await page.getByRole('button', { name: 'إرسال' }).click();
+  await page.getByRole('button', { name: 'إرسال', exact: true }).click();
   await page.waitForSelector('.bubble.me');
   await page.getByRole('button', { name: 'إنهاء المحادثة' }).click();
   await page.waitForSelector('.outcome', { timeout: 15000 });
@@ -73,7 +73,7 @@ async function run(viewport, tag) {
   await page.getByRole('link', { name: /راسل فهد/ }).click();
   await page.waitForSelector('#msg');
   await page.fill('#msg', 'كم نسبة استخدام التقارير الآن؟');
-  await page.getByRole('button', { name: 'إرسال' }).click();
+  await page.getByRole('button', { name: 'إرسال', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.chat-thread .bubble:not(.me):not(.typing)').length >= 1);
   const answer = await page.locator('.chat-thread .bubble:not(.me) .said').last().textContent();
   if (!answer.includes('58%')) errors.push(`[${tag}] رد فهد لا يحمل بيانات الاستخدام: ${answer}`);
@@ -102,7 +102,7 @@ async function run(viewport, tag) {
     await page.waitForSelector('.minutes .bubble');
     if (shotPrefix) await snap(`${shotPrefix}-open`);
     await page.fill('#say', text);
-    await page.getByRole('button', { name: 'إرسال' }).click();
+    await page.getByRole('button', { name: 'إرسال', exact: true }).click();
     await page.waitForSelector('.bubble.me');
     await page.waitForSelector('.concern.ok');
     if (shotPrefix) await snap(`${shotPrefix}-round`);

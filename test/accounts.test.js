@@ -31,16 +31,28 @@ function goodRun(seed = 9) {
 
 async function withServer(fn, env = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'mohaki-'));
-  const api = createAccountsApi({ store: new FileStore(dir), world, env });
+  const outbox = [];
+  const mailer = { send: async (m) => { outbox.push(m); } };
+  const api = createAccountsApi({ store: new FileStore(dir), world, env, mailer, publicUrl: 'https://mohaki.example' });
   const server = createServer(async (req, res) => { if (!(await api(req, res))) { res.writeHead(404); res.end(); } });
   await new Promise((r) => server.listen(0, r));
   const base = `http://localhost:${server.address().port}`;
   let cookie = '';
   const call = async (method, path, body, headers = {}) => {
     const res = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
+    if (headers.cookie) return { status: res.status, data: await res.json() };
     const set = res.headers.get('set-cookie'); if (set) cookie = set.split(';')[0];
     return { status: res.status, data: await res.json() };
   };
+  const tokenFrom = (kind) => {
+    const m = [...outbox].reverse().find((x) => x.link?.includes(kind));
+    return m && m.link.split('/').pop();
+  };
+  // يؤكد البريد من آخر رابط تأكيد أُرسل فعلًا
+  call.verifyEmail = async () => call('POST', '/api/auth/verify', { token: tokenFrom('confirm-email') });
+  call.outbox = outbox;
+  Object.defineProperty(call, 'cookie', { get: () => cookie });
+  call.tokenFrom = tokenFrom;
   try { await fn(call, () => { cookie = ''; }); } finally { server.close(); rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -97,6 +109,7 @@ test('الدخول والخروج، والمسارات المحمية تتطلب
 test('السجل لا يُصدر قبل الإكمال، ويُصدر بعده بنتيجة يحسبها الخادم', async () => {
   await withServer(async (call) => {
     await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
     const { seed, log, sim } = goodRun();
     await call('PUT', '/api/progress', { seed, log: log.slice(0, 20), startedAt: '2026-11-01' });
     assert.equal((await call('POST', '/api/records/issue')).status, 400);
@@ -118,6 +131,7 @@ test('السجل لا يُصدر قبل الإكمال، ويُصدر بعده �
 test('التلاعب: فعل غير صالح في السجل يمنع الإصدار', async () => {
   await withServer(async (call) => {
     await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
     const { seed, log } = goodRun();
     const forged = log.map((a, i) => (i === 3 && a.t === 'respond' ? { ...a, optionId: 'make_me_ceo' } : a));
     await call('PUT', '/api/progress', { seed, log: forged });
@@ -129,6 +143,7 @@ test('التلاعب: فعل غير صالح في السجل يمنع الإصد
 test('جهات التوظيف: الموافقون المؤهلون فقط، وبرمز وصول، والسحب يخفي المرشح', async () => {
   await withServer(async (call) => {
     await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
     const { seed, log } = goodRun();
     await call('PUT', '/api/progress', { seed, log });
     const rec = (await call('POST', '/api/records/issue')).data;
@@ -146,6 +161,7 @@ test('جهات التوظيف: الموافقون المؤهلون فقط، وب
 test('حق الحذف: يحذف الحساب ويُلغي السجلات الصادرة', async () => {
   await withServer(async (call) => {
     await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
     const { seed, log } = goodRun();
     await call('PUT', '/api/progress', { seed, log });
     const rec = (await call('POST', '/api/records/issue')).data;
@@ -161,4 +177,102 @@ test('طلبات غير JSON مرفوضة (حماية من إرسال النما
   await withServer(async (call) => {
     assert.equal((await call('POST', '/api/auth/register', reg(), { 'Content-Type': 'text/plain' })).status, 415);
   });
+});
+
+// ——— التحقق من البريد واستعادة كلمة المرور ———
+
+test('التسجيل يرسل رابط تأكيد مبنيًا من العنوان المُعدّ، بالعربية', async () => {
+  await withServer(async (call) => {
+    const r = await call('POST', '/api/auth/register', reg());
+    assert.equal(r.data.emailVerified, false);
+    const m = call.outbox.at(-1);
+    assert.equal(m.to, 'sara@example.com');
+    assert.match(m.link, /^https:\/\/mohaki\.example\/app\/#\/confirm-email\/[\w-]{40,}$/);
+    assert.match(m.html, /dir="rtl"/);
+    assert.match(m.text, /سارة العتيبي/);
+  });
+});
+
+test('السجل الموثّق يتطلب بريدًا مؤكدًا، والرابط صالح لمرة واحدة', async () => {
+  await withServer(async (call) => {
+    await call('POST', '/api/auth/register', reg());
+    const { seed, log } = goodRun();
+    await call('PUT', '/api/progress', { seed, log });
+    const blocked = await call('POST', '/api/records/issue');
+    assert.equal(blocked.status, 403);
+    const token = call.tokenFrom('confirm-email');
+    assert.equal((await call('POST', '/api/auth/verify', { token })).data.user.emailVerified, true);
+    assert.equal((await call('POST', '/api/auth/verify', { token })).status, 400, 'لا يُستخدم الرابط مرتين');
+    assert.equal((await call('POST', '/api/records/issue')).status, 200);
+  });
+});
+
+test('إعادة إرسال التأكيد محدودة: مرة كل دقيقة', async () => {
+  await withServer(async (call) => {
+    await call('POST', '/api/auth/register', reg());
+    assert.equal((await call('POST', '/api/auth/verify/send')).status, 429);
+    await call.verifyEmail();
+    assert.equal((await call('POST', '/api/auth/verify/send')).data.alreadyVerified, true);
+  });
+});
+
+test('طلب الاستعادة لا يكشف هل البريد مسجل', async () => {
+  await withServer(async (call) => {
+    await call('POST', '/api/auth/register', reg());
+    const before = call.outbox.length;
+    const a = await call('POST', '/api/auth/reset/request', { email: 'sara@example.com' });
+    const b = await call('POST', '/api/auth/reset/request', { email: 'nobody@example.com' });
+    assert.deepEqual(a, b, 'الرد نفسه للبريد المسجل وغير المسجل');
+    assert.equal(call.outbox.length, before + 1, 'رسالة واحدة فقط: للبريد المسجل');
+    assert.match(call.outbox.at(-1).link, /#\/reset-password\//);
+  });
+});
+
+test('تعيين كلمة المرور: ينهي كل الجلسات، ويُبطل الرابط، ويؤكد البريد', async () => {
+  await withServer(async (call, clear) => {
+    await call('POST', '/api/auth/register', reg());
+    await call('POST', '/api/auth/logout');
+    clear();
+    await call('POST', '/api/auth/reset/request', { email: 'sara@example.com' });
+    const token = call.tokenFrom('reset-password');
+    assert.equal((await call('POST', '/api/auth/reset', { token, password: '123' })).status, 400);
+    const ok = await call('POST', '/api/auth/reset', { token, password: 'new-secret-456' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.emailVerified, true);
+    assert.equal((await call('POST', '/api/auth/reset', { token, password: 'again-789' })).status, 400, 'الرابط لمرة واحدة');
+    clear();
+    assert.equal((await call('POST', '/api/auth/login', { email: 'sara@example.com', password: 'secret-123' })).status, 401);
+    assert.equal((await call('POST', '/api/auth/login', { email: 'sara@example.com', password: 'new-secret-456' })).status, 200);
+  });
+});
+
+test('تعيين كلمة المرور يُخرج الجلسات المفتوحة على الأجهزة الأخرى', async () => {
+  await withServer(async (call, clear) => {
+    await call('POST', '/api/auth/register', reg());
+    const otherDevice = call.cookie;
+    await call('POST', '/api/auth/reset/request', { email: 'sara@example.com' });
+    const token = call.tokenFrom('reset-password');
+    clear();
+    await call('POST', '/api/auth/reset', { token, password: 'new-secret-456' });
+    assert.equal((await call('GET', '/api/me', null, { cookie: otherDevice })).data.user, null);
+  });
+});
+
+test('رابط منتهي الصلاحية أو رمز مزور مرفوض', async () => {
+  await withServer(async (call) => {
+    assert.equal((await call('POST', '/api/auth/verify', { token: 'forged-token' })).status, 400);
+    assert.equal((await call('POST', '/api/auth/reset', { token: 'forged-token', password: 'whatever-123' })).status, 400);
+  });
+});
+
+test('جهات التوظيف لا ترى من لم يؤكد بريده حتى لو وافق', async () => {
+  await withServer(async (call) => {
+    await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
+    const { seed, log } = goodRun();
+    await call('PUT', '/api/progress', { seed, log });
+    await call('POST', '/api/records/issue');
+    const list = async () => (await call('GET', '/api/talent', null, { authorization: 'Bearer t' })).data.candidates;
+    assert.equal((await list()).length, 1);
+  }, { MOHAKI_EMPLOYER_TOKEN: 't' });
 });

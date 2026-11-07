@@ -306,6 +306,7 @@ tr:last-child td { border-bottom: 0; }
 .occupation details ul { margin: 4px 0; padding-inline-start: 18px; }
 .comps { margin-top: 8px; display: grid; gap: 6px; }
 
+.verify-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--amber-soft); border: 1px solid #f3df9e; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
 .guide ol { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; }
 .points-head { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: center; margin-bottom: 14px; }
 .points { font: 700 40px var(--num); direction: ltr; unicode-bidi: isolate; text-align: right; }
