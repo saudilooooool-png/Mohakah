@@ -12,4 +12,7 @@ const readJson = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
 
 export const loadCompany = (id) => readJson(`data/companies/${id}.json`);
 export const loadScenario = (id) => readJson(`data/scenarios/${id}.json`);
-export const loadOccupations = () => readJson('data/occupations/ssco.json');
+export const loadOccupations = () => ({
+  ...readJson('data/occupations/ssco.json'),
+  profiles: readJson('data/occupations/ssco-profiles.json').profiles,
+});

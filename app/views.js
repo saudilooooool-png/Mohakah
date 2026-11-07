@@ -483,7 +483,7 @@ export function report(session) {
         <div class="muted small">MOHAKI · Professional Record</div>
         <h2 style="font-size:20px;margin:2px 0 4px">${esc(r.role)}</h2>
         <p class="muted" style="margin:0 0 12px">${esc(r.company)} · بذرة العالم <span class="num">${session.seed}</span></p>
-        ${r.occupation ? occupationBlock(r.occupation) : ''}
+        ${r.occupation ? occupationBlock(r.occupation, r.skills) : ''}
         <p style="margin:0 0 6px"><b>نقاط القوة:</b> ${r.strengths.map(esc).join('، ')}</p>
         <p style="margin:0 0 6px"><b>للتطوير:</b> ${r.toImprove.map(esc).join('، ')}</p>
         <p style="margin:0" class="small"><b>توصية التطور:</b> ${esc(r.recommendation)}</p>
@@ -642,13 +642,26 @@ function occupationRow(data, roleId) {
 
 function occupationLabel(o) {
   const name = o.code ? `<span class="num">${esc(o.code)}</span> ${esc(o.titleAr ?? '')}` : `المجموعة <span class="num">${esc(o.unitGroup)}</span>`;
-  return `${name} <span class="pill ${o.status === 'official' ? 's-done' : 'p-high'}">${esc(o.statusLabel)}</span>`;
+  return `${name} <span class="pill ${o.status === 'official' ? 's-done' : 'p-high'}">${esc(o.statusLabel)}</span>${o.matchLabel ? ` <span class="pill t-pill">${esc(o.matchLabel)}</span>` : ''}`;
 }
 
-function occupationBlock(o) {
+function occupationBlock(o, skills = []) {
+  const skill = (id) => skills.find((x) => x.id === id);
+  const comps = o.profile?.behavioralCompetencies ?? [];
   return `<div class="occupation">
     <div class="small"><b>وفق التصنيف السعودي الموحد للمهن:</b> ${occupationLabel(o)}</div>
-    <details class="small"><summary>المصدر وملاحظات التصنيف</summary>
+    ${comps.length && o.competencyEvidence ? `<div class="comps">
+      <div class="small muted">الجدارات السلوكية الرسمية للمهنة، وما يقابلها من أدلة في محاكي:</div>
+      <div class="tag-list">${comps.map((c) => {
+        const sk = skill(o.competencyEvidence[c]);
+        return sk && sk.score !== null
+          ? `<span class="pill s-done">${esc(c)} · ${esc(sk.label)} <span class="num">${sk.score}%</span></span>`
+          : `<span class="pill t-pill">${esc(c)} · لم تُقَس بعد</span>`;
+      }).join('')}</div></div>` : ''}
+    <details class="small"><summary>المهام الرسمية للمهنة والمصدر</summary>
+      ${o.profile ? `<p>${esc(o.profile.summary)}</p><ul>${o.profile.tasks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+        <p>المؤهل: ${esc(o.profile.qualification ?? '—')} · الجدارات الفنية: ${o.profile.technicalCompetencies.map(esc).join('، ')}</p>` : ''}
+      ${o.matchReason ? `<p><b>سبب الاختيار:</b> ${esc(o.matchReason)}</p>` : ''}
       <p>المجموعة الأولية <span class="num">${esc(o.unitGroup)}</span> (ISCO-08: ${esc(o.unitGroupTitle ?? '')}).</p>
       ${o.source ? `<p>المصدر: ${o.source.url ? `<a href="${esc(o.source.url)}" target="_blank" rel="noopener">${esc(o.source.title)}</a>` : esc(o.source.title)}${o.source.decision ? ` · ${esc(o.source.decision)}` : ''}${o.source.official ? '' : ' (غير رسمي)'}</p>` : ''}
       ${o.note ? `<p>${esc(o.note)}</p>` : ''}

@@ -7,10 +7,18 @@ export const STATUS_LABEL = {
   candidate: 'رمز مرشح بانتظار التحقق الرسمي',
 };
 
+export const MATCH_LABEL = {
+  exact: 'مطابق للمسمى',
+  closest: 'الأقرب بحسب المهام الرسمية',
+};
+
 export const isValidCode = (code) => /^\d{6}$/.test(String(code ?? ''));
 export const unitGroupOf = (code) => String(code).slice(0, 4);
 
-/** يعيد وصف وظيفة جاهزًا للعرض، مع المصدر وحالة التحقق وقرار التوطين إن وُجد. */
+/**
+ * يعيد وصف وظيفة جاهزًا للعرض: الرمز وحالة التحقق ومدى المطابقة والمصدر، وملف المهنة الرسمي
+ * (المهام والجدارات) إن توفر في data.profiles، وربط كل جدارة رسمية بمهارة يقيسها محاكي.
+ */
 export function roleOccupation(data, roleId) {
   const role = data?.roles?.find((r) => r.id === roleId);
   if (!role) return null;
@@ -22,6 +30,11 @@ export function roleOccupation(data, roleId) {
     roleTitleAr: role.titleAr,
     status: s.status,
     statusLabel: STATUS_LABEL[s.status],
+    match: s.match ?? null,
+    matchLabel: MATCH_LABEL[s.match] ?? null,
+    matchReason: role.matchReason ?? null,
+    profile: (s.code && data.profiles?.[s.code]) || null,
+    competencyEvidence: role.competencyEvidence ?? null,
     code: s.code ?? null,
     titleAr: s.titleAr ?? null,
     unitGroup: s.unitGroup,
@@ -42,6 +55,12 @@ export function validateOccupationData(data, { scenarioIds = [] } = {}) {
   for (const c of data.officialCodes) {
     if (!isValidCode(c.code)) problems.push(`رمز رسمي بصيغة خاطئة: ${c.code}`);
     if (!sources.get(c.sourceId)?.official) problems.push(`الرمز ${c.code} مصدره ليس رسميًا`);
+    // إذا توفرت ملفات المهن من الجدول الرئيسي، يجب أن يوجد كل رمز رسمي فيه بالمسمى نفسه
+    if (data.profiles) {
+      const p = data.profiles[c.code];
+      if (!p) problems.push(`الرمز ${c.code} غير موجود في الجدول الرئيسي`);
+      else if (p.titleAr !== c.titleAr) problems.push(`الرمز ${c.code}: المسمى في الجدول الرئيسي «${p.titleAr}»`);
+    }
   }
 
   const checkRef = (where, ref) => {
@@ -60,6 +79,8 @@ export function validateOccupationData(data, { scenarioIds = [] } = {}) {
       if (!o) problems.push(`${r.id}: الرمز ${s.code} موسوم رسميًا لكنه ليس في قائمة الرموز الرسمية`);
       else if (o.titleAr !== s.titleAr) problems.push(`${r.id}: مسمى ${s.code} لا يطابق الوثيقة الرسمية`);
       if (!sources.get(s.sourceId)?.official) problems.push(`${r.id}: موسوم رسميًا ومصدره غير رسمي`);
+      if (!MATCH_LABEL[s.match]) problems.push(`${r.id}: مدى المطابقة غير محدد`);
+      if (s.match === 'closest' && !r.matchReason) problems.push(`${r.id}: «الأقرب» يحتاج تبريرًا بالمهام`);
     } else if (s.status === 'candidate') {
       if (s.code && official.has(s.code)) problems.push(`${r.id}: الرمز ${s.code} رسمي لكنه موسوم مرشحًا`);
     } else {
@@ -70,6 +91,10 @@ export function validateOccupationData(data, { scenarioIds = [] } = {}) {
       if (a.code && !official.has(a.code)) problems.push(`${r.id}: البديل ${a.code} ليس رمزًا رسميًا`);
     }
     if (r.saudization && !data.saudization.some((x) => x.id === r.saudization)) problems.push(`${r.id}: قرار توطين غير معروف`);
+    if (r.competencyEvidence && data.profiles?.[s.code]) {
+      const official = data.profiles[s.code].behavioralCompetencies;
+      for (const k of Object.keys(r.competencyEvidence)) if (!official.includes(k)) problems.push(`${r.id}: «${k}» ليست من جدارات المهنة الرسمية`);
+    }
     for (const sc of r.scenarios ?? []) if (scenarioIds.length && !scenarioIds.includes(sc)) problems.push(`${r.id}: سيناريو غير موجود ${sc}`);
   }
   return problems;

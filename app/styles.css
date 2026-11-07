@@ -297,6 +297,8 @@ tr:last-child td { border-bottom: 0; }
 .occupation { border-top: 1px solid var(--line); padding-top: 10px; margin: 0 0 12px; }
 .occupation details { margin-top: 6px; color: var(--ink-2); }
 .occupation details p { margin: 4px 0; }
+.occupation details ul { margin: 4px 0; padding-inline-start: 18px; }
+.comps { margin-top: 8px; display: grid; gap: 6px; }
 
 /* ——— النوافذ والإشعارات ——— */
 .modal-back { position: fixed; inset: 0; background: rgba(11,31,68,.45); display: grid; place-items: center; z-index: 50; padding: 16px; animation: fade .15s ease; }

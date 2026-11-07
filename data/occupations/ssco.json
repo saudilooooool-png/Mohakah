@@ -1,40 +1,210 @@
 {
- "about": "ربط وظائف محاكي بالتصنيف السعودي الموحد للمهن. كل رمز معه حالة تحقق ومصدره. لا يُعرض رمز بحالة candidate على أنه معتمد.",
+ "about": "ربط وظائف محاكي بالتصنيف السعودي الموحد للمهن. كل رمز متحقق منه في الجدول الرئيسي الرسمي للهيئة العامة للإحصاء (نسخة 2024). match توضح هل المسمى مطابق للوظيفة أم الأقرب لها بحسب المهام الرسمية.",
  "structure": {
   "summary": "رمز المهنة ستة أرقام في خمسة مستويات: الأرقام الأربعة الأولى هي المجموعة الأولية (Unit Group) في التصنيف الدولي ISCO-08، والرقمان الأخيران هما المهنة داخلها (01–99).",
   "sourceId": "gastat-manual-2025"
  },
  "sources": [
-  {"id": "gastat-manual-2025", "title": "Manual of Saudi Standard Classification of Occupations", "issuer": "الهيئة العامة للإحصاء", "date": "2025-01", "url": "https://stats.gov.sa/documents/d/guest/the-guiding-manual-for-the-saudi-unified-classification-of-occupations-en-2-pdf", "official": true},
-  {"id": "hrsd-sales-101278", "title": "الدليل الإجرائي لقرار توطين مهن المبيعات", "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية", "decision": "القرار الوزاري 101278", "date": "2026-01-19", "url": "https://www.hrsd.gov.sa/sites/default/files/2026-01/aldlyl-ala-jray-y-lqrar-twtyn-mhn-almby-at.pdf", "official": true},
-  {"id": "hrsd-marketing-101319", "title": "الدليل الإجرائي لقرار توطين مهن التسويق", "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية", "decision": "القرار الوزاري 101319", "date": "2026-01-19", "url": "https://www.hrsd.gov.sa/sites/default/files/2026-01/aldlyl-ala-jray-y-lqrar-twtyn-mhn-altswyq.pdf", "official": true},
-  {"id": "hrsd-pm-41454", "title": "Procedural Guide for the Decision on Project Management Occupations", "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية", "decision": "القرار الوزاري 41454", "date": "2026-08-13", "url": "https://www.hrsd.gov.sa/sites/default/files/2026-09/aldlyl-alajray-y-lqrar-almhn-adart-almshary--alnhay-y-mtrjm_0.pdf", "official": true},
-  {"id": "esco-wikidata", "title": "ESCO occupation mappings to ISCO-08 (via Wikidata)", "issuer": "European Commission ESCO / Wikidata", "url": "https://www.wikidata.org/wiki/Q1017553", "official": false},
-  {"id": "search-snippet-122302", "title": "جدول رموز متداول (غير رسمي) يذكر 122302 مدير تطوير المنتجات", "issuer": "نتيجة بحث غير موثقة", "official": false}
+  {
+   "id": "gastat-manual-2025",
+   "title": "Manual of Saudi Standard Classification of Occupations",
+   "issuer": "الهيئة العامة للإحصاء",
+   "date": "2025-01",
+   "url": "https://stats.gov.sa/documents/d/guest/the-guiding-manual-for-the-saudi-unified-classification-of-occupations-en-2-pdf",
+   "official": true
+  },
+  {
+   "id": "gastat-master-2024",
+   "title": "The Unified Saudi Occupational Classification — Master Sheets 2024 (Ar)",
+   "issuer": "الهيئة العامة للإحصاء",
+   "date": "2024",
+   "url": "https://www.stats.gov.sa/documents/20117/2435245/The_Unified_Saudi_Occupational_Classification__Master_Sheets__2024-Ar.xlsx_fixed_3451655/e6b77b09-883b-6e69-44ca-5a30795002db?version=1.0&t=1753083638873",
+   "official": true,
+   "note": "الجدول الكامل: 2,122 مهنة مع المهام والمؤهل والجدارات. صفحة التصانيف: https://www.stats.gov.sa/ar/classifications"
+  },
+  {
+   "id": "hrsd-sales-101278",
+   "title": "الدليل الإجرائي لقرار توطين مهن المبيعات",
+   "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية",
+   "decision": "القرار الوزاري 101278",
+   "date": "2026-01-19",
+   "url": "https://www.hrsd.gov.sa/sites/default/files/2026-01/aldlyl-ala-jray-y-lqrar-twtyn-mhn-almby-at.pdf",
+   "official": true
+  },
+  {
+   "id": "hrsd-marketing-101319",
+   "title": "الدليل الإجرائي لقرار توطين مهن التسويق",
+   "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية",
+   "decision": "القرار الوزاري 101319",
+   "date": "2026-01-19",
+   "url": "https://www.hrsd.gov.sa/sites/default/files/2026-01/aldlyl-ala-jray-y-lqrar-twtyn-mhn-altswyq.pdf",
+   "official": true
+  },
+  {
+   "id": "hrsd-pm-41454",
+   "title": "Procedural Guide for the Decision on Project Management Occupations",
+   "issuer": "وزارة الموارد البشرية والتنمية الاجتماعية",
+   "decision": "القرار الوزاري 41454",
+   "date": "2026-08-13",
+   "url": "https://www.hrsd.gov.sa/sites/default/files/2026-09/aldlyl-alajray-y-lqrar-almhn-adart-almshary--alnhay-y-mtrjm_0.pdf",
+   "official": true
+  },
+  {
+   "id": "esco-wikidata",
+   "title": "ESCO occupation mappings to ISCO-08 (via Wikidata)",
+   "issuer": "European Commission ESCO / Wikidata",
+   "url": "https://www.wikidata.org/wiki/Q1017553",
+   "official": false
+  },
+  {
+   "id": "hrdf-targeted-2024",
+   "title": "المهن المستهدفة في برنامج دعم التوظيف",
+   "issuer": "صندوق تنمية الموارد البشرية (هدف)",
+   "date": "2024-10",
+   "url": "https://www.hrdf.org.sa/media/rdfdtx1f/targeted-occupations-employment-support.pdf",
+   "official": true,
+   "note": "تؤكد 121314 و214909 و122104 و243109 و142001، وتتضمن رموزًا قديمة من سبعة أرقام (مثل 1214021 مدير تسويق) من التصنيف السابق."
+  }
  ],
  "officialCodes": [
-  {"code": "122104", "titleAr": "مدير مبيعات", "sourceId": "hrsd-sales-101278"},
-  {"code": "142001", "titleAr": "مدير مبيعات تجزئة", "sourceId": "hrsd-sales-101278"},
-  {"code": "142003", "titleAr": "مدير مبيعات جملة", "sourceId": "hrsd-sales-101278"},
-  {"code": "243401", "titleAr": "أخصائي مبيعات أجهزة تقنية المعلومات والاتصالات", "sourceId": "hrsd-sales-101278"},
-  {"code": "243109", "titleAr": "أخصائي مبيعات", "sourceId": "hrsd-sales-101278"},
-  {"code": "243106", "titleAr": "أخصائي تجاري", "sourceId": "hrsd-sales-101278"},
-  {"code": "332201", "titleAr": "مندوب مبيعات", "sourceId": "hrsd-sales-101278"},
-  {"code": "332401", "titleAr": "وسيط سلع مستقبلية", "sourceId": "hrsd-sales-101278"},
-  {"code": "332402", "titleAr": "وسيط سلع", "sourceId": "hrsd-sales-101278"},
-  {"code": "122103", "titleAr": "مدير تسويق", "sourceId": "hrsd-marketing-101319"},
-  {"code": "243110", "titleAr": "أخصائي تسويق", "sourceId": "hrsd-marketing-101319"},
-  {"code": "243101", "titleAr": "أخصائي دعاية وإعلان", "sourceId": "hrsd-marketing-101319"},
-  {"code": "243202", "titleAr": "أخصائي علاقات عامة", "sourceId": "hrsd-marketing-101319"},
-  {"code": "122201", "titleAr": "مدير دعاية وإعلان", "sourceId": "hrsd-marketing-101319"},
-  {"code": "122203", "titleAr": "مدير علاقات عامة", "sourceId": "hrsd-marketing-101319"},
-  {"code": "216601", "titleAr": "مصمم جرافيك", "sourceId": "hrsd-marketing-101319"},
-  {"code": "216604", "titleAr": "مصمم إعلان", "sourceId": "hrsd-marketing-101319"},
-  {"code": "343101", "titleAr": "مصور فوتوغرافي", "sourceId": "hrsd-marketing-101319"},
-  {"code": "333901", "titleAr": "وكيل دعاية وإعلان", "sourceId": "hrsd-marketing-101319"},
-  {"code": "121314", "titleAr": "مدير إدارة مشاريع", "titleEn": "Project Management Manager", "sourceId": "hrsd-pm-41454"},
-  {"code": "214909", "titleAr": "مهندس إدارة مشاريع", "titleEn": "Project Management Engineer", "sourceId": "hrsd-pm-41454"},
-  {"code": "242108", "titleAr": "أخصائي إدارة مشاريع", "titleEn": "Project Management Specialist", "sourceId": "hrsd-pm-41454"}
+  {
+   "code": "122104",
+   "titleAr": "مدير مبيعات",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "142001",
+   "titleAr": "مدير مبيعات تجزئة",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "142003",
+   "titleAr": "مدير مبيعات جملة",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "243401",
+   "titleAr": "أخصائي مبيعات أجهزة تقنية المعلومات والاتصالات",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "243109",
+   "titleAr": "أخصائي مبيعات",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "243106",
+   "titleAr": "أخصائي تجاري",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "332201",
+   "titleAr": "مندوب مبيعات",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "332401",
+   "titleAr": "وسيط سلع مستقبلية",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "332402",
+   "titleAr": "وسيط سلع",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "code": "122103",
+   "titleAr": "مدير تسويق",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "243110",
+   "titleAr": "أخصائي تسويق",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "243101",
+   "titleAr": "أخصائي دعاية وإعلان",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "243202",
+   "titleAr": "أخصائي علاقات عامة",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "122201",
+   "titleAr": "مدير دعاية وإعلان",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "122203",
+   "titleAr": "مدير علاقات عامة",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "216601",
+   "titleAr": "مصمم جرافيك",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "216604",
+   "titleAr": "مصمم إعلان",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "343101",
+   "titleAr": "مصور فوتوغرافي",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "333901",
+   "titleAr": "وكيل دعاية وإعلان",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "code": "121314",
+   "titleAr": "مدير إدارة مشاريع",
+   "titleEn": "Project Management Manager",
+   "sourceId": "hrsd-pm-41454"
+  },
+  {
+   "code": "214909",
+   "titleAr": "مهندس إدارة مشاريع",
+   "titleEn": "Project Management Engineer",
+   "sourceId": "hrsd-pm-41454"
+  },
+  {
+   "code": "242108",
+   "titleAr": "أخصائي إدارة مشاريع",
+   "titleEn": "Project Management Specialist",
+   "sourceId": "hrsd-pm-41454"
+  },
+  {
+   "code": "122302",
+   "titleAr": "مدير تطوير المنتجات",
+   "sourceId": "gastat-master-2024"
+  },
+  {
+   "code": "251102",
+   "titleAr": "محلل نظم المعلومات",
+   "sourceId": "gastat-master-2024"
+  },
+  {
+   "code": "242106",
+   "titleAr": "أخصائي استشارات أعمال",
+   "sourceId": "gastat-master-2024"
+  },
+  {
+   "code": "251108",
+   "titleAr": "مصمم حلول أعمال",
+   "sourceId": "gastat-master-2024"
+  },
+  {
+   "code": "243108",
+   "titleAr": "أخصائي أبحاث أسواق",
+   "sourceId": "gastat-master-2024"
+  }
  ],
  "unitGroups": {
   "1213": "Policy and planning managers",
@@ -46,39 +216,166 @@
   "2431": "Advertising and marketing professionals",
   "2432": "Public relations professionals",
   "2434": "Information and communications technology sales professionals",
-  "3322": "Commercial sales representatives"
+  "3322": "Commercial sales representatives",
+  "2511": "Systems analysts"
  },
  "saudization": [
-  {"id": "sales-60", "rate": 0.6, "effective": "2026-04-19", "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن المبيعات المستهدفة", "sourceId": "hrsd-sales-101278"},
-  {"id": "marketing-60", "rate": 0.6, "effective": "2026-04-19", "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن التسويق المستهدفة، وأجر أدنى 5,500 ريال للاحتساب", "sourceId": "hrsd-marketing-101319"},
-  {"id": "pm-70", "rate": 0.7, "effective": "2027-02-14", "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن إدارة المشاريع المستهدفة", "sourceId": "hrsd-pm-41454"}
+  {
+   "id": "sales-60",
+   "rate": 0.6,
+   "effective": "2026-04-19",
+   "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن المبيعات المستهدفة",
+   "sourceId": "hrsd-sales-101278"
+  },
+  {
+   "id": "marketing-60",
+   "rate": 0.6,
+   "effective": "2026-04-19",
+   "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن التسويق المستهدفة، وأجر أدنى 5,500 ريال للاحتساب",
+   "sourceId": "hrsd-marketing-101319"
+  },
+  {
+   "id": "pm-70",
+   "rate": 0.7,
+   "effective": "2027-02-14",
+   "scope": "المنشآت التي يعمل بها 3 فأكثر في مهن إدارة المشاريع المستهدفة",
+   "sourceId": "hrsd-pm-41454"
+  }
  ],
  "roles": [
-  {"id": "product-manager", "titleAr": "مدير منتجات (مستوى مبتدئ)", "titleEn": "Product Manager",
-   "scenarios": ["pm-first-30-days"],
-   "ssco": {"status": "candidate", "unitGroup": "1223", "code": "122302", "titleAr": "مدير تطوير المنتجات", "sourceId": "search-snippet-122302"},
-   "alternatives": [{"unitGroup": "2431", "note": "ESCO يدرج product manager أيضًا تحت 2431 (محترفو الإعلان والتسويق) عندما يغلب على الدور الجانب التسويقي.", "sourceId": "esco-wikidata"}],
-   "note": "لا يوجد دليل توطين يذكر مدير المنتجات. الرمز 122302 مرشح من جدول غير رسمي ويجب مطابقته مع الجدول الكامل للهيئة العامة للإحصاء. التصنيف يُبنى على المهام الفعلية، والمبتدئ الذي لا يدير فريقًا قد لا يندرج تحت المجموعة الرئيسية 1 (المديرون)."},
-  {"id": "business-analyst", "titleAr": "محلل أعمال", "titleEn": "Business Analyst",
+  {
+   "id": "product-manager",
+   "titleAr": "مدير منتجات (مستوى مبتدئ)",
+   "titleEn": "Product Manager",
+   "scenarios": [
+    "pm-first-30-days"
+   ],
+   "ssco": {
+    "status": "official",
+    "match": "closest",
+    "unitGroup": "1223",
+    "code": "122302",
+    "titleAr": "مدير تطوير المنتجات",
+    "sourceId": "gastat-master-2024"
+   },
+   "alternatives": [
+    {
+     "unitGroup": "2431",
+     "code": "243108",
+     "titleAr": "أخصائي أبحاث أسواق",
+     "note": "إذا اقتصر الدور على البحث والتحليل دون مسؤولية عن تطوير المنتج.",
+     "sourceId": "gastat-master-2024"
+    }
+   ],
+   "note": "المهنة ضمن المجموعة الرئيسية 1 (المديرون). المتدرب في السيناريو مبتدئ، لكن مسؤولياته (منتج وفريق وقرارات) هي مسؤوليات هذه المهنة.",
+   "matchReason": "لا يوجد مسمى «مدير منتجات» في الجدول. مهام 122302 الرسمية تطابق مهام الدور في السيناريو: دراسة الأسواق والعملاء لتحديد المتطلبات، ووضع الأهداف والجداول والموازنات، والتنسيق اليومي مع المبيعات، والعلاقة مع رؤساء الأقسام، والتقارير الدورية للإدارة العليا.",
+   "competencyEvidence": {
+    "القيادة": "communication",
+    "اتخاذ القرار": "decisions",
+    "حلّ المشاكل": "output",
+    "إدارة الأشخاص": null,
+    "التفكير الإستراتيجي": "impact"
+   }
+  },
+  {
+   "id": "business-analyst",
+   "titleAr": "محلل أعمال",
+   "titleEn": "Business Analyst",
    "scenarios": [],
-   "ssco": {"status": "candidate", "unitGroup": "2421", "code": null, "sourceId": "esco-wikidata"},
-   "note": "المجموعة الأولية 2421 (محللو الإدارة والتنظيم) مطابقة لتصنيف ESCO. يؤكدها أن الرمز الرسمي 242108 (أخصائي إدارة مشاريع) يقع في المجموعة نفسها. الرقمان الأخيران لمحلل الأعمال غير متحقق منهما."},
-  {"id": "digital-marketing-specialist", "titleAr": "أخصائي تسويق رقمي", "titleEn": "Digital Marketing Specialist",
+   "ssco": {
+    "status": "official",
+    "match": "closest",
+    "unitGroup": "2511",
+    "code": "251102",
+    "titleAr": "محلل نظم المعلومات",
+    "sourceId": "gastat-master-2024"
+   },
+   "note": "ترجيح سابق بالمجموعة 2421 (من ESCO) صحّحه الجدول الرسمي: محللو الأعمال في البرمجيات أقرب إلى 2511 محللي النظم.",
+   "alternatives": [
+    {
+     "unitGroup": "2421",
+     "code": "242106",
+     "titleAr": "أخصائي استشارات أعمال",
+     "note": "لمحلل الأعمال في الاستشارات وتطوير الأعمال، لا في فرق البرمجيات.",
+     "sourceId": "gastat-master-2024"
+    },
+    {
+     "unitGroup": "2511",
+     "code": "251108",
+     "titleAr": "مصمم حلول أعمال",
+     "note": "للأدوار التي تصمم الحلول بعد التحليل.",
+     "sourceId": "gastat-master-2024"
+    }
+   ],
+   "matchReason": "لا يوجد مسمى «محلل أعمال» في الجدول. مهام 251102 الرسمية هي عمل محلل الأعمال في شركة برمجيات: جمع متطلبات العميل والمقابلات، وتحليل العمليات وترجمتها إلى متطلبات نظام، ونماذج البيانات ومخططات التدفق."
+  },
+  {
+   "id": "digital-marketing-specialist",
+   "titleAr": "أخصائي تسويق رقمي",
+   "titleEn": "Digital Marketing Specialist",
    "scenarios": [],
-   "ssco": {"status": "official", "unitGroup": "2431", "code": "243110", "titleAr": "أخصائي تسويق", "sourceId": "hrsd-marketing-101319"},
+   "ssco": {
+    "status": "official",
+    "unitGroup": "2431",
+    "code": "243110",
+    "titleAr": "أخصائي تسويق",
+    "sourceId": "hrsd-marketing-101319",
+    "match": "closest"
+   },
    "saudization": "marketing-60",
-   "note": "لا يوجد رمز منفصل لـ«التسويق الرقمي» في دليل التوطين. أقرب مهنة رسمية: أخصائي تسويق."},
-  {"id": "sales-executive", "titleAr": "أخصائي مبيعات (حلول برمجية)", "titleEn": "Sales Executive",
+   "note": "لا يوجد رمز منفصل لـ«التسويق الرقمي» في دليل التوطين. أقرب مهنة رسمية: أخصائي تسويق.",
+   "matchReason": "لا يوجد مسمى منفصل للتسويق الرقمي في الجدول، وأقرب مهنة أخصائي تسويق."
+  },
+  {
+   "id": "sales-executive",
+   "titleAr": "أخصائي مبيعات (حلول برمجية)",
+   "titleEn": "Sales Executive",
    "scenarios": [],
-   "ssco": {"status": "official", "unitGroup": "2434", "code": "243401", "titleAr": "أخصائي مبيعات أجهزة تقنية المعلومات والاتصالات", "sourceId": "hrsd-sales-101278"},
-   "alternatives": [{"unitGroup": "3322", "code": "332201", "titleAr": "مندوب مبيعات", "note": "للأدوار الأقل تخصصًا تقنيًا.", "sourceId": "hrsd-sales-101278"}],
+   "ssco": {
+    "status": "official",
+    "unitGroup": "2434",
+    "code": "243401",
+    "titleAr": "أخصائي مبيعات أجهزة تقنية المعلومات والاتصالات",
+    "sourceId": "hrsd-sales-101278",
+    "match": "closest"
+   },
+   "alternatives": [
+    {
+     "unitGroup": "3322",
+     "code": "332201",
+     "titleAr": "مندوب مبيعات",
+     "note": "للأدوار الأقل تخصصًا تقنيًا.",
+     "sourceId": "hrsd-sales-101278"
+    }
+   ],
    "saudization": "sales-60",
-   "note": "في شركة برمجيات مثل NOVA TECH، تبيع الوظيفة حلولًا تقنية، فالأقرب أخصائي مبيعات تقنية المعلومات والاتصالات."},
-  {"id": "project-manager", "titleAr": "أخصائي إدارة مشاريع", "titleEn": "Project Manager",
+   "note": "في شركة برمجيات مثل NOVA TECH، تبيع الوظيفة حلولًا تقنية، فالأقرب أخصائي مبيعات تقنية المعلومات والاتصالات.",
+   "matchReason": "NOVA TECH تبيع حلولًا برمجية، فالأقرب أخصائي مبيعات أجهزة تقنية المعلومات والاتصالات."
+  },
+  {
+   "id": "project-manager",
+   "titleAr": "أخصائي إدارة مشاريع",
+   "titleEn": "Project Manager",
    "scenarios": [],
-   "ssco": {"status": "official", "unitGroup": "2421", "code": "242108", "titleAr": "أخصائي إدارة مشاريع", "sourceId": "hrsd-pm-41454"},
-   "alternatives": [{"unitGroup": "1213", "code": "121314", "titleAr": "مدير إدارة مشاريع", "note": "للمستوى الإداري الأعلى.", "sourceId": "hrsd-pm-41454"}],
+   "ssco": {
+    "status": "official",
+    "unitGroup": "2421",
+    "code": "242108",
+    "titleAr": "أخصائي إدارة مشاريع",
+    "sourceId": "hrsd-pm-41454",
+    "match": "exact"
+   },
+   "alternatives": [
+    {
+     "unitGroup": "1213",
+     "code": "121314",
+     "titleAr": "مدير إدارة مشاريع",
+     "note": "للمستوى الإداري الأعلى.",
+     "sourceId": "hrsd-pm-41454"
+    }
+   ],
    "saudization": "pm-70",
-   "note": "للمستوى المبتدئ والمتوسط. المستوى الإداري يقابله 121314."}
+   "note": "للمستوى المبتدئ والمتوسط. المستوى الإداري يقابله 121314."
+  }
  ]
 }

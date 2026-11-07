@@ -10,12 +10,13 @@ export async function loadWorld() {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario, occupations] = await Promise.all([
+  const [company, scenario, ssco, profiles] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
     get('../data/occupations/ssco.json'),
+    get('../data/occupations/ssco-profiles.json'),
   ]);
-  return { company, scenario, occupations };
+  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles } };
 }
 
 function readSave() {
