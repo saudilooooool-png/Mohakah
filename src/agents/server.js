@@ -58,6 +58,7 @@ export function createAgentApi({ root, env = process.env, client = createClaudeC
       spec: def.dialogue,
       options: def.options.map((o) => ({ id: o.id, label: o.label })),
       people: company.people,
+      saudiContext: company.saudiContext ?? null,
       context: cleanContext(body.context),
       meeting: cleanMeeting(body.meeting, def.dialogue),
       message,

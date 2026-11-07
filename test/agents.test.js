@@ -308,3 +308,17 @@ test('الميزانيات: غياب اقتراح واضح يترك القرار
   sim.respond(item.id, r.optionId, { addressed: r.addressed, transcript: r.transcript });
   assert.ok(sim.state.company.team.devCapacityPerDay < cap);
 });
+
+test('السياق السعودي يصل إلى تعليمات الوكلاء من بيانات الشركة على الخادم', async () => {
+  assert.ok(company.saudiContext?.saudization);
+  const { item } = simAtMeeting();
+  const u = meetingUserPrompt({ ...turnArgs(item), saudiContext: company.saudiContext });
+  assert.match(u, /<saudi_market_context>/);
+  assert.match(u, /الأحد إلى الخميس/);
+  const seen = [];
+  const api = createAgentApi({ root, env: {}, client: {}, turn: async (_c, a) => { seen.push(a); return {}; } });
+  const res = { writeHead() {}, end() {} };
+  const req = { url: '/api/meeting/turn', method: 'POST', async *[Symbol.asyncIterator]() { yield JSON.stringify({ eventId: 'd5_mgmt_meeting', message: 'مرحبا' }); } };
+  await api(req, res);
+  assert.deepEqual(seen[0].saudiContext, company.saudiContext);
+});

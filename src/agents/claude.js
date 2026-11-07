@@ -30,7 +30,7 @@ export function createClaudeClient(env = process.env) {
  * @param {Anthropic} client
  */
 export async function claudeMeetingTurn(client, {
-  spec, options, people, context, meeting, message, closing = false,
+  spec, options, people, context, meeting, message, closing = false, saudiContext = null,
   model = process.env.MOHAKI_AGENT_MODEL || DEFAULT_MODEL,
   effort = process.env.MOHAKI_AGENT_EFFORT || 'low',
 }) {
@@ -51,7 +51,7 @@ export async function claudeMeetingTurn(client, {
       system: [{ type: 'text', text: MEETING_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{
         role: 'user',
-        content: meetingUserPrompt({ spec, options, people, context, meeting, message, closing }),
+        content: meetingUserPrompt({ spec, options, people, context, meeting, message, closing, saudiContext }),
       }],
     });
   } catch (err) {

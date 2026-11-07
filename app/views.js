@@ -1,7 +1,7 @@
 // شاشات بيئة العمل. كل دالة تعيد HTML من حالة المحرك الحالية.
 import {
   esc, fmt, sar, delta, words, PRIORITY, TYPE, STATUS, dueLabel, avatar, icon, typeIcon,
-  lineChart, ring, bar,
+  lineChart, ring, bar, weekday, weekOf,
 } from './lib/ui.js';
 
 const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
@@ -49,8 +49,8 @@ export function shell(session, route, content) {
     <div class="main">
       <header class="topbar">
         <div class="day">
-          <b>${finished ? 'انتهى الشهر الأول' : `يوم العمل ${day}`}</b>
-          <span>${finished ? 'افتح سجلك المهني' : `من ${sim.lastDay} يومًا · ${dueToday ? `${dueToday} بند تنتهي مهلته اليوم` : 'لا مهلات تنتهي اليوم'}`}</span>
+          <b>${finished ? 'انتهت فترة العمل' : `يوم العمل ${day}`}</b>
+          <span>${finished ? 'افتح سجلك المهني' : `${weekday(day)} · الأسبوع ${weekOf(day)} من ${Math.ceil(sim.lastDay / 5)} · ${dueToday ? `${dueToday} بند تنتهي مهلته اليوم` : 'لا مهلات تنتهي اليوم'}`}</span>
         </div>
         <div class="daybar" aria-hidden="true"><i style="width:${((day - (finished ? 0 : 1)) / sim.lastDay) * 100}%"></i></div>
         <div class="spacer"></div>
@@ -94,7 +94,7 @@ export function welcome(world, hasSave) {
           <dt>الوظيفة</dt><dd>${esc(sc.role)}</dd>
           <dt>المدير المباشر</dt><dd>${esc(mgr?.name)} — ${esc(mgr?.title)}</dd>
           <dt>فريقك</dt><dd>${esc(team.join('، '))}</dd>
-          <dt>المدة</dt><dd>${sc.lengthDays} يوم عمل · كل يوم جلسة عمل واحدة</dd>
+          <dt>المدة</dt><dd>${sc.lengthDays} يوم عمل (${Math.ceil(sc.lengthDays / 5)} أسابيع، من الأحد إلى الخميس) · كل يوم جلسة عمل واحدة</dd>
         </dl>
       </div>
       <div class="actions">
@@ -124,7 +124,7 @@ export function desk(session) {
 
   return `
   <section class="card hero">
-    <h2>${first ? 'أهلًا بك في يومك الأول' : sim.finished ? 'انتهى شهرك الأول في NOVA TECH' : `صباح الخير — يوم العمل ${sim.day}`}</h2>
+    <h2>${first ? 'أهلًا بك في يومك الأول' : sim.finished ? 'انتهت فترة عملك الأولى في NOVA TECH' : `صباح الخير — ${weekday(sim.day)}، يوم العمل ${sim.day}`}</h2>
     <p>${first
       ? 'لا توجد محاضرة تشرح لك ماذا تفعل. أمامك رسائل واجتماعات وشكوى عميل ومهام لها مواعيد تسليم. رتّب أولوياتك وابدأ.'
       : sim.finished ? 'راجع ما حققته بقراراتك في سجلك المهني.' : 'هذا ما ينتظرك اليوم. البنود التي تنتهي مهلتها اليوم ستُغلق عند نهاية يوم العمل، ولتجاهلها عواقب.'}</p>
@@ -550,7 +550,7 @@ export function daySummary(session, dayEnded) {
     .map((a) => sim.items.find((i) => i.id === a.itemId)).filter(Boolean);
   const mk = (label, a, b, opts) => `<div><span>${label}</span><b>${fmt(a)}</b>${delta(a, b, opts)}</div>`;
   return `
-  <div class="modal-h"><div class="eyebrow">نهاية يوم العمل ${dayEnded}</div><h2>هذا ما حققته بقراراتك</h2></div>
+  <div class="modal-h"><div class="eyebrow">نهاية يوم العمل ${dayEnded} · ${weekday(dayEnded)}${dayEnded % 5 === 0 && !sim.finished ? ' · بداية عطلة نهاية الأسبوع' : ''}</div><h2>هذا ما حققته بقراراتك</h2></div>
   <div class="modal-b">
     <div class="mini-kpis">
       ${mk('الإيراد الشهري', now.mrr, prev.mrr)}
@@ -564,7 +564,7 @@ export function daySummary(session, dayEnded) {
   </div>
   <div class="modal-f">
     ${sim.finished ? '<button class="btn teal" data-act="go-report">افتح سجلك المهني</button>'
-      : `<button class="btn primary" data-act="close-modal">ابدأ يوم العمل ${sim.day}</button>`}
+      : `<button class="btn primary" data-act="close-modal">ابدأ يوم العمل ${sim.day} (${weekday(sim.day)})</button>`}
   </div>`;
 }
 

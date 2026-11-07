@@ -1624,6 +1624,142 @@
    }
   },
   {
+   "id": "d13_zatca_wave25",
+   "day": 13,
+   "type": "message",
+   "from": "cs_lead",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "decisions",
+    "prioritization"
+   ],
+   "title": "العملاء الصغار يسألون عن الفوترة الإلكترونية",
+   "body": "أمل: هيئة الزكاة والضريبة والجمارك أعلنت الموجة 25 من الربط مع منصة فاتورة: خُفّض حد الإيرادات إلى 187,500 ريال، والربط مطلوب قبل 1 فبراير 2027. عشرات من عملائنا الصغار دخلوا النطاق، ويسألون: هل يستطيع Nova Sales أن يحوّل عروض الأسعار إلى فواتير متوافقة؟ بعضهم يقارننا بمنافسين يقدمون هذا الربط.",
+   "options": [
+    {
+     "id": "partner_integration",
+     "label": "اربط المنتج ببرامج محاسبة معتمدة لدى الهيئة بدل بناء الفوترة من الصفر",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "zatca_partner",
+        "title": "ربط عروض الأسعار ببرامج محاسبة معتمدة للفوترة الإلكترونية",
+        "effort": 16,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.tail.avgHealth",
+          "value": 5
+         },
+         {
+          "op": "add",
+          "path": "company.model.organicMonthly",
+          "value": 2
+         },
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 3
+         },
+         {
+          "op": "trust",
+          "who": "cs_lead",
+          "value": 4
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 3
+      }
+     ],
+     "result": "أمل: هذا حل عملي قبل الموعد. سأبلغ العملاء بالخطة."
+    },
+    {
+     "id": "build_inhouse",
+     "label": "ابنِ إصدار الفواتير الإلكترونية والربط مع فاتورة داخل المنتج",
+     "quality": 0.5,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "zatca_inhouse",
+        "title": "بناء الفوترة الإلكترونية والربط مع فاتورة داخل المنتج",
+        "effort": 45,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.tail.avgHealth",
+          "value": 7
+         },
+         {
+          "op": "add",
+          "path": "company.model.organicMonthly",
+          "value": 3
+         },
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 4
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -4
+      }
+     ],
+     "result": "عبدالله: هذا مشروع كبير يحتاج اعتمادًا تقنيًا من الهيئة، ولن ينتهي قريبًا."
+    },
+    {
+     "id": "not_our_scope",
+     "label": "اعتذر: الفوترة مسؤولية برنامج المحاسبة لدى العميل",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": -5
+      },
+      {
+       "op": "schedule",
+       "inDays": 8,
+       "note": "بدأ عملاء صغار في الانتقال إلى منافس يربط عروض الأسعار بالفوترة الإلكترونية.",
+       "effects": [
+        {
+         "op": "add",
+         "path": "company.tail.avgHealth",
+         "value": -6
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "لم يصدر موقف من المنتج، فارتجل فريق الدعم ردودًا مختلفة للعملاء.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "cs_lead",
+      "value": -5
+     },
+     {
+      "op": "add",
+      "path": "company.tail.avgHealth",
+      "value": -2
+     }
+    ]
+   }
+  },
+  {
    "id": "d15_budget_cut",
    "day": 15,
    "type": "meeting",
@@ -1888,6 +2024,121 @@
     "closeRules": [
      {
       "outcome": "cut_tools"
+     }
+    ]
+   }
+  },
+  {
+   "id": "d17_data_residency",
+   "day": 17,
+   "type": "message",
+   "from": "sales_head",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "decisions",
+    "communication"
+   ],
+   "title": "سنابل تشترط بقاء البيانات داخل المملكة",
+   "body": "ماجد: سنابل التعليمية تريد تعميم النظام على كل فروعها (نحو 5,000 ريال إضافية شهريًا)، لكن فريقها القانوني سأل: أين تُحفظ بيانات الطلاب وأولياء الأمور؟ قاعدتنا الرئيسية في الرياض، لكن النسخ الاحتياطية تُنسخ إلى أوروبا. نظام حماية البيانات الشخصية يقيّد نقل البيانات خارج المملكة، والهيئة السعودية للبيانات والذكاء الاصطناعي تطبّقه فعليًا.",
+   "options": [
+    {
+     "id": "move_in_kingdom",
+     "label": "انقل النسخ الاحتياطية إلى مركز بيانات داخل المملكة واعرض على العميل وثيقة واضحة",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.costs.infraMonthly",
+       "value": 9000
+      },
+      {
+       "op": "accountMrr",
+       "id": "sanabel",
+       "value": 5000
+      },
+      {
+       "op": "accountHealth",
+       "id": "sanabel",
+       "value": 12
+      },
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": 3
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 5
+      }
+     ],
+     "result": "وافقت سنابل على التوسعة بعد مراجعة وثيقة استضافة البيانات."
+    },
+    {
+     "id": "phased_plan",
+     "label": "التزم بخطة نقل خلال شهر وابدأ بتقييم قانوني",
+     "quality": 0.7,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "sanabel",
+       "value": 4
+      },
+      {
+       "op": "schedule",
+       "inDays": 10,
+       "note": "اكتمل نقل النسخ الاحتياطية إلى داخل المملكة، ووقّعت سنابل التوسعة.",
+       "effects": [
+        {
+         "op": "add",
+         "path": "company.costs.infraMonthly",
+         "value": 9000
+        },
+        {
+         "op": "accountMrr",
+         "id": "sanabel",
+         "value": 5000
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "reassure_only",
+     "label": "طمئن العميل بأن البيانات مشفرة وآمنة دون تغيير الاستضافة",
+     "quality": 0.2,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "sanabel",
+       "value": -12
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": -4
+      },
+      {
+       "op": "flag",
+       "name": "pdpl_risk"
+      }
+     ],
+     "result": "الفريق القانوني في سنابل لم يقتنع، وجمّد التوسعة."
+    }
+   ],
+   "onExpire": {
+    "result": "تأخر الرد على سنابل فجمّدت التوسعة.",
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "sanabel",
+      "value": -8
+     },
+     {
+      "op": "trust",
+      "who": "sales_head",
+      "value": -5
      }
     ]
    }

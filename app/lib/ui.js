@@ -98,3 +98,8 @@ export function bar(value, { cls = '', max = 100 } = {}) {
   const auto = cls || (pct < 35 ? 'red' : pct < 55 ? 'amber' : '');
   return `<div class="bar ${auto}"><i style="width:${pct}%"></i></div>`;
 }
+
+// أسبوع العمل في السعودية: من الأحد إلى الخميس. يوم العمل 1 هو أول أحد.
+const WEEKDAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+export const weekday = (day) => WEEKDAYS[(day - 1) % 5];
+export const weekOf = (day) => Math.ceil(day / 5);

@@ -40,7 +40,7 @@ export function personaLines(people, ids, trust) {
  * @param {string} a.message   رسالة المتدرب في هذه الجولة (فارغة في الختام)
  * @param {boolean} a.closing  جولة الختام
  */
-export function meetingUserPrompt({ spec, options, people, context, meeting, message, closing }) {
+export function meetingUserPrompt({ spec, options, people, context, meeting, message, closing, saudiContext = null }) {
   const nameOf = (id) => (id === 'trainee' ? 'المتدرب (مدير المنتجات)' : people.find((p) => p.id === id)?.name ?? id);
   const transcript = meeting.transcript.map((l) => `${nameOf(l.speaker)}: ${l.text}`).join('\n');
   const concerns = spec.concerns.map((c) =>
@@ -49,7 +49,11 @@ export function meetingUserPrompt({ spec, options, people, context, meeting, mes
   return `<company_context>
 ${JSON.stringify(context, null, 1)}
 </company_context>
-
+${saudiContext ? `
+<saudi_market_context>
+${Object.values(saudiContext).map((v) => `- ${v}`).join('\n')}
+</saudi_market_context>
+` : ''}
 <meeting>
 الموضوع: ${spec.topic}
 رئيس الاجتماع: ${spec.chair}
