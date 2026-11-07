@@ -19,6 +19,42 @@ let verifyState = { loading: true };
 let confirmState = { loading: true };
 let resetState = {};
 let facState = { filter: 'pending', list: [], selected: null, calibration: null, loading: true, error: '' };
+let liveState = { loading: true, sessions: [], meetings: [], createEvent: null, error: '', room: null };
+let livePoll = null;
+
+async function loadLiveResults() {
+  if (!user) { ui.liveResults = {}; return; }
+  ui.liveResults = await account.liveResults();
+}
+
+async function loadLive() {
+  clearInterval(livePoll); livePoll = null;
+  const id = parseRoute().itemId;
+  if (!user) { render(); return; }
+  if (!id) {
+    liveState = { ...liveState, loading: true, error: '' };
+    render();
+    try { const d = await account.liveList(); liveState = { ...liveState, ...d, loading: false }; } catch (err) { liveState = { ...liveState, loading: false, error: err.message }; }
+    render();
+    return;
+  }
+  try { liveState.room = await account.live(id); } catch (err) { liveState.room = null; toast(err.message, 'bad'); }
+  render();
+  // تحديث المحضر فقط كل ثانيتين، حتى لا يضيع ما يكتبه المستخدم
+  livePoll = setInterval(async () => {
+    if (parseRoute().page !== 'live' || parseRoute().itemId !== id) { clearInterval(livePoll); return; }
+    try {
+      const next = await account.live(id);
+      const prev = liveState.room;
+      liveState.room = next;
+      if (!prev || prev.status !== next.status) { render(); return; }
+      if (prev.messages.length !== next.messages.length) {
+        const box = app.querySelector('[data-live-msgs]');
+        if (box) { box.innerHTML = V.liveMessages(world, next); box.scrollTop = box.scrollHeight; }
+      }
+    } catch { /* انقطاع مؤقت */ }
+  }, 2000);
+}
 
 async function loadFacilitator() {
   facState = { ...facState, loading: true, error: '' };
@@ -59,7 +95,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -73,6 +109,11 @@ function render() {
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
   if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
+  if (route.page === 'live' && user && !session) {
+    app.innerHTML = `<div class="content" style="margin:0 auto">${route.itemId && liveState.room ? V.liveRoom(world, liveState.room, { drafts }) : V.livePage(user, liveState)}</div>`;
+    const box = app.querySelector('[data-live-msgs]'); if (box) box.scrollTop = box.scrollHeight;
+    return;
+  }
   if (route.page === 'facilitator' && user?.role === 'facilitator' && !session) {
     app.innerHTML = `<div class="content" style="margin:0 auto">${V.facilitatorPage(world, facState)}</div>`;
     return;
@@ -96,6 +137,8 @@ function render() {
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session); break;
     case 'account': body = V.accountPage(session, user); break;
+    case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
+      : route.itemId && liveState.room ? V.liveRoom(world, liveState.room, { drafts }) : V.livePage(user, liveState); break;
     case 'facilitator': body = user?.role === 'facilitator' ? V.facilitatorPage(world, facState) : '<section class="card"><div class="empty"><b>هذه الصفحة للمُيسِّرين فقط</b></div></section>'; break;
     default: body = V.desk(session);
   }
@@ -168,6 +211,18 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  async 'live-start'(e) {
+    try { liveState.room = await account.liveStart(e.target.closest('[data-id]').dataset.id); render(); } catch (err) { toast(err.message, 'bad'); }
+  },
+  'apply-live'(e) {
+    const itemId = e.target.closest('[data-item]').dataset.item;
+    const item = session.sim.items.find((i) => i.id === itemId);
+    const r = ui.liveResults[item.eventId];
+    const said = r.transcript.filter((l) => l.speaker === 'trainee').map((l) => l.text).join('\n');
+    const opt = session.respond(itemId, r.optionId, said, { transcript: r.transcript, addressed: r.addressed, mode: 'human' });
+    toast(`اعتُمدت نتيجة الجلسة الحية: ${opt.label}`, 'good');
+    render();
+  },
   'fac-filter'(e) { facState.filter = e.target.closest('[data-filter]').dataset.filter; facState.selected = null; loadFacilitator(); },
   'fac-select'(e) { facState.selected = e.target.closest('[data-key]').dataset.key; facState.error = ''; render(); },
   'fac-export'() {
@@ -247,6 +302,18 @@ modalRoot.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalRoot.innerHTML) closeModal(); });
 
+app.addEventListener('change', (e) => {
+  if (e.target.dataset.actChange === 'live-event') {
+    // نحفظ ما أُدخل قبل إعادة الرسم، ثم نعيد ملء الحقول المشتركة
+    const form = e.target.closest('form');
+    const keep = { presenterEmail: form.presenterEmail.value, scheduledAt: form.scheduledAt.value };
+    liveState.createEvent = e.target.value;
+    render();
+    const f2 = app.querySelector('form[data-form="live-create"]');
+    if (f2) { f2.presenterEmail.value = keep.presenterEmail; f2.scheduledAt.value = keep.scheduledAt; }
+  }
+});
+
 // المسودات: لا يضيع ما كتبه المتدرب عند التنقل بين البنود
 app.addEventListener('input', (e) => {
   const t = e.target;
@@ -315,6 +382,8 @@ async function submitAuth(form) {
   if (remote) session = attach(Session.fromSave(world, remote));
   else if (session) { attach(session); await account.saveProgress(session.saveData()); }
   refreshAgents();
+  await loadLiveResults();
+  if (parseRoute().page === 'live') loadLive();
   toast(register ? `أهلًا ${user.name}! حسابك جاهز وتقدمك محفوظ.` : `مرحبًا بعودتك ${user.name}.`, 'good');
   render();
 }
@@ -344,6 +413,36 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'live-create') {
+    const f = new FormData(form);
+    const roles = {};
+    for (const [k, v] of f.entries()) if (k.startsWith('role:') && String(v).trim()) roles[k.slice(5)] = String(v).trim();
+    account.liveCreate({ eventId: f.get('eventId'), presenterEmail: f.get('presenterEmail'), scheduledAt: f.get('scheduledAt'), roles })
+      .then((d) => { toast('أُنشئت الجلسة. يراها المقدّم ولاعبو الأدوار في صفحة الجلسات الحية.', 'good'); location.hash = `#/live/${d.session.id}`; })
+      .catch((err) => { liveState.error = err.message; render(); });
+    return;
+  }
+  if (form.dataset.form === 'live-say') {
+    const f = new FormData(form);
+    const text = String(f.get('text') || '').trim();
+    if (!text) return;
+    account.liveSay(form.dataset.id, { text, as: f.get('as') || undefined })
+      .then((s) => { delete drafts[`live:${form.dataset.id}`]; saveDrafts(); liveState.room = s; render(); app.querySelector('#live-msg')?.focus(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'live-close') {
+    const f = new FormData(form);
+    const ratings = {};
+    for (const [k, v] of f.entries()) {
+      if (!k.startsWith('rating:') || !v) continue;
+      ratings[k.slice(7)] = Number(v);
+    }
+    account.liveClose(form.dataset.id, { addressed: f.getAll('addressed'), optionId: f.get('optionId'), note: f.get('note'), ratings })
+      .then((s) => { liveState.room = s; toast('انتهت الجلسة، ووصل الحكم إلى المقدّم.', 'good'); render(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'fac-review') {
     const f = new FormData(form);
     account.facReview({ userId: form.dataset.user, itemId: form.dataset.item, addressed: f.getAll('addressed'), optionId: f.get('optionId'), note: f.get('note') })
@@ -451,6 +550,8 @@ async function loadConfirm() {
 window.addEventListener('hashchange', () => {
   closeModal(); // الانتقال لصفحة أخرى يغلق أي نافذة مفتوحة
   if (parseRoute().page === 'facilitator') { loadFacilitator(); return; }
+  if (parseRoute().page === 'live') { loadLive(); return; }
+  if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
   if (parseRoute().page === 'reset-password') resetState = {};
@@ -466,6 +567,8 @@ window.addEventListener('hashchange', () => {
     user = await account.me();
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
     if (parseRoute().page === 'facilitator') loadFacilitator();
+    if (parseRoute().page === 'live') loadLive();
+    await loadLiveResults();
     if (user) {
       const remote = await account.progress().catch(() => null);
       const local = Session.localSave();

@@ -91,6 +91,59 @@ check((await tp.locator('.detail').textContent()).includes('ملاحظة الم�
 await snap(tp, '2-trainee-sees-review');
 console.log(`✓ لوحة المُيسِّر (${before.points} ← ${after.points} نقطة)`);
 
+// ——— 2) جلسة حية ———
+const presenter = await account('سارة المقدّمة', `presenter-${stamp}@example.com`);
+const player = await account('فهد لاعب الدور', `player-${stamp}@example.com`);
+// المقدّمة تبدأ المحاكاة وتتقدم حتى يُفتح اجتماع الإدارة (اليوم 3)
+const pp = await pageFor(browser, presenter);
+await pp.goto(`${BASE}#/`);
+const meetingsList = (await presenter('GET', '/api/live')).data; // للتأكد من الوصول
+check(Array.isArray(meetingsList.sessions), 'قائمة الجلسات لا تعمل للمتدرب');
+
+await fp.goto(`${BASE}#/live`);
+await fp.waitForSelector('form[data-form="live-create"]');
+const evId = await fp.locator('#lc-ev option', { hasText: 'اجتماع الإدارة' }).first().getAttribute('value');
+await fp.selectOption('#lc-ev', evId);
+await fp.fill('#lc-pr', presenter.email);
+const roleInputs = fp.locator('form[data-form="live-create"] input[name^="role:"]');
+await roleInputs.first().fill(player.email);
+await fp.fill('#lc-at', '2026-11-08T10:00');
+await snap(fp, '3-live-create');
+await fp.getByRole('button', { name: 'إنشاء الجلسة' }).click();
+await fp.waitForSelector('[data-live-msgs]');
+await fp.getByRole('button', { name: 'بدء الجلسة' }).click();
+await fp.waitForSelector('form[data-form="live-say"]');
+const sessionId = (await fp.evaluate(() => location.hash)).split('/').pop();
+
+const lp = await pageFor(browser, player, { width: 390, height: 844 });
+await lp.goto(`${BASE}#/live/${sessionId}`);
+await lp.waitForSelector('form[data-form="live-say"]');
+check((await lp.locator('.card').last().textContent()).includes('أنت رئيس الاجتماع'), 'بطاقة الدور لا تظهر للاعب الدور');
+await pp.goto(`${BASE}#/live/${sessionId}`);
+await pp.waitForSelector('form[data-form="live-say"]');
+await pp.fill('#live-msg', 'أقترح أن نبدأ بالتقارير لأن 40% من التذاكر عنها، ونعطي المبيعات موعدًا للتكامل في الربع القادم.');
+await pp.getByRole('button', { name: 'إرسال', exact: true }).click();
+await lp.waitForFunction(() => document.querySelector('[data-live-msgs]').textContent.includes('40%'), null, { timeout: 6000 });
+await lp.fill('#live-msg', 'مقتنع بالموعد، بشرط أن نراجعه بعد أسبوعين.');
+await lp.getByRole('button', { name: 'إرسال', exact: true }).click();
+await snap(lp, '4-live-role-player');
+await fp.waitForFunction(() => document.querySelector('[data-live-msgs]').textContent.includes('أسبوعين'), null, { timeout: 6000 });
+const close = fp.locator('form[data-form="live-close"]');
+await close.locator('input[name="addressed"]').first().check();
+await close.locator('input[name="optionId"]').first().check();
+await close.locator('select[name^="rating:"]').first().selectOption('5');
+await fp.fill('form[data-form="live-close"] textarea[name="note"]', 'عرض واضح بأرقام.');
+await snap(fp, '5-live-facilitator');
+await fp.getByRole('button', { name: 'إنهاء الجلسة واعتماد الحكم' }).click();
+await fp.waitForSelector('.outcome.good');
+const results = (await presenter('GET', '/api/live-results')).data.results;
+check(results?.[evId]?.optionId, 'لم تصل نتيجة الجلسة إلى المقدّمة');
+const collab = (await player('GET', '/api/collaboration')).data;
+check(collab.roles?.[0]?.rating === 5, `تقييم لاعب الدور لم يُسجل: ${JSON.stringify(collab)}`);
+await pp.waitForSelector('.outcome.good', { timeout: 6000 });
+await snap(pp, '6-live-presenter-result');
+console.log('✓ الجلسة الحية (إنشاء، بدء، حوار مباشر، حكم، تقييم لاعب الدور)');
+
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log('✓ ميزات المجتمع تعمل');

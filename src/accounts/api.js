@@ -291,6 +291,12 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         throw new HttpError(422, `تعذر التحقق من سجل الأفعال: ${err.message}`);
       }
       if (!sim.finished) throw new HttpError(400, `يُصدر السجل بعد إكمال ${world.scenario.lengthDays} يوم عمل`);
+      // نتيجة أي اجتماع حي يجب أن تطابق حكم المُيسِّر المسجّل على الخادم (لا يمكن تعديلها من المتصفح)
+      for (const a of p.log.filter((x) => x.t === 'respond' && x.mode === 'human')) {
+        const live = store.community?.liveResults?.[u.id]?.[String(a.itemId).split('#')[0]];
+        const same = live && live.optionId === a.optionId && [...(live.addressed ?? [])].sort().join() === [...(a.addressed ?? [])].sort().join();
+        if (!same) throw new HttpError(422, 'نتيجة اجتماع حي في سجلك لا تطابق حكم المُيسِّر المسجّل.');
+      }
       const reviews = store.community.reviews[u.id] ?? {};
       const logHash = sha256(JSON.stringify({ seed: p.seed, log: p.log, reviews: Object.keys(reviews).length ? reviews : undefined }));
       const existing = Object.values(store.records).find((r) => r.userId === u.id && r.logHash === logHash && !r.revoked);

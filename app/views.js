@@ -47,7 +47,7 @@ export function shell(session, route, content) {
         <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
         <div>${esc(sim.scenario.role)}</div>
         ${session.user
-          ? `<a href="#/account" class="side-link">حسابي</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
+          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
         <div><button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
@@ -279,6 +279,16 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
     </form>`;
   }
 
+  if (item.status === 'open' && item.dialogue && ui.liveResults?.[item.eventId]) {
+    const r = ui.liveResults[item.eventId];
+    const opt = item.options.find((o) => o.id === r.optionId);
+    return `${head}<div class="outcome good"><h3>عُقد هذا الاجتماع في جلسة حية</h3>
+      <p>حكم المُيسِّر: <b>${esc(opt?.label ?? r.optionId)}</b> · ${r.addressed.length} من ${item.dialogue.concerns.length} اعتراضات مجابة.</p>
+      ${r.note ? `<p class="small"><b>ملاحظة المُيسِّر:</b> ${esc(r.note)}</p>` : ''}
+      <div class="actions"><button class="btn primary" data-act="apply-live" data-item="${esc(item.id)}">اعتماد نتيجة الجلسة الحية</button>
+      <span class="small muted">تُطبَّق على الشركة كما حكم بها المُيسِّر، ولا يمكن تعديلها.</span></div></div>
+      ${minutes(session, r.transcript.map((l) => ({ speaker: l.speaker, text: l.text })), { full: true })}`;
+  }
   if (item.status === 'open' && item.dialogue) return `${head}${meetingRoom(session, item, ui)}`;
 
   if (item.status === 'open') {
@@ -985,5 +995,103 @@ export function facilitatorPage(world, state) {
     <section class="card inbox-list"><div class="tabs fac-tabs">${tab('pending', 'غير مراجعة')}${tab('reviewed', 'مراجعة')}${tab('all', 'الكل')}</div>
       ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : list.length ? `<div class="items">${list.map(row).join('')}</div>` : '<div class="empty"><b>لا شيء هنا</b></div>'}</section>
     <section class="card detail">${state.loading ? '' : detail}</section>
+  </div>`;
+}
+
+// ——— الجلسات الحية ———
+
+const STATUS_LIVE = { scheduled: 'مجدولة', live: 'جارية الآن', closed: 'انتهت' };
+const ROLE_LABEL = (r, roles) => (r === 'presenter' ? 'المقدّم' : r === 'facilitator' ? 'المُيسِّر' : `دور ${roles?.find((x) => x.speaker === r)?.character ?? r}`);
+
+export function livePage(user, state) {
+  const sessions = state.sessions ?? [];
+  const fac = user?.role === 'facilitator';
+  const meetings = state.meetings ?? [];
+  const sel = meetings.find((m) => m.id === state.createEvent) ?? meetings[0];
+  return `
+  <div class="page-h"><div><h1>الجلسات الحية</h1><p>اجتماعات يعرض فيها متدرب، ويلعب زملاؤه أدوار الحاضرين ببطاقات أدوار، ويحكم فيها المُيسِّر. لعب الأدوار يُحسب في جدارة "التعاون ودعم الزملاء"، ولا يؤثر على نقاط أحد.</p></div></div>
+  <div class="grid g-main">
+    <section class="card">
+      <h2>جلساتي</h2>
+      ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : sessions.length ? `<div class="items">${sessions.map((s) => `<a class="item" href="#/live/${esc(s.id)}">
+        <span class="ico">${icon('meeting')}</span>
+        <span><div class="tt">${esc(s.title)}</div><div class="meta"><span>المقدّم: ${esc(s.presenter)}</span><span class="pill ${s.status === 'live' ? 'p-critical' : s.status === 'closed' ? 's-done' : 't-pill'}">${STATUS_LIVE[s.status]}</span><span class="pill t-pill">${esc(ROLE_LABEL(s.myRole, s.roles))}</span></div></span>
+        <span class="due">${esc(new Date(s.scheduledAt).toLocaleString('ar-SA-u-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' }))}</span></a>`).join('')}</div>`
+        : '<div class="empty"><b>لا توجد جلسات</b>سيدعوك المُيسِّر إلى جلسة بدور محدد، أو لتكون المقدّم.</div>'}
+    </section>
+    ${fac && sel ? `<section class="card">
+      <h2>جلسة جديدة</h2>
+      <form data-form="live-create" class="grid" style="gap:10px">
+        <div class="field"><label for="lc-ev">الاجتماع</label><select id="lc-ev" name="eventId" data-act-change="live-event">${meetings.map((m) => `<option value="${esc(m.id)}" ${m.id === sel.id ? 'selected' : ''}>${esc(m.title)} (اليوم ${m.day})</option>`).join('')}</select></div>
+        <div class="field"><label for="lc-pr">بريد المتدرب المقدّم</label><input id="lc-pr" name="presenterEmail" type="email" required dir="ltr"></div>
+        ${sel.participants.map((p) => `<div class="field"><label>${esc(p.name)} <span class="muted small">(${esc(p.title)})</span></label><input name="role:${esc(p.id)}" type="email" dir="ltr" placeholder="بريد لاعب الدور، أو اتركه فأؤديه أنا"></div>`).join('')}
+        <div class="field"><label for="lc-at">الموعد</label><input id="lc-at" name="scheduledAt" type="datetime-local" required dir="ltr"></div>
+        ${state.error ? `<div class="outcome bad">${esc(state.error)}</div>` : ''}
+        <div class="actions"><button class="btn primary" type="submit">إنشاء الجلسة</button></div>
+      </form></section>` : ''}
+  </div>`;
+}
+
+export function liveMessages(world, s) {
+  const people = world.company.people;
+  const label = (m) => {
+    if (m.as === 'trainee') return `${s.presenter.name} (المقدّم)`;
+    if (m.as === 'facilitator') return 'المُيسِّر';
+    const role = s.roles.find((r) => r.speaker === m.as);
+    return `${people.find((p) => p.id === m.as)?.name ?? m.as}${role && m.by !== 'system' ? ` · ${role.player}` : ''}`;
+  };
+  return s.messages.map((m) => `<div class="bubble ${m.as === 'trainee' ? 'me' : ''} ${m.as === 'facilitator' ? 'narr' : ''}"><div><div class="who">${esc(label(m))}</div><div class="said">${esc(m.text)}</div></div></div>`).join('')
+    || '<div class="empty" style="padding:24px">لم تبدأ الجلسة بعد.</div>';
+}
+
+export function liveRoom(world, s, ui = {}) {
+  const c = s.card;
+  const isFac = s.myRole === 'facilitator';
+  const e = world.scenario.events.find((x) => x.id === s.eventId);
+  const people = world.company.people;
+  let cardHtml = '';
+  if (c.kind === 'role') {
+    cardHtml = `<h2>${esc(c.title)}</h2><p class="small">${esc(c.persona ?? '')}</p>
+      ${c.chair ? `<p class="small"><span class="pill p-normal">أنت رئيس الاجتماع</span>${c.concerns.length ? '' : ' أدِر النقاش: اطلب من المقدّم قرارًا واضحًا ورقمًا، وأعطِ الكلمة لأصحاب الاعتراضات، ثم اختم.'}</p>` : ''}
+      ${c.concerns.map((x) => `<div class="outcome info" style="margin:8px 0"><b>اعتراضك:</b> ${esc(x.label)}<br><span class="small"><b>تقتنع فقط إذا:</b> ${esc(x.convinceWhen)}</span><br><span class="small muted">إن اقتنعت، قل شيئًا مثل: «${esc(x.ifConvinced)}». وإن لم تقتنع: «${esc(x.ifNot)}»</span></div>`).join('')}
+      <details class="small"><summary>ما تعرفه عن الموقف</summary><p>${esc(c.facts)}</p></details>
+      ${c.opening.length ? `<p class="small muted">افتتاحك المقترح: «${esc(c.opening[0])}»</p>` : ''}`;
+  } else if (c.kind === 'presenter') {
+    cardHtml = `<h2>${esc(c.title)}</h2><p class="small">${esc(c.brief)}</p><p class="small muted">${esc(c.tips)}</p>
+      <p class="small">المُيسِّر هو من يحكم في النهاية، وتصلك النتيجة لتعتمدها في محاكاتك.</p>`;
+  } else {
+    cardHtml = `<h2>${esc(c.title)}</h2><p class="small">${esc(c.brief)}</p>
+      <p class="small"><b>الأدوار غير المسندة تؤديها أنت</b> باختيار "أتكلم بصفة".</p>`;
+  }
+  const roster = s.roles.map((r) => `<li><b>${esc(r.character)}</b> · ${esc(r.player)}</li>`).join('');
+  const speakAs = isFac ? `<select name="as" aria-label="أتكلم بصفة"><option value="facilitator">المُيسِّر (تعليق)</option>${s.roles.map((r) => `<option value="${esc(r.speaker)}">${esc(r.character)}</option>`).join('')}</select>` : '';
+  const closeForm = isFac && s.status !== 'closed' ? `
+    <form data-form="live-close" data-id="${esc(s.id)}" class="card" style="margin-top:12px">
+      <h2>ختام الجلسة وحكمك</h2>
+      ${e.dialogue.concerns.map((x) => `<label class="consent"><input type="checkbox" name="addressed" value="${esc(x.id)}"><span><b>${esc(people.find((p) => p.id === x.owner)?.name)} — ${esc(x.label)}</b><br><span class="small muted">${esc(x.criteria)}</span></span></label>`).join('')}
+      <div class="options">${e.options.map((o) => `<label class="opt"><input type="radio" name="optionId" value="${esc(o.id)}" required><span>${esc(o.label)}</span></label>`).join('')}</div>
+      ${s.roles.filter((r) => !r.byFacilitator).map((r) => `<div class="field"><label>تقييم أداء ${esc(r.player)} لدور ${esc(r.character)}</label><select name="rating:${esc(r.speaker)}"><option value="">—</option>${[5, 4, 3, 2, 1].map((n) => `<option value="${n}">${n} من 5</option>`).join('')}</select></div>`).join('')}
+      <div class="field"><label>ملاحظة للمقدّم</label><textarea name="note" rows="2"></textarea></div>
+      <div class="actions"><button class="btn primary" type="submit">إنهاء الجلسة واعتماد الحكم</button></div>
+    </form>` : '';
+  const result = s.result ? `<div class="outcome good" style="margin-bottom:14px;position:relative;z-index:1"><b>حكم المُيسِّر:</b> ${esc(e.options.find((o) => o.id === s.result.optionId)?.label ?? '')} · ${s.result.addressed.length} من ${e.dialogue.concerns.length} اعتراضات مجابة${s.result.note ? `<br><span class="small">${esc(s.result.note)}</span>` : ''}
+    ${s.myRole === 'presenter' ? '<div class="actions"><a class="btn primary" href="#/inbox">اعتمد النتيجة من بند الاجتماع في مهامك</a></div>' : ''}</div>` : '';
+  return `
+  <div class="page-h"><div><a href="#/live" class="small" style="text-decoration:none">→ الجلسات الحية</a><h1>${esc(s.title)}</h1>
+    <p>المقدّم: ${esc(s.presenter.name)} · <span class="pill ${s.status === 'live' ? 'p-critical' : s.status === 'closed' ? 's-done' : 't-pill'}">${STATUS_LIVE[s.status]}</span> · دورك: ${esc(ROLE_LABEL(s.myRole, s.roles))}</p></div>
+    ${isFac && s.status === 'scheduled' ? `<button class="btn teal" data-act="live-start" data-id="${esc(s.id)}">بدء الجلسة</button>` : ''}</div>
+  <div class="grid g-main">
+    <section class="card detail">
+      ${result}
+      <div class="minutes chat-thread" data-live-msgs>${liveMessages(world, s)}</div>
+      ${s.status !== 'closed' ? `<form data-form="live-say" data-id="${esc(s.id)}" class="live-form">
+        <div class="field"><textarea id="live-msg" name="text" rows="3" maxlength="1500" data-draft="live:${esc(s.id)}" placeholder="${s.myRole === 'presenter' ? 'تحدث إلى الحاضرين…' : 'تكلّم بلسان دورك…'}">${esc(ui.drafts?.[`live:${s.id}`] ?? '')}</textarea></div>
+        <div class="actions">${speakAs}<button class="btn primary" type="submit">إرسال</button><span class="small muted">تتحدث الصفحة تلقائيًا كل ثانيتين.</span></div>
+      </form>` : ''}
+    </section>
+    <div>
+      <section class="card">${cardHtml}<h2 style="margin-top:14px">الأدوار</h2><ul class="small" style="padding-inline-start:18px">${roster}<li><b>المقدّم</b> · ${esc(s.presenter.name)}</li></ul></section>
+      ${closeForm}
+    </div>
   </div>`;
 }

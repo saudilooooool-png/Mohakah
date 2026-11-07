@@ -31,6 +31,14 @@ export const account = {
   facDialogues: (filter = 'pending') => api('GET', `/api/facilitator/dialogues?filter=${filter}`).then((d) => d.dialogues),
   facReview: (body) => api('POST', '/api/facilitator/review', body),
   facCalibration: () => api('GET', '/api/facilitator/calibration'),
+  liveList: () => api('GET', '/api/live'),
+  liveCreate: (body) => api('POST', '/api/live', body),
+  live: (id) => api('GET', `/api/live/${encodeURIComponent(id)}`).then((d) => d.session),
+  liveSay: (id, body) => api('POST', `/api/live/${encodeURIComponent(id)}/message`, body).then((d) => d.session),
+  liveStart: (id) => api('POST', `/api/live/${encodeURIComponent(id)}/start`, {}).then((d) => d.session),
+  liveClose: (id, body) => api('POST', `/api/live/${encodeURIComponent(id)}/close`, body).then((d) => d.session),
+  liveResults: () => api('GET', '/api/live-results').then((d) => d.results).catch(() => ({})),
+  collaboration: () => api('GET', '/api/collaboration').catch(() => null),
 };
 
 /** حفظ مؤجل: يجمع التغييرات المتتالية في طلب واحد. */

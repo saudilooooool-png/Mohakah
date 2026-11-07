@@ -23,6 +23,7 @@
 | [`docs/07-roadmap.md`](docs/07-roadmap.md) | خطة بناء الـMVP والخطوات التالية |
 | [`docs/08-ai-agents.md`](docs/08-ai-agents.md) | وكلاء الذكاء الاصطناعي والاجتماعات الحوارية |
 | [`docs/12-pilot-and-costs.md`](docs/12-pilot-and-costs.md) | خطة الاختبار، وتكلفة Claude بالأرقام، وملفات التكلفة، وسقف الإنفاق |
+| [`docs/13-community-training.md`](docs/13-community-training.md) | التدريب بالمجتمع: لوحة المُيسِّر، والجلسات الحية بلعب الأدوار، ومراجعة الأقران |
 | [`docs/11-accounts-and-records.md`](docs/11-accounts-and-records.md) | رحلة المستخدم والتسجيل والموافقات، ونقاط محاكي، وسجل الأداء الموثّق، والتوصية لجهات التوظيف |
 | [`docs/10-occupations.md`](docs/10-occupations.md) | ربط الوظائف بالتصنيف السعودي الموحد للمهن، مع حالة التحقق والمصادر الرسمية |
 | [`docs/09-saudi-market-validation.md`](docs/09-saudi-market-validation.md) | التحقق من الواقع السعودي، والمصادر والقنوات القابلة للدمج، والمتطلبات النظامية |

@@ -113,3 +113,82 @@ test('معايرة: نسبة اتفاق الوكيل مع المُيسِّر، �
     assert.equal(cal.dataset.length, 2);
   });
 });
+
+// ——— 2) الجلسات الحية ———
+
+async function liveSetup(user) {
+  const fac = await user('هيا المُيسِّرة', 'fac@example.com');
+  const presenter = await user('نورة المقدِّمة', 'presenter@example.com');
+  const cfoPlayer = await user('سعد', 'cfo-player@example.com');
+  const salesPlayer = await user('ريم', 'sales-player@example.com');
+  const outsider = await user('غريب', 'outsider@example.com');
+  const created = await fac('POST', '/api/live', {
+    eventId: 'd5_mgmt_meeting', presenterEmail: 'presenter@example.com', scheduledAt: '2026-11-10T18:00',
+    roles: { cfo: 'cfo-player@example.com', sales_head: 'sales-player@example.com' }, // التطوير والرئيس يؤديهما المُيسِّر
+  });
+  return { fac, presenter, cfoPlayer, salesPlayer, outsider, created, id: created.data.session?.id };
+}
+
+test('الجلسة الحية: المُيسِّر ينشئها ويسند الأدوار، ولكل لاعب بطاقة دوره', async () => {
+  await withCommunity(async ({ user }) => {
+    const { presenter, cfoPlayer, outsider, created, id, salesPlayer } = await liveSetup(user);
+    assert.equal(created.status, 200);
+    assert.equal((await salesPlayer('POST', '/api/live', { eventId: 'd5_mgmt_meeting', presenterEmail: 'presenter@example.com' })).status, 403, 'المتدرب لا ينشئ جلسات');
+    const card = (await cfoPlayer('GET', `/api/live/${id}`)).data.session.card;
+    assert.equal(card.speaker, 'cfo');
+    assert.match(card.title, /هيفاء العتيبي/);
+    assert.equal(card.concerns.length, 1);
+    assert.match(card.concerns[0].convinceWhen, /مؤشر مالي/);
+    assert.equal((await presenter('GET', `/api/live/${id}`)).data.session.card.kind, 'presenter');
+    const roles = (await presenter('GET', `/api/live/${id}`)).data.session.roles;
+    assert.equal(roles.find((r) => r.speaker === 'eng_lead').byFacilitator, true);
+    assert.equal((await outsider('GET', `/api/live/${id}`)).status, 403);
+    assert.ok((await cfoPlayer('GET', '/api/live')).data.sessions.some((s) => s.id === id && s.myRole === 'cfo'));
+  });
+});
+
+test('الجلسة الحية: كل لاعب يتكلم بدوره فقط، والبداية تضع افتتاح الاجتماع', async () => {
+  await withCommunity(async ({ user }) => {
+    const { fac, presenter, cfoPlayer, id } = await liveSetup(user);
+    await fac('POST', `/api/live/${id}/start`);
+    let s = (await presenter('GET', `/api/live/${id}`)).data.session;
+    assert.equal(s.status, 'live');
+    assert.ok(s.messages.length >= 4, 'افتتاح الاجتماع من السيناريو');
+    await cfoPlayer('POST', `/api/live/${id}/message`, { as: 'ceo', text: 'أنا الرئيس التنفيذي!' });
+    await presenter('POST', `/api/live/${id}/message`, { text: 'نوصي بإصلاح التقارير ونقيس الأثر بعد أسبوعين.' });
+    await fac('POST', `/api/live/${id}/message`, { as: 'eng_lead', text: 'والجدول؟' });
+    s = (await presenter('GET', `/api/live/${id}`)).data.session;
+    const last = s.messages.slice(-3).map((m) => m.as);
+    assert.deepEqual(last, ['cfo', 'trainee', 'eng_lead'], 'لاعب المالية لا يتكلم بلسان الرئيس');
+  });
+});
+
+test('ختام الجلسة: حكم المُيسِّر يصبح نتيجة اجتماع المقدّم، ولا يمكن تعديله من المتصفح', async () => {
+  await withCommunity(async ({ user }) => {
+    const { fac, presenter, cfoPlayer, salesPlayer, id } = await liveSetup(user);
+    await fac('POST', `/api/live/${id}/start`);
+    await presenter('POST', `/api/live/${id}/message`, { text: 'رد المقدّم' });
+    const closed = await fac('POST', `/api/live/${id}/close`, {
+      addressed: ['roi', 'timeline'], optionId: 'defend_with_data', note: 'دفاع جيد بالأرقام',
+      ratings: { [cfoPlayer.id]: 5, [salesPlayer.id]: 3, notAPlayer: 5 },
+    });
+    assert.equal(closed.status, 200);
+    const results = (await presenter('GET', '/api/live-results')).data.results;
+    assert.deepEqual(results.d5_mgmt_meeting.addressed, ['roi', 'timeline']);
+    assert.ok(results.d5_mgmt_meeting.transcript.some((l) => l.speaker === 'trainee'));
+    // المقدّم يعتمد النتيجة في محاكاته
+    const { seed, log } = goodRun(9);
+    const human = log.map((a) => (a.t === 'respond' && a.itemId.startsWith('d5_mgmt_meeting#')
+      ? { ...a, optionId: 'defend_with_data', addressed: ['roi', 'timeline'], transcript: results.d5_mgmt_meeting.transcript, mode: 'human' } : a));
+    await presenter('PUT', '/api/progress', { seed, log: human });
+    assert.equal((await presenter('POST', '/api/records/issue')).status, 200);
+    // التلاعب: رفع الاعتراضات المجابة في المتصفح
+    const forged = human.map((a) => (a.mode === 'human' ? { ...a, addressed: ['roi', 'timeline', 'customers'] } : a));
+    await presenter('PUT', '/api/progress', { seed, log: forged });
+    assert.equal((await presenter('POST', '/api/records/issue')).status, 422);
+    // تقييم لاعبي الأدوار جدارة تعاون مستقلة
+    const collab = (await cfoPlayer('GET', '/api/collaboration')).data;
+    assert.equal(collab.roles[0].rating, 5);
+    assert.equal((await fac('POST', `/api/live/${id}/message`, { text: 'بعد الختام' })).status, 400);
+  });
+});
