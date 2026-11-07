@@ -36,6 +36,8 @@ export class Session {
     this.log = [];
     // مراسلات الزملاء: معلومات فقط، لا تؤثر على المحرك، فتُحفظ كما هي دون إعادة تشغيل
     this.threads = save.threads ?? {};
+    // تصحيحات المُيسِّر من الخادم: تُطبَّق فوق الأفعال عند إعادة البناء
+    this.reviews = save.reviews ?? {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -58,7 +60,7 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [] });
@@ -105,7 +107,7 @@ export class Session {
     return result;
   }
 
-  _apply(a) { return applyAction(this.sim, a); }
+  _apply(a) { return applyAction(this.sim, a, this.reviews); }
 
   _persist() {
     const data = this.saveData();

@@ -47,7 +47,7 @@ export function shell(session, route, content) {
         <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
         <div>${esc(sim.scenario.role)}</div>
         ${session.user
-          ? `<a href="#/account" class="side-link">حسابي</a> · <button type="button" data-act="logout">خروج</button>`
+          ? `<a href="#/account" class="side-link">حسابي</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
         <div><button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
@@ -328,6 +328,7 @@ function closedOutcome(session, item) {
       <p class="small">حققت <b class="num">${act.addressed.length}</b> من <b class="num">${concerns.length}</b> ${item.dialogue.mode === 'chat' ? 'نقاط' : 'اعتراضات'}.</p>
       <ul class="check">${concerns.map((c) => `<li class="${act.addressed.includes(c.id) ? '' : 'miss'}">${esc(session.person(c.owner).name)}: ${esc(c.label)}</li>`).join('')}</ul>
       <p class="small muted">${modeLabel(act.mode)}</p>
+      ${session.reviews?.[item.id]?.note ? `<p class="small"><b>ملاحظة المُيسِّر (${esc(session.reviews[item.id].byName ?? '')}):</b> ${esc(session.reviews[item.id].note)}</p>` : ''}
     </div>
     <h2 class="section-t" style="margin-top:18px">${item.dialogue.mode === 'chat' ? 'نص المحادثة' : 'محضر الاجتماع'}</h2>
     ${minutes(session, act.transcript, { full: true })}`;
@@ -609,6 +610,8 @@ export function modeLabel(mode) {
     claude: 'أدار الحوار وكلاء ذكاء اصطناعي (Claude)',
     offline: 'أدار الحوار الوضع المحلي القائم على القواعد',
     mixed: 'أدار الحوار Claude مع تحويل جزئي إلى الوضع المحلي',
+    reviewed: 'راجع المُيسِّر هذا الحكم وصحّحه',
+    human: 'أدار الحوار بشر في جلسة حية، وحكم فيه المُيسِّر',
   }[mode] ?? '';
 }
 
@@ -930,4 +933,57 @@ export function resetPasswordPage(state = {}) {
     </form>
     <p class="small muted">بعد الحفظ تُنهى كل الجلسات المفتوحة على حسابك في الأجهزة الأخرى.</p>
   </section>`);
+}
+
+// ——— لوحة المُيسِّر ———
+
+const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
+const AGENT_MODE = { claude: 'Claude', offline: 'الوضع المحلي', mixed: 'مختلط', reviewed: 'مُصحَّح', human: 'جلسة حية' };
+
+export function facilitatorPage(world, state) {
+  const people = world.company.people;
+  const nameOf = (id) => (id === 'trainee' ? 'المتدرب' : people.find((p) => p.id === id)?.name ?? id);
+  const cal = state.calibration;
+  const list = state.list ?? [];
+  const sel = list.find((d) => `${d.userId}|${d.itemId}` === state.selected) ?? list[0];
+  const tab = (id, label) => `<button class="${state.filter === id ? 'on' : ''}" data-act="fac-filter" data-filter="${id}">${label}</button>`;
+  const calCards = cal && Object.keys(cal.byAgentMode).length
+    ? Object.entries(cal.byAgentMode).map(([mode, g]) => `<section class="card kpi"><div class="k-l">اتفاق ${esc(AGENT_MODE[mode] ?? mode)} مع المُيسِّر</div>
+        <div class="k-v"><span class="num">${pct(g.concernAgreement)}</span></div><span class="muted small">في الحكم على الاعتراضات · <span class="num">${pct(g.decisionAgreement)}</span> في النتيجة · <span class="num">${g.dialogues}</span> حوارًا</span></section>`).join('')
+    : '<section class="card"><p class="muted small" style="margin:0">لا توجد مراجعات بعد. كل حوار تراجعه يضيف إلى المقارنة بين حكم الوكيل وحكمك، وهي ما نحتاجه لمعايرة النموذج.</p></section>';
+  const row = (d) => `<button class="item fac-row ${d === sel ? 'on' : ''}" data-act="fac-select" data-key="${esc(`${d.userId}|${d.itemId}`)}" style="text-align:right;width:100%;border:0;background:none">
+      <span class="ico">${typeIcon(d.kind === 'chat' ? 'message' : 'meeting')}</span>
+      <span><div class="tt">${esc(d.title)}</div><div class="meta"><span>${esc(d.userName)}</span><span class="pill t-pill">${esc(AGENT_MODE[d.agentMode] ?? d.agentMode)}</span>${d.review ? '<span class="pill s-done">مراجَع</span>' : ''}</div></span>
+      <span></span></button>`;
+  let detail = '<div class="empty"><b>لا توجد حوارات هنا</b>ستظهر حوارات المتدربين بعد أن يكملوها.</div>';
+  if (sel) {
+    const cur = sel.review ?? sel.ai;
+    const aiOpt = sel.options.find((o) => o.id === sel.ai.optionId)?.label;
+    detail = `
+      <div class="chips"><span class="pill t-pill">${sel.kind === 'chat' ? 'محادثة' : 'اجتماع'}</span><span class="pill t-pill">${esc(sel.userName)}</span><span class="pill t-pill">أدارها: ${esc(AGENT_MODE[sel.agentMode] ?? sel.agentMode)}</span></div>
+      <h1>${esc(sel.title)}</h1>
+      <div class="minutes full">${sel.transcript.map((l) => `<div class="bubble ${l.speaker === 'trainee' ? 'me' : ''}"><div><div class="who">${esc(nameOf(l.speaker))}</div><div class="said">${esc(l.text)}</div></div></div>`).join('')}</div>
+      <div class="outcome info" style="margin:12px 0"><b>حكم الوكيل:</b> ${sel.ai.addressed.length} من ${sel.concerns.length} اعتراضات مجابة · النتيجة: ${esc(aiOpt ?? sel.ai.optionId)}</div>
+      ${sel.review ? `<p class="small muted">راجعه ${esc(sel.review.byName)} في ${esc(new Date(sel.review.at).toLocaleDateString('ar-SA-u-ca-gregory'))}.</p>` : ''}
+      <form data-form="fac-review" data-user="${esc(sel.userId)}" data-item="${esc(sel.itemId)}">
+        <h2 class="section-t">حكمك على الاعتراضات</h2>
+        ${sel.concerns.map((c) => `<label class="consent"><input type="checkbox" name="addressed" value="${esc(c.id)}" ${cur.addressed.includes(c.id) ? 'checked' : ''}>
+          <span><b>${esc(nameOf(c.owner))} — ${esc(c.label)}</b>${sel.ai.addressed.includes(c.id) !== cur.addressed.includes(c.id) ? ' <span class="pill p-high">يختلف عن الوكيل</span>' : ''}<br><span class="small muted">${esc(c.criteria)}</span></span></label>`).join('')}
+        <h2 class="section-t" style="margin-top:14px">النتيجة</h2>
+        <div class="options">${sel.options.map((o) => `<label class="opt"><input type="radio" name="optionId" value="${esc(o.id)}" ${cur.optionId === o.id ? 'checked' : ''}><span>${esc(o.label)}${o.id === sel.ai.optionId ? ' <span class="muted small">(حكم الوكيل)</span>' : ''}</span></label>`).join('')}</div>
+        <div class="field"><label for="fac-note">ملاحظة للمتدرب <span class="muted small">(تظهر له مع الحوار)</span></label><textarea id="fac-note" name="note" rows="3">${esc(sel.review?.note ?? '')}</textarea></div>
+        ${state.error ? `<div class="outcome bad">${esc(state.error)}</div>` : ''}
+        <div class="actions"><button class="btn primary" type="submit">${sel.review ? 'تحديث المراجعة' : 'حفظ المراجعة'}</button>
+          <span class="small muted">تعيد المراجعة حساب نقاط المتدرب بالمحرك. إن غيّرت النتيجة مسار أحداثه اللاحقة، ستُرفض مع شرح.</span></div>
+      </form>`;
+  }
+  return `
+  <div class="page-h"><div><h1>لوحة المُيسِّر</h1><p>راجع حكم الوكيل على حوارات المتدربين وصحّحه. حكمك هو المرجع لمعايرة النموذج.</p></div>
+    ${cal?.reviewed ? '<button class="btn" data-act="fac-export">تنزيل مجموعة المقارنة (JSON)</button>' : ''}</div>
+  <div class="grid g-4">${calCards}</div>
+  <div class="inbox-layout" style="margin-top:16px">
+    <section class="card inbox-list"><div class="tabs fac-tabs">${tab('pending', 'غير مراجعة')}${tab('reviewed', 'مراجعة')}${tab('all', 'الكل')}</div>
+      ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : list.length ? `<div class="items">${list.map(row).join('')}</div>` : '<div class="empty"><b>لا شيء هنا</b></div>'}</section>
+    <section class="card detail">${state.loading ? '' : detail}</section>
+  </div>`;
 }

@@ -18,6 +18,17 @@ const saver = debouncedSaver();
 let verifyState = { loading: true };
 let confirmState = { loading: true };
 let resetState = {};
+let facState = { filter: 'pending', list: [], selected: null, calibration: null, loading: true, error: '' };
+
+async function loadFacilitator() {
+  facState = { ...facState, loading: true, error: '' };
+  render();
+  try {
+    const [list, calibration] = await Promise.all([account.facDialogues(facState.filter), account.facCalibration()]);
+    facState = { ...facState, list, calibration, loading: false };
+  } catch (err) { facState = { ...facState, loading: false, error: err.message }; }
+  render();
+}
 
 /** يربط الجلسة بالحساب: كل حفظ محلي يُرفع إلى الخادم (مؤجلًا). */
 function attach(s) {
@@ -48,7 +59,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -62,6 +73,10 @@ function render() {
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
   if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
+  if (route.page === 'facilitator' && user?.role === 'facilitator' && !session) {
+    app.innerHTML = `<div class="content" style="margin:0 auto">${V.facilitatorPage(world, facState)}</div>`;
+    return;
+  }
   if (!session) {
     app.innerHTML = route.page === 'account' && user
       ? `<div class="content" style="margin:0 auto">${V.accountPage(null, user)}<p><a href="#/desk">← العودة</a></p></div>`
@@ -81,6 +96,7 @@ function render() {
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session); break;
     case 'account': body = V.accountPage(session, user); break;
+    case 'facilitator': body = user?.role === 'facilitator' ? V.facilitatorPage(world, facState) : '<section class="card"><div class="empty"><b>هذه الصفحة للمُيسِّرين فقط</b></div></section>'; break;
     default: body = V.desk(session);
   }
   const keepScroll = route.page === 'inbox' ? window.scrollY : 0;
@@ -152,6 +168,14 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  'fac-filter'(e) { facState.filter = e.target.closest('[data-filter]').dataset.filter; facState.selected = null; loadFacilitator(); },
+  'fac-select'(e) { facState.selected = e.target.closest('[data-key]').dataset.key; facState.error = ''; render(); },
+  'fac-export'() {
+    const blob = new Blob([JSON.stringify(facState.calibration.dataset, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `mohaki-calibration-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    URL.revokeObjectURL(a.href);
+  },
   async 'resend-verification'() {
     try {
       const r = await account.resendVerification();
@@ -320,6 +344,13 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'fac-review') {
+    const f = new FormData(form);
+    account.facReview({ userId: form.dataset.user, itemId: form.dataset.item, addressed: f.getAll('addressed'), optionId: f.get('optionId'), note: f.get('note') })
+      .then(() => { toast('حُفظت المراجعة، وأُعيد حساب نقاط المتدرب.', 'good'); facState.selected = null; return loadFacilitator(); })
+      .catch((err) => { facState.error = err.message; render(); });
+    return;
+  }
   if (form.dataset.form === 'forgot') {
     account.requestReset(String(new FormData(form).get('email') || ''))
       .then((r) => openModal(V.forgotModal(r.message)))
@@ -419,6 +450,7 @@ async function loadConfirm() {
 
 window.addEventListener('hashchange', () => {
   closeModal(); // الانتقال لصفحة أخرى يغلق أي نافذة مفتوحة
+  if (parseRoute().page === 'facilitator') { loadFacilitator(); return; }
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
   if (parseRoute().page === 'reset-password') resetState = {};
@@ -433,6 +465,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
+    if (parseRoute().page === 'facilitator') loadFacilitator();
     if (user) {
       const remote = await account.progress().catch(() => null);
       const local = Session.localSave();

@@ -28,6 +28,9 @@ export const account = {
   requestReset: (email) => api('POST', '/api/auth/reset/request', { email }),
   resetPassword: (token, password) => api('POST', '/api/auth/reset', { token, password }),
   record: (code) => api('GET', `/api/records/${encodeURIComponent(code)}`),
+  facDialogues: (filter = 'pending') => api('GET', `/api/facilitator/dialogues?filter=${filter}`).then((d) => d.dialogues),
+  facReview: (body) => api('POST', '/api/facilitator/review', body),
+  facCalibration: () => api('GET', '/api/facilitator/calibration'),
 };
 
 /** حفظ مؤجل: يجمع التغييرات المتتالية في طلب واحد. */

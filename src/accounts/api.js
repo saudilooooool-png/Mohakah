@@ -62,6 +62,9 @@ export function cleanProfile(raw = {}) {
 export function createAccountsApi({ store, world, env = process.env, now: clock = now, mailer = null, publicUrl = env.MOHAKI_PUBLIC_URL || 'http://localhost:4173' }) {
   const secureCookie = env.MOHAKI_SECURE_COOKIE === '1';
   const employerToken = env.MOHAKI_EMPLOYER_TOKEN || null;
+  // المُيسِّرون: بريدهم في MOHAKI_FACILITATORS (مفصولة بفواصل)، ويجب أن يكون مؤكدًا
+  const facilitators = new Set(String(env.MOHAKI_FACILITATORS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean));
+  const isFacilitator = (u) => !!u && facilitators.has(u.email) && !!u.emailVerifiedAt;
   const attempts = new Map(); // email -> [timestamps] لحماية بسيطة من التخمين
   const resetRequests = new Map(); // email -> [timestamps]
   // روابط البريد مبنية من عنوان مُعدّ مسبقًا، لا من ترويسة Host في الطلب (حماية من تزوير روابط الاستعادة)
@@ -113,6 +116,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
 
   const publicUser = (u) => u && {
     id: u.id, name: u.name, email: u.email, emailVerified: !!u.emailVerifiedAt, profile: u.profile, consents: u.consents, createdAt: u.createdAt,
+    role: isFacilitator(u) ? 'facilitator' : 'trainee',
     records: Object.values(store.records).filter((r) => r.userId === u.id && !r.revoked).map((r) => r.code),
   };
 
@@ -261,7 +265,10 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       return { ok: true };
     },
 
-    'GET /api/progress': (req, res, body, u) => ({ progress: store.progress(u.id) }),
+    'GET /api/progress': (req, res, body, u) => {
+      const p = store.progress(u.id);
+      return { progress: p && { ...p, reviews: store.community.reviews[u.id] ?? {} } };
+    },
 
     'PUT /api/progress': (req, res, body, u) => {
       const seed = Number(body.seed);
@@ -279,12 +286,13 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       if (!p) throw new HttpError(400, 'لا يوجد تقدم محفوظ');
       let sim;
       try {
-        ({ sim } = replay(world, p, { strict: true }));
+        ({ sim } = replay(world, { ...p, reviews: store.community.reviews[u.id] ?? {} }, { strict: true }));
       } catch (err) {
         throw new HttpError(422, `تعذر التحقق من سجل الأفعال: ${err.message}`);
       }
       if (!sim.finished) throw new HttpError(400, `يُصدر السجل بعد إكمال ${world.scenario.lengthDays} يوم عمل`);
-      const logHash = sha256(JSON.stringify({ seed: p.seed, log: p.log }));
+      const reviews = store.community.reviews[u.id] ?? {};
+      const logHash = sha256(JSON.stringify({ seed: p.seed, log: p.log, reviews: Object.keys(reviews).length ? reviews : undefined }));
       const existing = Object.values(store.records).find((r) => r.userId === u.id && r.logHash === logHash && !r.revoked);
       if (existing) return existing;
       const report = sim.report();
@@ -385,5 +393,6 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
   }
   // يتيح للخادم معرفة صاحب الطلب (لسقف الاستخدام وتفعيل الذكاء الاصطناعي للمسجلين)
   handle.userFrom = userFrom;
+  handle.isFacilitator = isFacilitator;
   return handle;
 }

@@ -2,10 +2,16 @@
 // والخادم (التحقق من النتيجة قبل إصدار السجل: لا يثق الخادم بأي رقم يحسبه المتصفح).
 import { Simulation } from './engine/simulation.js';
 
-export function applyAction(sim, a) {
+/**
+ * تطبيق فعل واحد. reviews: تصحيحات المُيسِّر { [itemId]: { addressed, optionId } } تُطبَّق فوق
+ * حكم الوكيل الأصلي دون تعديل السجل نفسه (يبقى الأصل محفوظًا للتدقيق).
+ */
+export function applyAction(sim, a, reviews = null) {
   if (a.t === 'respond') {
-    return sim.respond(a.itemId, a.optionId, {
-      rationale: a.rationale ?? '', transcript: a.transcript ?? null, addressed: a.addressed ?? null, mode: a.mode ?? null,
+    const r = reviews?.[a.itemId];
+    return sim.respond(a.itemId, r?.optionId ?? a.optionId, {
+      rationale: a.rationale ?? '', transcript: a.transcript ?? null,
+      addressed: r?.addressed ?? a.addressed ?? null, mode: r ? 'reviewed' : a.mode ?? null,
     });
   }
   if (a.t === 'deliver') return sim.submitDeliverable(a.itemId, a.text);
@@ -18,12 +24,12 @@ export function applyAction(sim, a) {
  * @param {{seed:number, log:Array}} save
  * @param {{strict?: boolean}} opts strict: يرمي خطأ عند أول فعل غير صالح (للخادم)
  */
-export function replay(world, { seed, log = [] }, { strict = false } = {}) {
+export function replay(world, { seed, log = [], reviews = null }, { strict = false } = {}) {
   const sim = new Simulation({ company: world.company, scenario: world.scenario, seed, occupations: world.occupations ?? null });
   const applied = [];
   for (const a of log) {
     try {
-      applyAction(sim, a);
+      applyAction(sim, a, reviews);
       applied.push(a);
     } catch (err) {
       if (strict) throw new Error(`فعل غير صالح رقم ${applied.length + 1}: ${err.message}`);
