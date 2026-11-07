@@ -73,7 +73,9 @@ export class Simulation {
     const valid = addressed ? concerns.filter((c) => addressed.includes(c.id)) : [];
     this._recordAction(item, {
       kind: 'decision', optionId, rationale, quality: option.quality ?? null,
-      ...(item.dialogue ? { transcript, addressed: valid.map((c) => c.id), concernsTotal: concerns.length, mode } : {}),
+      // تُحتسب الاعتراضات فقط إذا جرى حوار فعلًا (وُجد حكم على الاعتراضات)؛ الرد المباشر
+      // على بند حواري (من سكربت أو اختبار) يُقيَّم بالتبرير كأي قرار آخر
+      ...(item.dialogue && addressed ? { transcript, addressed: valid.map((c) => c.id), concernsTotal: concerns.length, mode } : {}),
     });
     item.status = 'done';
     item.resolution = { optionId, day: this.day };

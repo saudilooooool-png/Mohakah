@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Simulation, loadCompany, loadScenario } from '../src/index.js';
 import {
-  openMeeting, offlineTurn, offlineClose, applyTurn, sanitizeTurn, meetingResult, turnSchema,
+  openMeeting, offlineTurn, offlineClose, applyTurn, sanitizeTurn, meetingResult, turnSchema, validateDialogueSpec,
 } from '../src/agents/meeting.js';
 import { claudeMeetingTurn, AgentError } from '../src/agents/claude.js';
 import { createAgentApi, cleanContext } from '../src/agents/server.js';
@@ -184,4 +184,73 @@ test('الخادم: نقاط النهاية تعمل، والمواصفات تُ
   const fakeRes = { writeHead() {}, end(b) { this.body = b; } };
   await off({ url: '/api/agents/status', method: 'GET' }, fakeRes);
   assert.equal(JSON.parse(fakeRes.body).mode, 'offline');
+});
+
+// ——— اجتماع تخطيط السبرنت (اليوم 3) ———
+
+function simAtSprint(seed = 3) {
+  const sim = new Simulation({ company, scenario, seed });
+  while (sim.day < 3) sim.endDay();
+  const item = sim.inbox().find((i) => i.eventId === 'd3_sprint_priority');
+  return { sim, item };
+}
+
+test('كل اجتماعات السيناريو الحوارية متسقة مع خيارات أحداثها وشخصيات الشركة', () => {
+  const dialogues = scenario.events.filter((e) => e.dialogue);
+  assert.ok(dialogues.length >= 2);
+  for (const e of dialogues) assert.deepEqual(validateDialogueSpec(e, company.people), [], e.id);
+});
+
+test('السبرنت: اختيار التقارير مع دليل يجيب الاعتراضات ويضع الإصلاح على خارطة الطريق', () => {
+  const { sim, item } = simAtSprint();
+  assert.ok(item.dialogue);
+  const r = meetingResult(playOffline(item, [
+    'نبدأ بإصلاح أداء التقارير بندًا واحدًا: 22 نقطة جهد تكفيها سعة الفريق في أسبوعين، ونؤجل الباقي. '
+    + 'الاستخدام نزل من 58% إلى 41% والأفق مهددة بالإلغاء وتدفع 18,500 ريال. '
+    + 'وحملات واتساب نعود إليها في السبرنت القادم بعد أن يرسل ماجد بيانات الصفقات وقيمتها.',
+  ]));
+  assert.equal(r.optionId, 'reports_fix');
+  assert.deepEqual(r.addressed.sort(), ['customers', 'focus', 'sales']);
+  const morale = sim.state.company.team.morale;
+  sim.respond(item.id, r.optionId, { rationale: r.rationale, transcript: r.transcript, addressed: r.addressed, mode: r.mode });
+  assert.equal(sim.state.company.roadmap.active.id, 'reports_fix');
+  assert.equal(sim.state.company.team.morale, morale + 2, 'أثر اعتراض التركيز المُجاب من السيناريو');
+});
+
+test('السبرنت: يُحتسب الموقف الذي ذكره المتدرب أولًا', () => {
+  const { item } = simAtSprint();
+  const r = meetingResult(playOffline(item, ['نبدأ بواتساب ثم إصلاح التقارير في السبرنت القادم.']));
+  assert.equal(r.optionId, 'whatsapp');
+});
+
+test('السبرنت: الموقف المعلن يبقى في الجولات التالية حتى يتغير', () => {
+  const { item } = simAtSprint();
+  const r = meetingResult(playOffline(item, [
+    'أختار الصلاحيات أولا لأن رواسي تريد التوسع.',
+    'وبالنسبة للأفق سأتصل بهم بنفسي هذا الأسبوع.',
+  ]));
+  assert.equal(r.optionId, 'permissions');
+});
+
+test('السبرنت: عدم الحسم ينتهي بتوزيع الجهد على الثلاثة', () => {
+  const { sim, item } = simAtSprint();
+  const r = meetingResult(playOffline(item, ['كل البنود مهمة، لنحاول التقدم فيها جميعًا قدر الإمكان.']));
+  assert.equal(r.optionId, 'all_three');
+  sim.respond(item.id, r.optionId, { addressed: r.addressed, transcript: r.transcript });
+  assert.equal(sim.state.company.roadmap.queue.length, 2, 'البنود الثلاثة على الخارطة');
+});
+
+test('السبرنت: مخطط Claude يقيّد القرار بالبنود الأربعة والمتحدثين بالحاضرين', async () => {
+  const { item } = simAtSprint();
+  const calls = [];
+  const client = fakeClient({
+    stop_reason: 'end_turn', model: 'claude-opus-5-5',
+    content: [{ type: 'text', text: JSON.stringify({ replies: [{ speaker: 'eng_lead', text: 'اتفقنا.' }], concerns: { focus: true, customers: true, sales: false }, decision: 'reports_fix' }) }],
+  }, calls);
+  const t = await claudeMeetingTurn(client, turnArgs(item, { closing: true, message: '' }));
+  assert.equal(t.decision, 'reports_fix');
+  const schema = calls[0].output_config.format.schema;
+  assert.deepEqual(schema.properties.decision.enum, ['reports_fix', 'whatsapp', 'permissions', 'all_three']);
+  assert.deepEqual(schema.properties.replies.items.properties.speaker.enum, ['eng_lead', 'sales_head', 'cs_lead', 'dev2']);
+  assert.match(calls[0].messages[0].content, /تخطيط السبرنت/);
 });

@@ -137,12 +137,17 @@ function detectConcerns(spec, text) {
   }));
 }
 
+/** يعيد الموقف الذي ذكره المتدرب أولًا في رسالته (لا أول موقف في القائمة). */
 function detectStance(spec, text) {
   const body = normalize(text);
+  let best = null;
   for (const [stance, words] of Object.entries(spec.stanceKeywords ?? {})) {
-    if (words.some((w) => body.includes(normalize(w)))) return stance;
+    for (const w of words) {
+      const at = body.indexOf(normalize(w));
+      if (at !== -1 && (!best || at < best.at)) best = { stance, at };
+    }
   }
-  return null;
+  return best?.stance ?? null;
 }
 
 export function offlineTurn(spec, meeting, message) {
@@ -154,19 +159,51 @@ export function offlineTurn(spec, meeting, message) {
   const stillOpen = spec.concerns.filter((c) => !found[c.id] && !meeting.addressed[c.id]);
   if (stillOpen.length) replies.push({ speaker: stillOpen[0].owner, text: stillOpen[0].replyOpen });
   if (!replies.length) replies.push({ speaker: spec.chair, text: 'واضح. هل هناك ما تضيفه قبل أن نختم؟' });
-  const addressedCount = spec.concerns.filter((c) => found[c.id] || meeting.addressed[c.id]).length;
-  const stance = detectStance(spec, message) ?? (addressedCount >= 2 ? 'defend_with_data' : 'unclear');
+  // الموقف المعلن يبقى حتى يعلن المتدرب موقفًا آخر
+  const stance = detectStance(spec, message) ?? meeting.stance ?? 'unclear';
   return { replies: replies.slice(0, 3), concerns: found, stance };
 }
 
+/**
+ * الختام في الوضع المحلي: الموقف الذي أعلنه المتدرب إن وُجد، وإلا أول قاعدة من
+ * `closeRules` في السيناريو يحقق شرطها (عدد الاعتراضات المُجابة). آخر قاعدة هي الافتراضية.
+ */
 export function offlineClose(spec, meeting) {
   const addressedCount = Object.values(meeting.addressed).filter(Boolean).length;
-  let decision;
-  if (meeting.stance === 'cut_scope' || meeting.stance === 'give_in') decision = meeting.stance;
-  else decision = addressedCount >= 2 ? 'defend_with_data' : 'give_in';
+  const declared = meeting.stance && meeting.stance !== 'unclear' && spec.outcomes[meeting.stance] ? meeting.stance : null;
+  const rule = (spec.closeRules ?? []).find((r) => addressedCount >= (r.minAddressed ?? 0));
+  const decision = declared ?? rule?.outcome;
+  if (!decision) throw new Error('لا توجد قاعدة ختام في مواصفات الاجتماع');
   return {
     replies: [{ speaker: spec.chair, text: spec.outcomes[decision]?.closing ?? 'شكرًا، انتهى الاجتماع.' }],
     concerns: { ...meeting.addressed },
     decision,
   };
+}
+
+/**
+ * يتحقق من اتساق مواصفات اجتماع حواري مع خيارات حدثه وشخصيات الشركة.
+ * يعيد قائمة بالمشكلات (فارغة إذا كانت المواصفات سليمة).
+ */
+export function validateDialogueSpec(event, people) {
+  const spec = event.dialogue;
+  const problems = [];
+  const ids = new Set(people.map((p) => p.id));
+  const options = new Set(event.options.map((o) => o.id));
+  const parts = new Set(spec.participants);
+  if (!parts.has(spec.chair)) problems.push('رئيس الاجتماع ليس من المشاركين');
+  for (const p of spec.participants) if (!ids.has(p)) problems.push(`مشارك غير معروف: ${p}`);
+  for (const l of spec.opening) if (!parts.has(l.speaker)) problems.push(`متحدث في الافتتاح ليس مشاركًا: ${l.speaker}`);
+  for (const c of spec.concerns) {
+    if (!parts.has(c.owner)) problems.push(`صاحب الاعتراض ${c.id} ليس مشاركًا`);
+    for (const f of ['criteria', 'keywords', 'replyAddressed', 'replyOpen']) if (!c[f]) problems.push(`الاعتراض ${c.id} ينقصه ${f}`);
+  }
+  for (const o of options) if (!spec.outcomes?.[o]?.guide || !spec.outcomes[o].closing) problems.push(`النتيجة ${o} ينقصها guide أو closing`);
+  for (const k of Object.keys(spec.outcomes ?? {})) if (!options.has(k)) problems.push(`نتيجة ليست من خيارات الحدث: ${k}`);
+  for (const k of Object.keys(spec.stanceKeywords ?? {})) if (!options.has(k)) problems.push(`كلمات موقف لنتيجة غير موجودة: ${k}`);
+  const rules = spec.closeRules ?? [];
+  if (!rules.length) problems.push('لا توجد قواعد ختام');
+  for (const r of rules) if (!options.has(r.outcome)) problems.push(`قاعدة ختام لنتيجة غير موجودة: ${r.outcome}`);
+  if (rules.length && (rules.at(-1).minAddressed ?? 0) > 0) problems.push('آخر قاعدة ختام يجب أن تكون افتراضية (بلا شرط)');
+  return problems;
 }

@@ -61,27 +61,42 @@ async function run(viewport, tag) {
     await snap(`6-${p}`);
   }
 
-  // اجتماع الإدارة الحواري (اليوم 5)
-  while (!(await page.locator('.day b').textContent()).includes('5')) {
+  // الاجتماعات الحوارية: تخطيط السبرنت (اليوم 3) ثم اجتماع الإدارة (اليوم 5)
+  const dayIs = async (n) => (await page.locator('.day b').textContent()).includes(String(n));
+  const endDay = async () => {
     await page.locator('[data-act="end-day"]').click();
     await page.locator('.modal [data-act="confirm-end-day"]').click();
     await page.locator('.modal [data-act="close-modal"]').click();
+  };
+  async function playMeeting(title, text, expected, shotPrefix) {
+    await page.goto(`${BASE}#/meetings`);
+    await page.locator('.item', { hasText: title }).click();
+    await page.getByRole('button', { name: 'ادخل الاجتماع' }).click();
+    await page.waitForSelector('.minutes .bubble');
+    if (shotPrefix) await snap(`${shotPrefix}-open`);
+    await page.fill('#say', text);
+    await page.getByRole('button', { name: 'إرسال' }).click();
+    await page.waitForSelector('.bubble.me');
+    await page.waitForSelector('.concern.ok');
+    if (shotPrefix) await snap(`${shotPrefix}-round`);
+    await page.getByRole('button', { name: 'اختتام الاجتماع' }).click();
+    await page.waitForSelector('.outcome', { timeout: 15000 });
+    const outcome = await page.locator('.outcome h3').textContent();
+    if (!outcome.includes(expected)) errors.push(`[${tag}] نتيجة غير متوقعة في «${title}»: ${outcome}`);
+    if (shotPrefix) await snap(`${shotPrefix}-minutes`);
   }
-  await page.goto(`${BASE}#/meetings`);
-  await page.locator('.item', { hasText: 'اجتماع الإدارة' }).click();
-  await page.getByRole('button', { name: 'ادخل الاجتماع' }).click();
-  await page.waitForSelector('.minutes .bubble');
-  await snap('7-meeting-open');
-  await page.fill('#say', 'نوصي بإصلاح التقارير أولًا لأنه يحمي الإيرادات: الأفق تدفع 18500 ريال شهريًا. سنقيس النجاح بمؤشر الاستخدام ونسبة الإلغاء في مراجعة بعد أسبوعين. لعملاء واتساب نعطي موعدًا واضحًا بعد الإصلاح ولا تضيع الصفقات. والإصلاح 22 نقطة جهد أي نحو أسبوعين بسعة الفريق، أولوية واحدة.');
-  await page.getByRole('button', { name: 'إرسال' }).click();
-  await page.waitForSelector('.bubble.me');
-  await page.waitForSelector('.concern.ok');
-  await snap('8-meeting-round');
-  await page.getByRole('button', { name: 'اختتام الاجتماع' }).click();
-  await page.waitForSelector('.outcome', { timeout: 15000 });
-  const outcome = await page.locator('.outcome h3').textContent();
-  if (!outcome.includes('دافع بالأرقام')) errors.push(`[${tag}] نتيجة اجتماع غير متوقعة: ${outcome}`);
-  await snap('9-meeting-minutes');
+
+  while (!(await dayIs(3))) await endDay();
+  await playMeeting('تخطيط السبرنت',
+    'نبدأ بإصلاح أداء التقارير بندًا واحدًا: 22 نقطة جهد تكفيها سعة الفريق في أسبوعين، ونؤجل الباقي. الاستخدام نزل من 58% إلى 41% والأفق مهددة بالإلغاء. وحملات واتساب نعود إليها في السبرنت القادم بعد أن يرسل ماجد بيانات الصفقات.',
+    'إصلاح أداء التقارير', '7-sprint');
+  await page.goto(`${BASE}#/company`);
+  if (!(await page.locator('.barrow', { hasText: 'إعادة بناء أداء التقارير' }).count())) errors.push(`[${tag}] قرار السبرنت لم يصل إلى خارطة الطريق`);
+
+  while (!(await dayIs(5))) await endDay();
+  await playMeeting('اجتماع الإدارة',
+    'نوصي بإصلاح التقارير أولًا لأنه يحمي الإيرادات: الأفق تدفع 18500 ريال شهريًا. سنقيس النجاح بمؤشر الاستخدام ونسبة الإلغاء في مراجعة بعد أسبوعين. لعملاء واتساب نعطي موعدًا واضحًا بعد الإصلاح ولا تضيع الصفقات. والإصلاح 22 نقطة جهد أي نحو أسبوعين بسعة الفريق، أولوية واحدة.',
+    'دافع بالأرقام', '8-mgmt');
 
   // لا تمرير أفقي على أي شاشة
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

@@ -619,7 +619,7 @@ function meetingRoom(session, item, ui) {
       <div class="field">
         <label for="say">ردك في الاجتماع <span class="muted small">· ${left > 0 ? `الجولة ${m.round + 1} من ${m.maxRounds}` : 'انتهت الجولات'}</span></label>
         <textarea id="say" name="message" rows="4" maxlength="1500" data-draft="${esc(item.id)}" data-draft-field="say" ${pending || left <= 0 ? 'disabled' : ''}
-          placeholder="تحدث إلى الحاضرين: ما الدليل؟ ما المؤشر الذي سيتحسن؟ ماذا تقول للعملاء المنتظرين؟ هل الجدول واقعي؟">${esc(ui.drafts?.[item.id]?.say ?? '')}</textarea>
+          placeholder="${esc(spec.placeholder ?? 'تحدث إلى الحاضرين.')}">${esc(ui.drafts?.[item.id]?.say ?? '')}</textarea>
       </div>
       <div class="actions">
         <button class="btn primary" type="submit" ${pending || left <= 0 ? 'disabled' : ''}>إرسال</button>
