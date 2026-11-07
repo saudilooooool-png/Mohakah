@@ -4,8 +4,11 @@
   "description": "محاكي | MOHAKI — منصة محاكاة بيئات العمل والشركات (نواة محرك المحاكاة)",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "start": "node scripts/serve.js",
     "test": "node --test",
     "demo": "node scripts/demo.js"
   },
