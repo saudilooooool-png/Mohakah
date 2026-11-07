@@ -47,6 +47,15 @@ export function buildReport(sim, runBaseline) {
   const delivs = acts.filter((a) => a.kind === 'deliverable' || (a.kind === 'expired' && sim.items.find((i) => i.id === a.itemId)?.deliverable));
   const outputQuality = avg(delivs.map((d) => (d.kind === 'deliverable' ? d.evaluation.score : 0)));
 
+  // إدارة الأشخاص: البنود الموسومة بمهارة people (التفويض، الإرهاق، الخلافات، الملاحظات الفردية).
+  // القرار = جودته؛ الحوار = نصف جودة النتيجة ونصف نسبة النقاط التي حققها المتدرب؛ المتروك = صفر.
+  const peopleActs = acts.filter((a) => a.skills?.includes('people'));
+  const people = avg(peopleActs.map((a) => {
+    if (a.kind === 'expired') return 0;
+    if (a.kind !== 'decision' || a.quality === null) return null;
+    return a.addressed ? 0.5 * a.quality + 0.5 * (a.addressed.length / Math.max(1, a.concernsTotal)) : a.quality;
+  }).filter((x) => x !== null));
+
   // الأثر على الشركة: مقارنة بعالم موازٍ بنفس البذرة لم يتخذ فيه أحد أي قرار
   const baseline = runBaseline();
   const mine = snapshot(sim.state);
@@ -61,6 +70,7 @@ export function buildReport(sim, runBaseline) {
     { id: 'communication', label: 'التواصل', score: communication },
     { id: 'time', label: 'إدارة الوقت', score: timeMgmt },
     { id: 'output', label: 'جودة المخرجات', score: outputQuality },
+    { id: 'people', label: 'إدارة الأشخاص', score: people },
     { id: 'impact', label: 'الأثر على نتائج الشركة', score: impact },
   ].map((s) => ({ ...s, score: s.score === null ? null : pct(s.score) }));
 

@@ -322,3 +322,52 @@ test('السياق السعودي يصل إلى تعليمات الوكلاء م
   await api(req, res);
   assert.deepEqual(seen[0].saudiContext, company.saudiContext);
 });
+
+// ——— إدارة الأشخاص: الاجتماع الفردي مع فهد (اليوم 23) ———
+
+function simAt1on1(seed = 3) {
+  const sim = new Simulation({ company, scenario, seed });
+  while (sim.day < 23) sim.endDay();
+  const item = sim.inbox().find((i) => i.eventId === 'd23_feedback_1on1');
+  return { sim, item };
+}
+
+test('الملاحظة الفردية: وقائع واستماع وخطة تنتهي بالتوجيه وتبني الثقة', () => {
+  const { sim, item } = simAt1on1();
+  assert.deepEqual(item.dialogue.participants, ['analyst']);
+  const r = meetingResult(playOffline(item, [
+    'تقرير الإلغاءات الذي وصل للإدارة كان فيه أرقام خاطئة، واضطر سلطان لتصحيح ما قاله للمستثمرين. أخبرني ما الذي حدث من جهتك؟ أريد أن أفهم السبب.',
+    'نتفق إذن على خطة: كل الطلبات تمر عبري بأولوية واحدة، وأنت تراجع كل تقرير قبل الإرسال، ونجتمع متابعة أسبوعية.',
+  ]));
+  assert.equal(r.optionId, 'coach_plan');
+  assert.deepEqual(r.addressed.sort(), ['facts', 'listen', 'plan']);
+  const before = sim.state.player.trust.analyst;
+  sim.respond(item.id, r.optionId, { rationale: r.rationale, transcript: r.transcript, addressed: r.addressed, mode: r.mode });
+  assert.equal(sim.state.player.trust.analyst, before + 8 + 6, 'أثر النتيجة + أثر النقاط الثلاث');
+});
+
+test('الملاحظة الفردية: التهديد ينتهي بتحذير رسمي، والتهرّب لا يعالج شيئًا', () => {
+  const { item } = simAt1on1();
+  assert.equal(meetingResult(playOffline(item, ['هذا إنذار، وإذا تكرر سأرفع الأمر للموارد البشرية.'])).optionId, 'formal_warning');
+  assert.equal(meetingResult(playOffline(item, ['لا بأس، ننسى الموضوع ونكمل.'])).optionId, 'let_it_go');
+  assert.equal(meetingResult(playOffline(item, ['لن أرفع الأمر للموارد البشرية. أخبرني ما الذي حدث وما السبب؟ أريد أن أفهم ظروفك.'])).optionId, 'let_it_go',
+    'النفي يمنع احتساب التهديد، وبلا خطة متفق عليها لا يكتمل التوجيه');
+});
+
+test('مهارة إدارة الأشخاص تُقاس من التفويض والإرهاق والملاحظة الفردية، والتجاهل صفر', () => {
+  const passive = Simulation.runBaseline(company, scenario, 4, 30);
+  assert.equal(passive.report().skills.find((s) => s.id === 'people').score, 0);
+  const sim = new Simulation({ company, scenario, seed: 4 });
+  while (!sim.finished) {
+    for (const item of sim.inbox()) {
+      if (item.deliverable) continue;
+      const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
+      sim.respond(item.id, best.id, { rationale: 'قرار مدروس' });
+    }
+    sim.endDay();
+  }
+  const people = sim.report().skills.find((s) => s.id === 'people');
+  assert.ok(people.score >= 85, `${people.score}`);
+  const ids = sim.actions.filter((a) => a.skills?.includes('people')).map((a) => a.eventId);
+  for (const id of ['d1_kickoff', 'd7_delegation', 'd18_dev_burnout', 'd23_feedback_1on1']) assert.ok(ids.includes(id), id);
+});

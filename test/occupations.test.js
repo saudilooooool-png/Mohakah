@@ -71,3 +71,9 @@ test('ملفات المهن مستخرجة من الجدول الرئيسي ال
   assert.equal(data.profiles['251102'].unitGroup, '2511');
   assert.ok(data.profiles['122302'].behavioralCompetencies.includes('اتخاذ القرار'));
 });
+
+test('كل جدارات مدير تطوير المنتجات الرسمية لها دليل في محاكي (لا فجوات)', () => {
+  const o = roleOccupation(data, 'product-manager');
+  for (const c of o.profile.behavioralCompetencies) assert.ok(o.competencyEvidence[c], c);
+  assert.equal(o.competencyEvidence['إدارة الأشخاص'], 'people');
+});

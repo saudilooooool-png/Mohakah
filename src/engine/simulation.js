@@ -107,7 +107,7 @@ export class Simulation {
     // 1) البنود التي فات موعدها بلا تصرف
     for (const item of this.items.filter((i) => i.status === 'open' && i.dueDay <= this.day)) {
       item.status = 'expired';
-      this.actions.push({ day: this.day, itemId: item.id, eventId: item.eventId, kind: 'expired', priority: item.priority, onTime: false, category: item.category });
+      this.actions.push({ day: this.day, itemId: item.id, eventId: item.eventId, kind: 'expired', priority: item.priority, onTime: false, category: item.category, skills: item.skills });
       if (item.onExpire?.result) this.log(item.onExpire.result, 'bad');
       applyEffects(this.state, item.onExpire?.effects, { sim: this });
     }
