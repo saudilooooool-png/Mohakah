@@ -371,3 +371,41 @@ test('مهارة إدارة الأشخاص تُقاس من التفويض وال
   const ids = sim.actions.filter((a) => a.skills?.includes('people')).map((a) => a.eventId);
   for (const id of ['d1_kickoff', 'd7_delegation', 'd18_dev_burnout', 'd23_feedback_1on1']) assert.ok(ids.includes(id), id);
 });
+
+// ——— اجتماع جاهزية الإصدار (اليوم 20) ———
+
+function simAtRelease(seed = 3) {
+  const sim = new Simulation({ company, scenario, seed });
+  while (sim.day < 20) sim.endDay();
+  const item = sim.inbox().find((i) => i.eventId === 'd20_release');
+  return { sim, item };
+}
+
+test('الإصدار: إطلاق تجريبي مع احتواء المخاطر والدعم والالتزامات يجيب الاعتراضات الثلاثة', () => {
+  const { sim, item } = simAtRelease();
+  assert.ok(item.dialogue);
+  const r = meetingResult(playOffline(item, [
+    'نطلق لمجموعة تجريبية من عشرين عميلًا ونضم رواسي إليها حتى يلتزم ماجد بالموعد. '
+    + 'أخطاء التصدير والجوال غير حرجة، ونراقبها أسبوعًا مع خطة تراجع ونصلحها قبل التوسع. '
+    + 'ونبلغ العملاء في المجموعة بالأخطاء المعروفة مسبقًا، وتجهز أمل ردودًا جاهزة لفريق الدعم.',
+  ]));
+  assert.equal(r.optionId, 'beta');
+  assert.deepEqual(r.addressed.sort(), ['commitment', 'risk', 'support']);
+  const q = sim.state.company.productQuality;
+  sim.respond(item.id, r.optionId, { rationale: r.rationale, transcript: r.transcript, addressed: r.addressed, mode: r.mode });
+  assert.equal(sim.state.company.productQuality, q + 1);
+});
+
+test('الإصدار: أسبوع الجودة يضع الإصلاح على خارطة الطريق', () => {
+  const { sim, item } = simAtRelease();
+  const r = meetingResult(playOffline(item, ['لن نطلق الآن. نخصص أسبوع جودة لإصلاح أخطاء التصدير والجوال، وماجد يبلغ رواسي بموعد جديد بعد أسبوع.']));
+  assert.equal(r.optionId, 'qa_week', 'النفي يمنع احتساب «نطلق الآن»');
+  sim.respond(item.id, r.optionId, { addressed: r.addressed, transcript: r.transcript });
+  const rm = sim.state.company.roadmap;
+  assert.ok([rm.active, ...rm.queue].some((x) => x?.id === 'qa_hardening'));
+});
+
+test('الإصدار: عدم الحسم ينتهي بالإطلاق في الموعد بأخطائه (متسق مع فوات الموعد)', () => {
+  const { item } = simAtRelease();
+  assert.equal(meetingResult(playOffline(item, ['كل الخيارات لها مزايا وعيوب، والأمر يحتاج تفكيرًا.'])).optionId, 'launch_now');
+});
