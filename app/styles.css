@@ -258,6 +258,17 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .bubble.narr > div { background: var(--amber-soft); }
 .live-form select, .field select { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); width: 100%; }
 .live-form .actions select { width: auto; }
+.peer-doc { white-space: pre-wrap; background: #f8f9fc; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; line-height: 1.9; max-height: 420px; overflow-y: auto; margin-bottom: 14px; }
+.peer-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg label { cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: inline-block; border: 1.5px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.seg input:checked + span { border-color: var(--teal); background: var(--teal-soft, #e6f6f4); font-weight: 700; }
+.seg input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 2px; }
+.peer-rev { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.peer-rev p { margin: 6px 0; }
+.peer-secs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .day-sep { text-align: center; margin: 6px 0; }
 .day-sep span { font-size: 12px; color: var(--ink-3); background: #f1f4f8; padding: 2px 10px; border-radius: 99px; }
 .chip { border: 0; cursor: pointer; }

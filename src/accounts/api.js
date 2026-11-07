@@ -6,6 +6,7 @@
 // - النتيجة لا تُقبل من المتصفح: الخادم يعيد تشغيل الأفعال بالمحرك الحتمي ويحسبها بنفسه.
 // - السجل ليس "شهادة خبرة" ولا "شهادة خدمة" (المادة 64 من نظام العمل يصدرها صاحب العمل)،
 //   ولا "شهادة تدريب معتمدة" قبل ترخيص البرنامج.
+import { collaborationSummary, forgetUser } from '../community/collab.js';
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { replay } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
@@ -140,6 +141,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
     const next = {
       processing: consents.processing === true,
       employerSharing: consents.employerSharing === true,
+      peerReview: consents.peerReview === true,
     };
     for (const [k, v] of Object.entries(next)) {
       if (user.consents?.[k] !== v) user.consentHistory.push({ consent: k, value: v, at: clock() });
@@ -260,6 +262,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       for (const [k, s] of Object.entries(store.sessions)) if (s.userId === u.id) delete store.sessions[k];
       delete store.users[u.id];
       store.deleteProgress(u.id);
+      forgetUser(store.community, u.id); store.saveCommunity();
       store.saveUsers(); store.saveSessions(); store.saveRecords();
       res.setHeader?.('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
       return { ok: true };
@@ -322,6 +325,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         recommendable: points.recommendable,
         occupation: report.occupation && { code: report.occupation.code, titleAr: report.occupation.titleAr, status: report.occupation.status, match: report.occupation.match },
         evidence: { decisions: report.evidence.decisions.length, deliverables: report.evidence.deliverables.length, shipped: report.evidence.shipped.map((s) => s.title) },
+        collaboration: collaborationSummary(store.community, u.id),
         logHash,
         verifiedBy: 'server-replay',
       };

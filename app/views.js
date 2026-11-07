@@ -47,7 +47,7 @@ export function shell(session, route, content) {
         <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
         <div>${esc(sim.scenario.role)}</div>
         ${session.user
-          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
+          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
         <div><button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
@@ -497,7 +497,7 @@ export function feed(session) {
 
 // ——— تطورك المهني ———
 
-export function report(session) {
+export function report(session, ui = {}) {
   const sim = session.sim;
   if (!session.log.length) {
     return `<div class="page-h"><div><h1>تطورك المهني</h1></div></div>
@@ -525,6 +525,7 @@ export function report(session) {
     </div>
   </section>
   ${pointsCard(session, r)}
+  ${collabCard(ui.collab)}
   <div class="grid g-2" style="margin-top:16px">
     <section class="card"><h2>المهارات</h2>
       <div class="grid" style="gap:14px">${r.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score === null ? '—' : `${s.score}%`}</span>${s.score === null ? '<div class="bar"></div>' : bar(s.score)}</div>`).join('')}</div>
@@ -823,7 +824,9 @@ export function authModal(mode = 'register', error = '') {
     <label class="consent"><input type="checkbox" name="processing" required>
       <span><b>أوافق على معالجة بياناتي لأغراض التدريب والتقييم داخل محاكي</b> (مطلوب). تُحفظ قراراتك ومحادثاتك ونتائجك لحساب سجلك المهني. لا نطلب رقم الهوية أو الجوال.</span></label>
     <label class="consent"><input type="checkbox" name="employerSharing">
-      <span><b>أوافق على مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة لمحاكي</b> (اختياري). لا يُشارك إلا إذا استوفيت شروط التوصية، ويمكنك سحب الموافقة في أي وقت.</span></label>` : ''}
+      <span><b>أوافق على مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة لمحاكي</b> (اختياري). لا يُشارك إلا إذا استوفيت شروط التوصية، ويمكنك سحب الموافقة في أي وقت.</span></label>
+    <label class="consent"><input type="checkbox" name="peerReview">
+      <span><b>أوافق على عرض مستنداتي على متدربين آخرين لمراجعتها دون اسمي</b> (اختياري). تصلك ملاحظاتهم، ولا تؤثر على نقاطك.</span></label>` : ''}
     <div class="actions">
       <button class="btn primary" type="submit">${reg ? 'إنشاء الحساب' : 'دخول'}</button>
       <button class="btn ghost" type="button" data-act="open-auth" data-mode="${reg ? 'login' : 'register'}">${reg ? 'لدي حساب' : 'ليس لدي حساب'}</button>
@@ -865,6 +868,7 @@ export function accountPage(session, user) {
       <h2>الموافقات</h2>
       <label class="consent"><input type="checkbox" checked disabled><span><b>معالجة البيانات لأغراض التدريب</b>: مطلوبة لاستخدام المنصة. لسحبها احذف حسابك.</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-sharing" ${user.consents?.employerSharing ? 'checked' : ''}><span><b>مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة</b>: يمكنك تفعيلها أو سحبها في أي وقت، ويُسجَّل تاريخ كل تغيير.</span></label>
+      <label class="consent"><input type="checkbox" data-act="toggle-peer" ${user.consents?.peerReview ? 'checked' : ''}><span><b>عرض مستنداتي على متدربين آخرين لمراجعتها دون اسمي</b>: إن سحبتها، لا تُكلَّف مستنداتك لمراجعات جديدة.</span></label>
       <h2 style="margin-top:18px">سجلاتي الموثّقة</h2>
       ${user.records?.length ? `<ul class="feed">${user.records.map((c) => `<li><span class="d"></span><span class="dot"></span><a href="#/verify/${esc(c)}" class="num">${esc(c)}</a></li>`).join('')}</ul>` : '<p class="small muted">لم تُصدر سجلًا بعد. يُصدر بعد إكمال التجربة.</p>'}
       <h2 style="margin-top:18px">الحساب</h2>
@@ -901,6 +905,7 @@ export function verifyPage(state) {
       <div><div class="points"><span class="num">${r.points}</span><small> / 1000</small></div><span class="pill s-done">${esc(r.band.label)}</span></div>
       <div class="breakdown">${r.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.score}%</span>${bar(b.score)}</div>`).join('')}</div>
     </div>
+    ${r.collaboration && (r.collaboration.rolesPlayed || r.collaboration.reviewsGiven) ? `<p class="small"><b>التعاون ودعم الزملاء</b> (منفصل عن النقاط): لعب <span class="num">${r.collaboration.rolesPlayed}</span> دورًا في جلسات زملائه${r.collaboration.avgRoleRating ? ` بتقييم <span class="num">${r.collaboration.avgRoleRating}</span> من 5` : ''} · راجع <span class="num">${r.collaboration.reviewsGiven}</span> مستندًا، وجد أصحابها <span class="num">${r.collaboration.reviewsHelpful}</span> منها مفيدة.</p>` : ''}
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
     <p class="small muted">تاريخ الإصدار: ${d(r.issuedAt)} · احتُسبت النتيجة بإعادة تشغيل كل القرارات على خادم محاكي · بصمة سجل الأفعال: <span class="num" style="word-break:break-all">${esc(r.logHash.slice(0, 16))}…</span></p>
     <div class="actions no-print"><button class="btn" data-act="print">طباعة / حفظ PDF</button><a class="btn ghost" href="#/desk">إلى محاكي</a></div>
@@ -987,12 +992,17 @@ export function facilitatorPage(world, state) {
           <span class="small muted">تعيد المراجعة حساب نقاط المتدرب بالمحرك. إن غيّرت النتيجة مسار أحداثه اللاحقة، ستُرفض مع شرح.</span></div>
       </form>`;
   }
+  if (state.filter === 'peer') {
+    return `<div class="page-h"><div><h1>لوحة المُيسِّر</h1><p>مراجعات الأقران: المُبلَّغ عنها أولًا. أخفِ ما ليس مهنيًا، فلا يراه الكاتب ولا يُحسب للمراجع.</p></div></div>
+    <section class="card"><div class="tabs fac-tabs">${tab('pending', 'غير مراجعة')}${tab('reviewed', 'مراجعة')}${tab('all', 'الكل')}${tab('peer', 'مراجعات الأقران')}</div>
+    ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : peerModerationPage(state)}</section>`;
+  }
   return `
   <div class="page-h"><div><h1>لوحة المُيسِّر</h1><p>راجع حكم الوكيل على حوارات المتدربين وصحّحه. حكمك هو المرجع لمعايرة النموذج.</p></div>
     ${cal?.reviewed ? '<button class="btn" data-act="fac-export">تنزيل مجموعة المقارنة (JSON)</button>' : ''}</div>
   <div class="grid g-4">${calCards}</div>
   <div class="inbox-layout" style="margin-top:16px">
-    <section class="card inbox-list"><div class="tabs fac-tabs">${tab('pending', 'غير مراجعة')}${tab('reviewed', 'مراجعة')}${tab('all', 'الكل')}</div>
+    <section class="card inbox-list"><div class="tabs fac-tabs">${tab('pending', 'غير مراجعة')}${tab('reviewed', 'مراجعة')}${tab('all', 'الكل')}${tab('peer', 'مراجعات الأقران')}</div>
       ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : list.length ? `<div class="items">${list.map(row).join('')}</div>` : '<div class="empty"><b>لا شيء هنا</b></div>'}</section>
     <section class="card detail">${state.loading ? '' : detail}</section>
   </div>`;
@@ -1094,4 +1104,73 @@ export function liveRoom(world, s, ui = {}) {
       ${closeForm}
     </div>
   </div>`;
+}
+
+// ——— التعاون ودعم الزملاء ———
+
+function collabCard(c) {
+  if (!c) return '';
+  const s = c.summary;
+  return `<section class="card" style="margin-top:16px"><h2>التعاون ودعم الزملاء</h2>
+    <p class="small muted" style="margin-top:0">دليل منفصل عن النقاط: كيف ساعدت زملاءك في التدريب. يظهر في سجلك الموثّق كما هو.</p>
+    <div class="grid g-4">
+      <div class="kpi"><div class="k-l">أدوار في جلسات حية</div><div class="k-v"><span class="num">${s.rolesPlayed}</span></div></div>
+      <div class="kpi"><div class="k-l">متوسط تقييم المُيسِّر لأدوارك</div><div class="k-v"><span class="num">${s.avgRoleRating ?? '—'}</span>${s.avgRoleRating ? '<span class="muted small"> من 5</span>' : ''}</div></div>
+      <div class="kpi"><div class="k-l">مستندات راجعتها</div><div class="k-v"><span class="num">${s.reviewsGiven}</span></div></div>
+      <div class="kpi"><div class="k-l">وجدها أصحابها مفيدة</div><div class="k-v"><span class="num">${s.reviewsHelpful}</span></div></div>
+    </div>
+    ${!s.rolesPlayed && !s.reviewsGiven ? '<p class="small" style="margin-bottom:0">ابدأ من <a href="#/peer">مراجعة الأقران</a>: راجع مستند زميل في 10 دقائق.</p>' : ''}</section>`;
+}
+
+// ——— مراجعة الأقران ———
+
+const LEVEL = { yes: 'موجود وواضح', partly: 'موجود جزئيًا', no: 'غير موجود' };
+const LEVEL_PILL = { yes: 's-done', partly: 'p-high', no: 'p-critical' };
+
+export function peerPage(user, state) {
+  const tab = (id, label) => `<button class="${state.tab === id ? 'on' : ''}" data-act="peer-tab" data-tab="${id}">${label}</button>`;
+  let body = '';
+  if (state.loading) body = '<div class="empty">جارٍ التحميل…</div>';
+  else if (state.tab === 'received') {
+    const list = state.received ?? [];
+    body = list.length ? list.map((r) => `<article class="peer-rev">
+        <div class="chips"><span class="pill t-pill">${esc(r.title)}</span><span class="pill t-pill">زميل متدرب</span><span class="pill t-pill">تقييم عام ${r.overall} من 5</span></div>
+        <div class="peer-secs">${r.sections.map((x) => `<span class="pill ${LEVEL_PILL[x.level]}">${esc(x.label)}: ${LEVEL[x.level]}</span>`).join('')}</div>
+        <p><b>نقطة قوة:</b> ${esc(r.strengths)}</p><p><b>اقتراح تحسين:</b> ${esc(r.improve)}</p>
+        <div class="actions">${r.helpful === null
+          ? `<span class="small">هل كانت مفيدة؟</span><button class="btn" data-act="peer-helpful" data-id="${esc(r.id)}" data-v="1">نعم</button><button class="btn ghost" data-act="peer-helpful" data-id="${esc(r.id)}" data-v="0">لا</button>`
+          : `<span class="small muted">${r.helpful ? 'قيّمتها مفيدة' : 'قيّمتها غير مفيدة'}</span>`}
+          ${r.reported ? '<span class="small muted">أُبلغ المُيسِّر</span>' : `<button class="btn ghost" data-act="peer-report" data-id="${esc(r.id)}">إبلاغ المُيسِّر</button>`}</div>
+      </article>`).join('')
+      : `<div class="empty"><b>لا توجد مراجعات لمستنداتك بعد</b>${user.consents?.peerReview ? 'تصلك بعد أن يراجعها زملاؤك.' : 'فعّل "عرض مستنداتي على متدربين آخرين" من <a href="#/account">حسابي</a> لتصلك مراجعاتهم.'}</div>`;
+  } else {
+    const a = (state.queue ?? [])[0];
+    body = !a ? '<div class="empty"><b>لا توجد مستندات تنتظر المراجعة الآن</b>تظهر عندما يسلّم زملاؤك مستنداتهم ويوافقون على مراجعتها. الأولوية لمهام سلّمتها أنت.</div>' : `
+      <div class="chips"><span class="pill t-pill">${esc(a.title)}</span><span class="pill t-pill">كاتبه زميل متدرب (دون اسم)</span><span class="pill t-pill"><span class="num">${a.words}</span> كلمة</span>${state.queue.length > 1 ? `<span class="pill t-pill">ينتظرك ${state.queue.length - 1} آخر</span>` : ''}</div>
+      <details class="small" style="margin:8px 0"><summary>ما طُلب في المهمة</summary><p>${esc(a.brief)}</p></details>
+      <div class="peer-doc">${esc(a.text)}</div>
+      <form data-form="peer-review" data-id="${esc(a.id)}">
+        <h2 class="section-t">هل يغطي المستند كل قسم مطلوب؟</h2>
+        ${a.sections.map((x) => `<div class="peer-row"><span>${esc(x.label)}</span><span class="seg">${Object.entries(LEVEL).map(([v, l]) => `<label><input type="radio" name="sec:${esc(x.id)}" value="${v}" required><span>${l}</span></label>`).join('')}</span></div>`).join('')}
+        <div class="field"><label for="pr-s">نقطة قوة واحدة على الأقل</label><textarea id="pr-s" name="strengths" rows="2" maxlength="1000" placeholder="ما الذي أقنعك؟ اقتبس جملة إن أمكن."></textarea></div>
+        <div class="field"><label for="pr-i">اقتراح تحسين محدد</label><textarea id="pr-i" name="improve" rows="3" maxlength="1500" placeholder="ما الذي ينقص، وكيف يُصلح؟ مثال: أضف مؤشر نجاح بموعد."></textarea></div>
+        <div class="field"><label>تقييمك العام</label><span class="seg">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="overall" value="${n}" required><span>${n}</span></label>`).join('')}</span></div>
+        ${state.error ? `<div class="outcome bad">${esc(state.error)}</div>` : ''}
+        <div class="actions"><button class="btn primary" type="submit">إرسال المراجعة</button><span class="small muted">مراجعتك لا تغيّر نقاط زميلك. تُحسب لك في "التعاون ودعم الزملاء" إن وجدها مفيدة.</span></div>
+      </form>`;
+  }
+  return `
+  <div class="page-h"><div><h1>مراجعة الأقران</h1><p>راجع مستندات زملائك بمعايير المهمة نفسها، واقرأ ما كتبوه عن مستنداتك. دون أسماء في الاتجاهين.</p></div></div>
+  <section class="card"><div class="tabs fac-tabs">${tab('review', 'راجع مستند زميل')}${tab('received', 'مراجعات مستنداتي')}</div>${body}</section>`;
+}
+
+export function peerModerationPage(state) {
+  const list = state.peer ?? [];
+  return list.length ? list.map((r) => `<article class="peer-rev ${r.hidden ? 'muted' : ''}">
+      <div class="chips"><span class="pill t-pill">${esc(r.title)}</span><span class="pill t-pill">المراجع: ${esc(r.reviewer)}</span><span class="pill t-pill">الكاتب: ${esc(r.author)}</span><span class="pill t-pill">${r.overall} من 5</span>
+        ${r.reported ? '<span class="pill p-critical">أبلغ عنها الكاتب</span>' : ''}${r.helpful === true ? '<span class="pill s-done">مفيدة</span>' : ''}${r.hidden ? '<span class="pill p-high">مخفية</span>' : ''}</div>
+      <p><b>نقطة قوة:</b> ${esc(r.strengths)}</p><p><b>اقتراح تحسين:</b> ${esc(r.improve)}</p>
+      ${r.hidden && r.hiddenReason ? `<p class="small muted">سبب الإخفاء: ${esc(r.hiddenReason)}</p>` : ''}
+      <div class="actions">${r.hidden ? `<button class="btn" data-act="peer-moderate" data-id="${esc(r.id)}" data-hide="0">إظهار</button>` : `<button class="btn ghost" data-act="peer-moderate" data-id="${esc(r.id)}" data-hide="1">إخفاء</button>`}</div>
+    </article>`).join('') : '<div class="empty"><b>لا توجد مراجعات أقران بعد</b></div>';
 }

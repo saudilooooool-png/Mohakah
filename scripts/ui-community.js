@@ -87,7 +87,7 @@ await tp.goto(`${BASE}#/inbox?f=closed`);
 await tp.waitForSelector('.inbox-list');
 await tp.locator('.inbox-list .item', { hasText: 'اجتماع الإدارة' }).first().click();
 await tp.waitForSelector('.outcome');
-check((await tp.locator('.detail').textContent()).includes('ملاحظة المُيسِّر'), 'المتدرب لا يرى ملاحظة المُيسِّر');
+check(await tp.waitForSelector('.detail >> text=ملاحظة المُيسِّر', { timeout: 5000 }).then(() => true, () => false), 'المتدرب لا يرى ملاحظة المُيسِّر');
 await snap(tp, '2-trainee-sees-review');
 console.log(`✓ لوحة المُيسِّر (${before.points} ← ${after.points} نقطة)`);
 
@@ -143,6 +143,41 @@ check(collab.roles?.[0]?.rating === 5, `تقييم لاعب الدور لم يُ
 await pp.waitForSelector('.outcome.good', { timeout: 6000 });
 await snap(pp, '6-live-presenter-result');
 console.log('✓ الجلسة الحية (إنشاء، بدء، حوار مباشر، حكم، تقييم لاعب الدور)');
+
+// ——— 3) مراجعة الأقران ———
+await trainee('PATCH', '/api/me', { consents: { peerReview: true } });
+const rp = await pageFor(browser, player, { width: 390, height: 844 });
+await rp.goto(`${BASE}#/peer`);
+await rp.waitForSelector('form[data-form="peer-review"]');
+check(!(await rp.locator('.peer-doc').textContent()).includes('خالد'), 'اسم الكاتب ظاهر للمراجع');
+for (const row of await rp.locator('.peer-row').all()) await row.locator('label').first().click();
+await rp.fill('#pr-s', 'التوصية واضحة ومربوطة بأرقام الاستخدام.');
+await rp.fill('#pr-i', 'أضف مؤشر نجاح بموعد محدد، مثل رفع الاستخدام إلى 50% خلال شهر.');
+await rp.locator('.seg label', { hasText: /^4$/ }).click();
+await snap(rp, '7-peer-review-mobile');
+await rp.getByRole('button', { name: 'إرسال المراجعة' }).click();
+await rp.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('وصلت مراجعتك'), null, { timeout: 5000 });
+
+await tp.goto(`${BASE}#/peer`);
+await tp.waitForSelector('[data-tab="received"]');
+await tp.click('[data-tab="received"]');
+await tp.waitForSelector('.peer-rev');
+check(!(await tp.locator('.peer-rev').first().textContent()).includes('فهد'), 'اسم المراجع ظاهر للكاتب');
+await tp.getByRole('button', { name: 'نعم', exact: true }).first().click();
+await tp.waitForSelector('text=قيّمتها مفيدة');
+await snap(tp, '8-peer-received');
+const sum = (await player('GET', '/api/collaboration')).data.summary;
+check(sum.reviewsGiven === 1 && sum.reviewsHelpful === 1, `ملخص التعاون غير صحيح: ${JSON.stringify(sum)}`);
+
+await fp.goto(`${BASE}#/facilitator`);
+await fp.waitForSelector('[data-filter="peer"]');
+await fp.click('[data-filter="peer"]');
+await fp.waitForSelector('.peer-rev');
+check((await fp.locator('.peer-rev').first().textContent()).includes('فهد'), 'المُيسِّر لا يرى اسم المراجع');
+await snap(fp, '9-peer-moderation');
+await tp.goto(`${BASE}#/report`);
+check(await tp.waitForSelector('text=التعاون ودعم الزملاء', { timeout: 5000 }).then(() => true, () => false), 'بطاقة التعاون لا تظهر في التقرير');
+console.log('✓ مراجعة الأقران (تكليف مجهول، معيار الأقسام، تقييم الفائدة، إشراف المُيسِّر)');
 
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

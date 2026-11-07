@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { replay } from '../replay.js';
 import { HttpError } from '../accounts/api.js';
+import { ensurePeer, collaborationSummary } from './collab.js';
 
 const str = (v, n = 500) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const now = () => new Date().toISOString();
@@ -228,10 +229,128 @@ export function createCommunityApi({ store, world, accountsApi, clock = now }) {
   }
 
   // ——— التعاون ودعم الزملاء (مستقل عن النقاط) ———
+  // ——— 3) مراجعة الأقران للمستندات ———
+  // مجهولة الهوية في الاتجاهين: المراجع لا يرى اسم الكاتب، والكاتب يرى "زميل". المُيسِّر يرى الاثنين.
+  const P = ensurePeer(C);
+  const PER_DOC = 2;            // مراجعتان لكل مستند تكفيان
+  const OPEN_MAX = 2;           // تكليفات مفتوحة لكل مراجع في الوقت نفسه
+  const STALE_MS = 7 * 864e5;   // تكليف لم يُنجز خلال أسبوع لا يحجز المستند
+  const LEVELS = ['yes', 'partly', 'no'];
+  const docKey = (authorId, itemId) => `${authorId}|${itemId}`;
+
+  /** المستندات المسلّمة من متدربين وافقوا على مراجعة الأقران وأكّدوا بريدهم. */
+  function submissions() {
+    const out = [];
+    for (const [authorId, p] of store.allProgress()) {
+      const u = store.users[authorId];
+      if (!u?.consents?.peerReview || !u.emailVerifiedAt) continue;
+      for (const a of p.log) {
+        if (a.t !== 'deliver' || !a.text) continue;
+        const e = eventOf(a.itemId);
+        if (e?.deliverable) out.push({ authorId, itemId: a.itemId, eventId: e.id, text: a.text });
+      }
+    }
+    return out;
+  }
+
+  const live = (a) => a.reviewId || Date.parse(clock()) - Date.parse(a.at) < STALE_MS;
+  const load = (key) => Object.values(P.assignments).filter((a) => docKey(a.authorId, a.itemId) === key && live(a)).length;
+
+  function assignmentView(a) {
+    const e = eventOf(a.itemId);
+    const doc = store.progress(a.authorId)?.log.find((x) => x.t === 'deliver' && x.itemId === a.itemId);
+    return {
+      id: a.id, title: e.title, brief: e.body, minWords: e.deliverable.minWords ?? 80,
+      sections: e.deliverable.sections.map((x) => ({ id: x.id, label: x.label })),
+      text: doc?.text ?? '', words: (doc?.text ?? '').trim().split(/\s+/).filter(Boolean).length,
+    };
+  }
+
+  function peerQueue(u) {
+    if (!u.emailVerifiedAt) throw new HttpError(403, 'أكّد بريدك أولًا لمراجعة مستندات زملائك.');
+    const mine = Object.values(P.assignments).filter((a) => a.reviewerId === u.id);
+    let open = mine.filter((a) => !a.reviewId && live(a));
+    if (open.length < OPEN_MAX) {
+      const seen = new Set(mine.map((a) => docKey(a.authorId, a.itemId)));
+      const delivered = new Set((store.progress(u.id)?.log ?? []).filter((x) => x.t === 'deliver').map((x) => eventOf(x.itemId)?.id));
+      const candidates = submissions()
+        .filter((d) => d.authorId !== u.id && !seen.has(docKey(d.authorId, d.itemId)) && load(docKey(d.authorId, d.itemId)) < PER_DOC)
+        // الأولوية لمستندات مهام سلّمها المراجع بنفسه (يعرف المطلوب)، ثم الأقل مراجعة
+        .sort((x, y) => (delivered.has(y.eventId) - delivered.has(x.eventId)) || load(docKey(x.authorId, x.itemId)) - load(docKey(y.authorId, y.itemId)));
+      for (const d of candidates.slice(0, OPEN_MAX - open.length)) {
+        const a = { id: randomUUID(), reviewerId: u.id, authorId: d.authorId, itemId: d.itemId, eventId: d.eventId, at: clock(), reviewId: null };
+        P.assignments[a.id] = a;
+        open.push(a);
+      }
+      store.saveCommunity();
+    }
+    return { assignments: open.map(assignmentView) };
+  }
+
+  function peerReview(u, body) {
+    const a = P.assignments[str(body.assignmentId, 64)];
+    if (!a || a.reviewerId !== u.id) throw new HttpError(404, 'لا يوجد تكليف مراجعة بهذا المعرّف');
+    if (a.reviewId) throw new HttpError(409, 'سبق أن أرسلت مراجعة لهذا المستند');
+    const e = eventOf(a.itemId);
+    const sections = {};
+    for (const sec of e.deliverable.sections) {
+      const v = body.sections?.[sec.id];
+      if (!LEVELS.includes(v)) throw new HttpError(400, `قيّم قسم "${sec.label}"`);
+      sections[sec.id] = v;
+    }
+    const strengths = str(body.strengths, 1000);
+    const improve = str(body.improve, 1500);
+    const overall = Number(body.overall);
+    if (strengths.length < 15) throw new HttpError(400, 'اذكر نقطة قوة واحدة على الأقل بجملة واضحة');
+    if (improve.length < 30) throw new HttpError(400, 'اكتب اقتراح تحسين محددًا (30 حرفًا على الأقل): ما الذي ينقص، وكيف يُصلح؟');
+    if (!(overall >= 1 && overall <= 5)) throw new HttpError(400, 'اختر تقييمًا عامًا من 1 إلى 5');
+    const r = { id: randomUUID(), assignmentId: a.id, reviewerId: u.id, authorId: a.authorId, itemId: a.itemId, eventId: a.eventId, sections, strengths, improve, overall: Math.round(overall), at: clock(), helpful: null, reported: false, hidden: false };
+    P.reviews[r.id] = r;
+    a.reviewId = r.id;
+    store.saveCommunity();
+    return { id: r.id };
+  }
+
+  const sectionsView = (r) => eventOf(r.itemId).deliverable.sections.map((x) => ({ id: x.id, label: x.label, level: r.sections[x.id] }));
+
+  function peerReceived(u) {
+    return Object.values(P.reviews).filter((r) => r.authorId === u.id && !r.hidden)
+      .sort((x, y) => y.at.localeCompare(x.at))
+      .map((r) => ({ id: r.id, itemId: r.itemId, title: eventOf(r.itemId).title, sections: sectionsView(r), strengths: r.strengths, improve: r.improve, overall: r.overall, helpful: r.helpful, reported: r.reported, at: r.at }));
+  }
+
+  function peerFeedback(u, body) {
+    const r = P.reviews[str(body.reviewId, 64)];
+    if (!r || r.authorId !== u.id) throw new HttpError(404, 'لا توجد مراجعة بهذا المعرّف');
+    if (typeof body.helpful === 'boolean') r.helpful = body.helpful;
+    if (body.report === true) r.reported = true;
+    store.saveCommunity();
+    return { ok: true };
+  }
+
+  function peerModeration() {
+    const name = (id) => store.users[id]?.name ?? '—';
+    return Object.values(P.reviews)
+      .sort((x, y) => (y.reported - x.reported) || y.at.localeCompare(x.at))
+      .slice(0, 200)
+      .map((r) => ({ id: r.id, title: eventOf(r.itemId).title, reviewer: name(r.reviewerId), author: name(r.authorId), sections: sectionsView(r), strengths: r.strengths, improve: r.improve, overall: r.overall, helpful: r.helpful, reported: r.reported, hidden: r.hidden, hiddenReason: r.hiddenReason ?? '', at: r.at }));
+  }
+
+  function moderate(fac, body) {
+    const r = P.reviews[str(body.reviewId, 64)];
+    if (!r) throw new HttpError(404, 'لا توجد مراجعة بهذا المعرّف');
+    r.hidden = body.hidden === true;
+    r.hiddenReason = r.hidden ? str(body.reason, 300) : '';
+    r.moderatedBy = fac.id;
+    r.moderatedAt = clock();
+    store.saveCommunity();
+    return { ok: true };
+  }
+
   function collaboration(userId) {
     const roles = Object.values(C.sessions).filter((s) => s.status === 'closed' && Object.values(s.roles).includes(userId))
       .map((s) => ({ sessionId: s.id, title: events.find((x) => x.id === s.eventId)?.title, rating: s.ratings?.[userId] ?? null, at: s.closedAt }));
-    return { roles };
+    return { roles, summary: collaborationSummary(C, userId) };
   }
 
   const routes = {
@@ -251,6 +370,12 @@ export function createCommunityApi({ store, world, accountsApi, clock = now }) {
     'POST /api/live/:id/close': (req, body, id) => { const u = requireFacilitator(req); const s = getSession(id, u); closeSession(s, u, body); return { session: sessionView(s, u) }; },
     'GET /api/live-results': (req) => { const u = requireUser(req); return { results: C.liveResults[u.id] ?? {} }; },
     'GET /api/collaboration': (req) => collaboration(requireUser(req).id),
+    'GET /api/peer/queue': (req) => peerQueue(requireUser(req)),
+    'POST /api/peer/review': (req, body) => peerReview(requireUser(req), body),
+    'GET /api/peer/received': (req) => ({ reviews: peerReceived(requireUser(req)) }),
+    'POST /api/peer/feedback': (req, body) => peerFeedback(requireUser(req), body),
+    'GET /api/facilitator/peer': (req) => { requireFacilitator(req); return { reviews: peerModeration() }; },
+    'POST /api/facilitator/peer/moderate': (req, body) => moderate(requireFacilitator(req), body),
 
     'GET /api/facilitator/dialogues': (req) => {
       requireFacilitator(req);

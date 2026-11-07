@@ -192,3 +192,108 @@ test('ختام الجلسة: حكم المُيسِّر يصبح نتيجة اج�
     assert.equal((await fac('POST', `/api/live/${id}/message`, { text: 'بعد الختام' })).status, 400);
   });
 });
+
+// ——— 3) مراجعة الأقران ———
+
+const peerBody = (a, extra = {}) => ({
+  assignmentId: a.id,
+  sections: Object.fromEntries(a.sections.map((s, i) => [s.id, i % 2 ? 'partly' : 'yes'])),
+  strengths: 'التوصية واضحة ومربوطة برقم.',
+  improve: 'ينقص المستند مؤشر نجاح محدد بموعد، مثل نسبة الاستخدام بعد شهر.',
+  overall: 4,
+  ...extra,
+});
+
+test('مراجعة الأقران: لا يُعرض إلا مستند من وافق، بلا اسم الكاتب، ولا يراجع أحد مستنده', async () => {
+  await withCommunity(async ({ user }) => {
+    const author = await user('كاتب', 'author@example.com');
+    const other = await user('غير موافق', 'nope@example.com');
+    const reviewer = await user('مراجع', 'rev@example.com');
+    const { seed, log } = goodRun(9, { stopDay: 2 });
+    await author('PUT', '/api/progress', { seed, log });
+    await other('PUT', '/api/progress', { seed, log });
+    // قبل الموافقة: لا شيء
+    assert.equal((await reviewer('GET', '/api/peer/queue')).data.assignments.length, 0);
+    await author('PATCH', '/api/me', { consents: { peerReview: true } });
+    const q = (await reviewer('GET', '/api/peer/queue')).data.assignments;
+    assert.equal(q.length, 2); // تكليفان مفتوحان كحد أقصى
+    assert.ok(q[0].text.length > 50 && q[0].sections.length >= 4);
+    assert.ok(!JSON.stringify(q).includes('كاتب') && !JSON.stringify(q).includes('author@'), 'يظهر اسم الكاتب للمراجع');
+    // الكاتب لا يُكلَّف بمستنده
+    assert.equal((await author('GET', '/api/peer/queue')).data.assignments.length, 0);
+    // الطلب نفسه يعيد التكليفات نفسها
+    assert.deepEqual((await reviewer('GET', '/api/peer/queue')).data.assignments.map((a) => a.id), q.map((a) => a.id));
+  });
+});
+
+test('مراجعة الأقران: تحقق المحتوى، ومراجعتان كحد أقصى للمستند، والكاتب يقيّم فائدتها', async () => {
+  await withCommunity(async ({ user, store }) => {
+    const author = await user('كاتب', 'author@example.com');
+    await author('PATCH', '/api/me', { consents: { peerReview: true } });
+    const { seed, log } = goodRun(9, { stopDay: 1 });
+    await author('PUT', '/api/progress', { seed, log });
+    const docs = log.filter((a) => a.t === 'deliver').length;
+    const [r1, r2, r3] = [await user('مراجع أول', 'r1@example.com'), await user('مراجع ثان', 'r2@example.com'), await user('مراجع ثالث', 'r3@example.com')];
+    const a1 = (await r1('GET', '/api/peer/queue')).data.assignments[0];
+    assert.equal((await r1('POST', '/api/peer/review', peerBody(a1, { improve: 'جيد' }))).status, 400);
+    assert.equal((await r1('POST', '/api/peer/review', peerBody(a1, { sections: {} }))).status, 400);
+    assert.equal((await r2('POST', '/api/peer/review', peerBody(a1))).status, 404, 'مراجع يرسل على تكليف غيره');
+    assert.equal((await r1('POST', '/api/peer/review', peerBody(a1))).status, 200);
+    assert.equal((await r1('POST', '/api/peer/review', peerBody(a1))).status, 409);
+    await r2('GET', '/api/peer/queue');
+    // بعد مراجعين اثنين لكل مستند، لا يبقى للثالث شيء
+    assert.equal(docs, 2);
+    assert.equal(Object.keys(store.community.peer.assignments).length, 4);
+    assert.equal((await r3('GET', '/api/peer/queue')).data.assignments.length, 0);
+    const got = (await author('GET', '/api/peer/received')).data.reviews;
+    assert.equal(got.length, 1);
+    assert.equal(got[0].sections.length, a1.sections.length);
+    assert.ok(!JSON.stringify(got).includes('مراجع أول'), 'يظهر اسم المراجع للكاتب');
+    assert.equal((await r1('POST', '/api/peer/feedback', { reviewId: got[0].id, helpful: true })).status, 404, 'غير الكاتب يقيّم الفائدة');
+    await author('POST', '/api/peer/feedback', { reviewId: got[0].id, helpful: true });
+    const c = (await r1('GET', '/api/collaboration')).data.summary;
+    assert.deepEqual([c.reviewsGiven, c.reviewsHelpful], [1, 1]);
+  });
+});
+
+test('مراجعة الأقران: المُيسِّر يرى الأسماء ويخفي المراجعة المسيئة، ولا تؤثر على النقاط', async () => {
+  await withCommunity(async ({ user }) => {
+    const fac = await user('مُيسِّرة', 'fac@example.com');
+    const author = await user('كاتب', 'author@example.com');
+    const r1 = await user('مراجع', 'r1@example.com');
+    await author('PATCH', '/api/me', { consents: { peerReview: true } });
+    const { seed, log } = goodRun(9);
+    await author('PUT', '/api/progress', { seed, log });
+    const before = (await author('POST', '/api/records/issue')).data;
+    const a = (await r1('GET', '/api/peer/queue')).data.assignments[0];
+    await r1('POST', '/api/peer/review', peerBody(a, { overall: 1 }));
+    const [rev] = (await author('GET', '/api/peer/received')).data.reviews;
+    await author('POST', '/api/peer/feedback', { reviewId: rev.id, helpful: false, report: true });
+    assert.equal((await r1('GET', '/api/facilitator/peer')).status, 403);
+    const list = (await fac('GET', '/api/facilitator/peer')).data.reviews;
+    assert.equal(list[0].reported, true);
+    assert.deepEqual([list[0].reviewer, list[0].author], ['مراجع', 'كاتب']);
+    await fac('POST', '/api/facilitator/peer/moderate', { reviewId: rev.id, hidden: true, reason: 'تعليق غير مهني' });
+    assert.equal((await author('GET', '/api/peer/received')).data.reviews.length, 0);
+    assert.equal((await r1('GET', '/api/collaboration')).data.summary.reviewsGiven, 0, 'المراجعة المخفية لا تُحسب');
+    // نقاط الكاتب لم تتغير بتقييم 1 من 5
+    const after = (await author('POST', '/api/records/issue')).data;
+    assert.equal(after.points, before.points);
+    assert.equal(after.code, before.code);
+  });
+});
+
+test('حذف الحساب يزيل مراجعات الأقران وتكليفاتها', async () => {
+  await withCommunity(async ({ user, store }) => {
+    const author = await user('كاتب', 'author@example.com');
+    const r1 = await user('مراجع', 'r1@example.com');
+    await author('PATCH', '/api/me', { consents: { peerReview: true } });
+    const { seed, log } = goodRun(9, { stopDay: 1 });
+    await author('PUT', '/api/progress', { seed, log });
+    const a = (await r1('GET', '/api/peer/queue')).data.assignments[0];
+    await r1('POST', '/api/peer/review', peerBody(a));
+    await author('DELETE', '/api/me');
+    assert.equal(Object.keys(store.community.peer.reviews).length, 0);
+    assert.equal(Object.keys(store.community.peer.assignments).length, 0);
+  });
+});

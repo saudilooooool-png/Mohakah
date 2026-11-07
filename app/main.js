@@ -21,6 +21,24 @@ let resetState = {};
 let facState = { filter: 'pending', list: [], selected: null, calibration: null, loading: true, error: '' };
 let liveState = { loading: true, sessions: [], meetings: [], createEvent: null, error: '', room: null };
 let livePoll = null;
+let peerState = { tab: 'review', loading: true, queue: [], received: [], error: '' };
+
+async function loadPeer() {
+  if (!user) { render(); return; }
+  peerState = { ...peerState, loading: true, error: '' };
+  render();
+  try {
+    const [queue, received] = await Promise.all([account.peerQueue(), account.peerReceived()]);
+    peerState = { ...peerState, queue, received, loading: false };
+  } catch (err) { peerState = { ...peerState, loading: false, queue: [], error: err.message }; }
+  render();
+}
+
+async function loadCollab() {
+  if (!user) { ui.collab = null; return; }
+  ui.collab = await account.collaboration();
+  render();
+}
 
 async function loadLiveResults() {
   if (!user) { ui.liveResults = {}; return; }
@@ -60,8 +78,11 @@ async function loadFacilitator() {
   facState = { ...facState, loading: true, error: '' };
   render();
   try {
-    const [list, calibration] = await Promise.all([account.facDialogues(facState.filter), account.facCalibration()]);
-    facState = { ...facState, list, calibration, loading: false };
+    if (facState.filter === 'peer') facState = { ...facState, peer: await account.facPeer(), loading: false };
+    else {
+      const [list, calibration] = await Promise.all([account.facDialogues(facState.filter), account.facCalibration()]);
+      facState = { ...facState, list, calibration, loading: false };
+    }
   } catch (err) { facState = { ...facState, loading: false, error: err.message }; }
   render();
 }
@@ -95,7 +116,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -109,6 +130,10 @@ function render() {
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
   if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
+  if (route.page === 'peer' && user && !session) {
+    app.innerHTML = `<div class="content" style="margin:0 auto">${V.peerPage(user, peerState)}</div>`;
+    return;
+  }
   if (route.page === 'live' && user && !session) {
     app.innerHTML = `<div class="content" style="margin:0 auto">${route.itemId && liveState.room ? V.liveRoom(world, liveState.room, { drafts }) : V.livePage(user, liveState)}</div>`;
     const box = app.querySelector('[data-live-msgs]'); if (box) box.scrollTop = box.scrollHeight;
@@ -135,7 +160,8 @@ function render() {
     case 'files': body = V.files(session); break;
     case 'company': body = V.company(session); break;
     case 'feed': body = V.feed(session); break;
-    case 'report': body = V.report(session); break;
+    case 'report': body = V.report(session, ui); break;
+    case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
       : route.itemId && liveState.room ? V.liveRoom(world, liveState.room, { drafts }) : V.livePage(user, liveState); break;
@@ -211,6 +237,30 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  'peer-tab'(e) { peerState.tab = e.target.closest('[data-tab]').dataset.tab; peerState.error = ''; render(); },
+  async 'peer-helpful'(e) {
+    const el = e.target.closest('[data-id]');
+    try { await account.peerFeedback({ reviewId: el.dataset.id, helpful: el.dataset.v === '1' }); peerState.received = await account.peerReceived(); render(); } catch (err) { toast(err.message, 'bad'); }
+  },
+  async 'peer-report'(e) {
+    if (!confirm('إبلاغ المُيسِّر بأن هذه المراجعة غير مهنية؟')) return;
+    try { await account.peerFeedback({ reviewId: e.target.closest('[data-id]').dataset.id, report: true, helpful: false }); peerState.received = await account.peerReceived(); toast('أُبلغ المُيسِّر.', 'good'); render(); } catch (err) { toast(err.message, 'bad'); }
+  },
+  async 'peer-moderate'(e) {
+    const el = e.target.closest('[data-id]');
+    const hide = el.dataset.hide === '1';
+    const reason = hide ? prompt('سبب الإخفاء (يظهر في سجل الإشراف):', 'غير مهنية') : '';
+    if (hide && reason === null) return;
+    try { await account.facModerate({ reviewId: el.dataset.id, hidden: hide, reason }); loadFacilitator(); } catch (err) { toast(err.message, 'bad'); }
+  },
+  async 'toggle-peer'(e) {
+    try {
+      user = await account.update({ consents: { peerReview: e.target.checked } });
+      if (session) session.user = user;
+      toast(e.target.checked ? 'ستُعرض مستنداتك على زملائك للمراجعة دون اسمك.' : 'لن تُكلَّف مستنداتك لمراجعات جديدة.', 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+    render();
+  },
   async 'live-start'(e) {
     try { liveState.room = await account.liveStart(e.target.closest('[data-id]').dataset.id); render(); } catch (err) { toast(err.message, 'bad'); }
   },
@@ -373,7 +423,7 @@ async function submitAuth(form) {
     ? await account.register({
       name: f.get('name'), email: f.get('email'), password: f.get('password'),
       profile: { university: f.get('university'), major: f.get('major'), graduationYear: f.get('graduationYear'), city: f.get('city') },
-      consents: { processing: f.get('processing') === 'on', employerSharing: f.get('employerSharing') === 'on' },
+      consents: { processing: f.get('processing') === 'on', employerSharing: f.get('employerSharing') === 'on', peerReview: f.get('peerReview') === 'on' },
     })
     : await account.login(f.get('email'), f.get('password'));
   closeModal();
@@ -382,8 +432,9 @@ async function submitAuth(form) {
   if (remote) session = attach(Session.fromSave(world, remote));
   else if (session) { attach(session); await account.saveProgress(session.saveData()); }
   refreshAgents();
-  await loadLiveResults();
+  loadLiveResults().then(render);
   if (parseRoute().page === 'live') loadLive();
+  if (parseRoute().page === 'peer') loadPeer();
   toast(register ? `أهلًا ${user.name}! حسابك جاهز وتقدمك محفوظ.` : `مرحبًا بعودتك ${user.name}.`, 'good');
   render();
 }
@@ -413,6 +464,15 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'peer-review') {
+    const f = new FormData(form);
+    const sections = {};
+    for (const [k, v] of f.entries()) if (k.startsWith('sec:')) sections[k.slice(4)] = v;
+    account.peerReview({ assignmentId: form.dataset.id, sections, strengths: f.get('strengths'), improve: f.get('improve'), overall: Number(f.get('overall')) })
+      .then(() => { toast('شكرًا! وصلت مراجعتك إلى زميلك دون اسمك.', 'good'); window.scrollTo(0, 0); loadPeer(); })
+      .catch((err) => { peerState.error = err.message; render(); });
+    return;
+  }
   if (form.dataset.form === 'live-create') {
     const f = new FormData(form);
     const roles = {};
@@ -551,6 +611,8 @@ window.addEventListener('hashchange', () => {
   closeModal(); // الانتقال لصفحة أخرى يغلق أي نافذة مفتوحة
   if (parseRoute().page === 'facilitator') { loadFacilitator(); return; }
   if (parseRoute().page === 'live') { loadLive(); return; }
+  if (parseRoute().page === 'peer') { loadPeer(); return; }
+  if (parseRoute().page === 'report') loadCollab();
   if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
@@ -568,6 +630,8 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
     if (parseRoute().page === 'facilitator') loadFacilitator();
     if (parseRoute().page === 'live') loadLive();
+    if (parseRoute().page === 'peer') loadPeer();
+    if (parseRoute().page === 'report') loadCollab();
     await loadLiveResults();
     if (user) {
       const remote = await account.progress().catch(() => null);

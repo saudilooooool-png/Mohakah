@@ -39,6 +39,12 @@ export const account = {
   liveClose: (id, body) => api('POST', `/api/live/${encodeURIComponent(id)}/close`, body).then((d) => d.session),
   liveResults: () => api('GET', '/api/live-results').then((d) => d.results).catch(() => ({})),
   collaboration: () => api('GET', '/api/collaboration').catch(() => null),
+  peerQueue: () => api('GET', '/api/peer/queue').then((d) => d.assignments),
+  peerReview: (body) => api('POST', '/api/peer/review', body),
+  peerReceived: () => api('GET', '/api/peer/received').then((d) => d.reviews),
+  peerFeedback: (body) => api('POST', '/api/peer/feedback', body),
+  facPeer: () => api('GET', '/api/facilitator/peer').then((d) => d.reviews),
+  facModerate: (body) => api('POST', '/api/facilitator/peer/moderate', body),
 };
 
 /** حفظ مؤجل: يجمع التغييرات المتتالية في طلب واحد. */
