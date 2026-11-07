@@ -1,0 +1,13 @@
+{
+  "name": "mohaki",
+  "version": "0.1.0",
+  "description": "محاكي | MOHAKI — منصة محاكاة بيئات العمل والشركات (نواة محرك المحاكاة)",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test",
+    "demo": "node scripts/demo.js"
+  },
+  "license": "UNLICENSED"
+}

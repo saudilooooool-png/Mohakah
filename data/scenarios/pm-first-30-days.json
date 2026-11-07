@@ -1,0 +1,2341 @@
+{
+ "id": "pm-first-30-days",
+ "company": "nova-tech",
+ "role": "Product Manager — المستوى المبتدئ",
+ "manager": "cpo",
+ "team": [
+  "ux",
+  "eng_lead",
+  "dev2",
+  "analyst"
+ ],
+ "lengthDays": 30,
+ "randomEventChance": 0.3,
+ "initialTrust": {
+  "cpo": 60,
+  "ceo": 55,
+  "cfo": 50,
+  "eng_lead": 55,
+  "sales_head": 55,
+  "cs_lead": 55,
+  "ux": 55,
+  "marketing_lead": 55
+ },
+ "events": [
+  {
+   "id": "d1_welcome",
+   "day": 1,
+   "type": "message",
+   "from": "cpo",
+   "priority": "low",
+   "dueInDays": 1,
+   "skills": [
+    "communication"
+   ],
+   "title": "أهلًا بك في NOVA TECH",
+   "body": "مرحبًا بك في فريق المنتجات! أمامك يوم مزدحم. أتمنى أن نجلس قريبًا لنتفق على أولوياتك للشهر الأول.",
+   "options": [
+    {
+     "id": "book_1on1",
+     "label": "احجز اجتماعًا فرديًا مع خالد لتحديد التوقعات",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": 5
+      }
+     ],
+     "result": "خالد: ممتاز، لنتفق على معايير النجاح منذ البداية."
+    },
+    {
+     "id": "reply_thanks",
+     "label": "رد بالشكر فقط",
+     "quality": 0.5,
+     "effects": []
+    }
+   ]
+  },
+  {
+   "id": "d1_kickoff",
+   "day": 1,
+   "type": "meeting",
+   "from": "cpo",
+   "priority": "normal",
+   "dueInDays": 1,
+   "skills": [
+    "communication"
+   ],
+   "title": "اجتماع الفريق — 10:00",
+   "body": "اجتماع تعارف مع فريقك: ريم (UX)، عبدالله ونورة (التطوير)، فهد (البيانات).",
+   "options": [
+    {
+     "id": "listen_ask",
+     "label": "استمع واسأل عن الأهداف والعوائق الحالية",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": 4
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": 4
+      },
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": 3
+      }
+     ],
+     "result": "الفريق شعر أنك تريد أن تفهم قبل أن تقرر."
+    },
+    {
+     "id": "pitch_ideas",
+     "label": "اعرض أفكارك الكبيرة لتطوير المنتج من اليوم الأول",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -4
+      },
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": -2
+      }
+     ],
+     "result": "عبدالله: لدينا التزامات قائمة، لنفهم الوضع أولًا.",
+     "tone": "bad"
+    }
+   ]
+  },
+  {
+   "id": "d1_ufuq_complaint",
+   "day": 1,
+   "type": "complaint",
+   "from": "cs_lead",
+   "priority": "critical",
+   "dueInDays": 2,
+   "skills": [
+    "communication",
+    "decisions"
+   ],
+   "title": "شكوى: مجموعة الأفق تهدد بالإلغاء",
+   "body": "مجموعة الأفق (18,500 ريال/شهر) تشتكي أن التقارير بطيئة وتتعطل في نهاية الشهر. مديرهم قال: نقيّم البدائل.",
+   "options": [
+    {
+     "id": "call_and_plan",
+     "label": "اتصل بالعميل، افهم المشكلة، واتفق على خطة متابعة دون وعد بتاريخ",
+     "quality": 1.0,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "ufuq",
+       "value": 12
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 5
+      }
+     ],
+     "result": "العميل قدّر التواصل المباشر ومنح الفريق فرصة."
+    },
+    {
+     "id": "promise_date",
+     "label": "عِد العميل بإصلاح خلال 10 أيام",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "ufuq",
+       "value": 16
+      },
+      {
+       "op": "flag",
+       "name": "promised_ufuq"
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -5
+      }
+     ],
+     "result": "العميل هدأ مؤقتًا. الآن هناك وعد يجب الوفاء به."
+    },
+    {
+     "id": "escalate",
+     "label": "صعّد الأمر إلى خالد ليتولاه",
+     "quality": 0.55,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "ufuq",
+       "value": 5
+      },
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": -2
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "لم يتواصل أحد مع مجموعة الأفق، وارتفع غضب العميل.",
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "ufuq",
+      "value": -18
+     },
+     {
+      "op": "trust",
+      "who": "cs_lead",
+      "value": -8
+     }
+    ]
+   }
+  },
+  {
+   "id": "d1_usage_report",
+   "day": 1,
+   "type": "task",
+   "category": "task",
+   "from": "cpo",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "output",
+    "analysis"
+   ],
+   "title": "تحليل انخفاض استخدام التقارير",
+   "body": "استخدام خاصية التقارير انخفض من 58% إلى 41% خلال ربع واحد. أريد تحليلًا مكتوبًا قبل اجتماع الإدارة: المشكلة، البيانات، الأسباب المحتملة، التوصية، وكيف سنقيس النجاح.",
+   "deliverable": {
+    "minWords": 120,
+    "passScore": 0.6,
+    "sections": [
+     {
+      "id": "problem",
+      "label": "تعريف المشكلة",
+      "keywords": [
+       "المشكلة",
+       "انخفاض",
+       "تراجع"
+      ]
+     },
+     {
+      "id": "data",
+      "label": "البيانات والأرقام",
+      "keywords": [
+       "%",
+       "نسبة",
+       "بيانات",
+       "مقارنة",
+       "41",
+       "58"
+      ]
+     },
+     {
+      "id": "causes",
+      "label": "الأسباب أو الفرضيات",
+      "keywords": [
+       "سبب",
+       "أسباب",
+       "فرضية",
+       "بطء",
+       "بطيئة"
+      ]
+     },
+     {
+      "id": "recommendation",
+      "label": "التوصية",
+      "keywords": [
+       "توصية",
+       "نقترح",
+       "أقترح",
+       "الحل"
+      ]
+     },
+     {
+      "id": "measure",
+      "label": "مؤشر قياس النجاح",
+      "keywords": [
+       "قياس",
+       "مؤشر",
+       "نجاح",
+       "kpi",
+       "هدف"
+      ]
+     }
+    ],
+    "onGood": {
+     "result": "خالد: تحليل واضح ومبني على أدلة. سأستخدمه في اجتماع الإدارة.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": 8
+      },
+      {
+       "op": "flag",
+       "name": "usage_analysis_done"
+      }
+     ]
+    },
+    "onWeak": {
+     "result": "خالد: التحليل يحتاج دليلًا أوضح وتوصية قابلة للقياس.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": -3
+      }
+     ]
+    }
+   },
+   "onExpire": {
+    "result": "فات موعد التحليل، وسيُعقد اجتماع الإدارة دون بيانات.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -8
+     }
+    ]
+   }
+  },
+  {
+   "id": "d1_sales_request",
+   "day": 1,
+   "type": "message",
+   "from": "sales_head",
+   "priority": "normal",
+   "dueInDays": 4,
+   "skills": [
+    "decisions",
+    "communication"
+   ],
+   "title": "طلب عاجل من المبيعات: حملات واتساب",
+   "body": "ثلاثة عملاء محتملين طلبوا إرسال حملات واتساب جماعية. أحتاجها في خارطة الطريق هذا الشهر وإلا سنخسر الصفقات.",
+   "options": [
+    {
+     "id": "ask_for_data",
+     "label": "اطلب حجم الصفقات المرتبطة وعدد العملاء قبل الالتزام",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 2
+      }
+     ],
+     "result": "ماجد أرسل بيانات الصفقات: 3 صفقات بقيمة 9,000 ريال شهريًا."
+    },
+    {
+     "id": "commit_now",
+     "label": "التزم بإضافتها فورًا",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "whatsapp_bulk",
+        "title": "حملات واتساب الجماعية",
+        "effort": 40,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 6
+         },
+         {
+          "op": "multiply",
+          "path": "company.model.baseCac",
+          "value": 0.85
+         },
+         {
+          "op": "add",
+          "path": "company.features.whatsapp.usage",
+          "value": 15
+         },
+         {
+          "op": "trust",
+          "who": "sales_head",
+          "value": 10
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 10
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -6
+      }
+     ]
+    },
+    {
+     "id": "decline",
+     "label": "ارفض: ليست أولوية",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": -10
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "ماجد اشتكى لخالد أن المنتج لا يرد على المبيعات.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "sales_head",
+      "value": -6
+     },
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -2
+     }
+    ]
+   }
+  },
+  {
+   "id": "d1_mgmt_deck",
+   "day": 1,
+   "type": "task",
+   "category": "task",
+   "from": "cpo",
+   "priority": "high",
+   "dueInDays": 5,
+   "skills": [
+    "output",
+    "presentation"
+   ],
+   "title": "عرض لاجتماع الإدارة (اليوم 5)",
+   "body": "جهّز عرضًا عن خطة المنتج للشهر القادم: الوضع الحالي بالأرقام، المشكلة، الخيارات، توصيتك، الموارد المطلوبة، والجدول الزمني.",
+   "deliverable": {
+    "minWords": 150,
+    "passScore": 0.6,
+    "sections": [
+     {
+      "id": "context",
+      "label": "الوضع الحالي بالأرقام",
+      "keywords": [
+       "الوضع",
+       "الحالي",
+       "الإيرادات",
+       "العملاء",
+       "%"
+      ]
+     },
+     {
+      "id": "problem",
+      "label": "المشكلة",
+      "keywords": [
+       "المشكلة",
+       "التحدي",
+       "انخفاض"
+      ]
+     },
+     {
+      "id": "options",
+      "label": "الخيارات والبدائل",
+      "keywords": [
+       "خيارات",
+       "بدائل",
+       "الخيار",
+       "بديل"
+      ]
+     },
+     {
+      "id": "recommendation",
+      "label": "التوصية",
+      "keywords": [
+       "توصية",
+       "نوصي",
+       "أوصي",
+       "نقترح"
+      ]
+     },
+     {
+      "id": "resources",
+      "label": "الموارد والتكلفة",
+      "keywords": [
+       "ميزانية",
+       "تكلفة",
+       "موارد",
+       "الفريق"
+      ]
+     },
+     {
+      "id": "timeline",
+      "label": "الجدول الزمني",
+      "keywords": [
+       "أسبوع",
+       "أسابيع",
+       "مراحل",
+       "الجدول",
+       "يوم"
+      ]
+     }
+    ],
+    "onGood": {
+     "result": "الإدارة اعتمدت الخطة وأضافت 15,000 ريال شهريًا لميزانية التسويق.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": 10
+      },
+      {
+       "op": "trust",
+       "who": "cfo",
+       "value": 5
+      },
+      {
+       "op": "add",
+       "path": "company.marketing.monthlyBudget",
+       "value": 15000
+      }
+     ]
+    },
+    "onWeak": {
+     "result": "الرئيس التنفيذي: العرض غير مقنع، أعيدوا العمل عليه. لم تُعتمد الميزانية.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": -6
+      }
+     ]
+    }
+   },
+   "onExpire": {
+    "result": "تأجل اجتماع الإدارة لعدم جاهزية العرض.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "ceo",
+      "value": -10
+     },
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -6
+     }
+    ]
+   }
+  },
+  {
+   "id": "d3_sprint_priority",
+   "day": 3,
+   "type": "meeting",
+   "from": "eng_lead",
+   "priority": "critical",
+   "dueInDays": 2,
+   "skills": [
+    "decisions",
+    "prioritization"
+   ],
+   "title": "تخطيط السبرنت: بند كبير واحد فقط",
+   "body": "عبدالله: سعة الفريق تكفي بندًا كبيرًا واحدًا الآن. المطروح: إصلاح أداء التقارير (22 نقطة)، حملات واتساب (40 نقطة)، الصلاحيات المتقدمة (30 نقطة). ماذا نبدأ؟",
+   "options": [
+    {
+     "id": "reports_fix",
+     "label": "إصلاح أداء التقارير",
+     "quality": 0.95,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "reports_fix",
+        "title": "إعادة بناء أداء التقارير",
+        "effort": 22,
+        "urgent": true,
+        "onShip": [
+         {
+          "op": "set",
+          "path": "company.features.reports.trend",
+          "value": 0.3
+         },
+         {
+          "op": "add",
+          "path": "company.features.reports.usage",
+          "value": 12
+         },
+         {
+          "op": "add",
+          "path": "company.productQuality",
+          "value": 5
+         },
+         {
+          "op": "accountHealth",
+          "id": "ufuq",
+          "value": 22
+         },
+         {
+          "op": "flag",
+          "name": "reports_fixed"
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 5
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": -3
+      }
+     ],
+     "result": "قرار مبني على بيانات الاستخدام وشكوى عميل استراتيجي."
+    },
+    {
+     "id": "whatsapp",
+     "label": "حملات واتساب الجماعية",
+     "quality": 0.55,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "whatsapp_bulk",
+        "title": "حملات واتساب الجماعية",
+        "effort": 40,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 6
+         },
+         {
+          "op": "multiply",
+          "path": "company.model.baseCac",
+          "value": 0.85
+         },
+         {
+          "op": "add",
+          "path": "company.features.whatsapp.usage",
+          "value": 15
+         },
+         {
+          "op": "trust",
+          "who": "sales_head",
+          "value": 10
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 8
+      }
+     ]
+    },
+    {
+     "id": "permissions",
+     "label": "الصلاحيات المتقدمة",
+     "quality": 0.5,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "permissions",
+        "title": "الصلاحيات المتقدمة للفرق الكبيرة",
+        "effort": 30,
+        "onShip": [
+         {
+          "op": "accountMrr",
+          "id": "rawasi",
+          "value": 6000
+         },
+         {
+          "op": "accountHealth",
+          "id": "rawasi",
+          "value": 20
+         },
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 2
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 4
+      }
+     ]
+    },
+    {
+     "id": "all_three",
+     "label": "ابدأوا الثلاثة معًا",
+     "quality": 0.2,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "whatsapp_bulk",
+        "title": "حملات واتساب الجماعية",
+        "effort": 40,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 6
+         },
+         {
+          "op": "multiply",
+          "path": "company.model.baseCac",
+          "value": 0.85
+         },
+         {
+          "op": "add",
+          "path": "company.features.whatsapp.usage",
+          "value": 15
+         },
+         {
+          "op": "trust",
+          "who": "sales_head",
+          "value": 10
+         }
+        ]
+       }
+      },
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "permissions",
+        "title": "الصلاحيات المتقدمة للفرق الكبيرة",
+        "effort": 30,
+        "onShip": [
+         {
+          "op": "accountMrr",
+          "id": "rawasi",
+          "value": 6000
+         },
+         {
+          "op": "accountHealth",
+          "id": "rawasi",
+          "value": 20
+         },
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 2
+         }
+        ]
+       }
+      },
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "reports_fix",
+        "title": "إعادة بناء أداء التقارير",
+        "effort": 22,
+        "urgent": true,
+        "onShip": [
+         {
+          "op": "set",
+          "path": "company.features.reports.trend",
+          "value": 0.3
+         },
+         {
+          "op": "add",
+          "path": "company.features.reports.usage",
+          "value": 12
+         },
+         {
+          "op": "add",
+          "path": "company.productQuality",
+          "value": 5
+         },
+         {
+          "op": "accountHealth",
+          "id": "ufuq",
+          "value": 22
+         },
+         {
+          "op": "flag",
+          "name": "reports_fixed"
+         }
+        ]
+       }
+      },
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": -8
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -8
+      }
+     ],
+     "result": "عبدالله: هذا تشتيت للفريق.",
+     "tone": "bad"
+    }
+   ],
+   "onExpire": {
+    "result": "بدأ السبرنت بلا أولوية واضحة واشتغل كل مطور على ما يراه.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.team.morale",
+      "value": -5
+     },
+     {
+      "op": "trust",
+      "who": "eng_lead",
+      "value": -8
+     }
+    ]
+   }
+  },
+  {
+   "id": "d5_mgmt_meeting",
+   "day": 5,
+   "type": "meeting",
+   "from": "ceo",
+   "priority": "high",
+   "dueInDays": 1,
+   "skills": [
+    "communication",
+    "decisions"
+   ],
+   "title": "اجتماع الإدارة: اعتراضات على الخطة",
+   "body": "هيفاء (المالية): لا أرى عائدًا واضحًا. ماجد (المبيعات): الخطة لا تلبي طلبات العملاء. عبدالله: الجدول متفائل.",
+   "options": [
+    {
+     "id": "defend_with_data",
+     "label": "دافع بالأرقام واعرض مؤشرات نجاح ونقطة مراجعة بعد أسبوعين",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cfo",
+       "value": 5
+      },
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": 4
+      }
+     ],
+     "result": "الإدارة وافقت مع نقطة مراجعة."
+    },
+    {
+     "id": "cut_scope",
+     "label": "قلّص النطاق لتقليل المخاطر والتكلفة",
+     "quality": 0.7,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cfo",
+       "value": 6
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": -3
+      }
+     ]
+    },
+    {
+     "id": "give_in",
+     "label": "تراجع واطلب وقتًا لإعادة التفكير",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": -5
+      },
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": -3
+      }
+     ],
+     "tone": "bad"
+    }
+   ],
+   "onExpire": {
+    "result": "غبت عن اجتماع الإدارة.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "ceo",
+      "value": -8
+     },
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -4
+     }
+    ]
+   }
+  },
+  {
+   "id": "d6_competitor_price",
+   "day": 6,
+   "type": "message",
+   "from": "marketing_lead",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "decisions"
+   ],
+   "title": "المنافس خفّض أسعاره",
+   "body": "قمة CRM خفّضت سعر المستخدم 15%. فريق المبيعات يسأل: هل نرد؟",
+   "onFire": {
+    "result": "قمة CRM أعلنت خفض أسعارها 15%.",
+    "tone": "bad",
+    "effects": [
+     {
+      "op": "competitorPrice",
+      "id": "qimma",
+      "factor": 0.85
+     }
+    ]
+   },
+   "options": [
+    {
+     "id": "match_price",
+     "label": "خفّض سعرنا لنطابقهم",
+     "quality": 0.35,
+     "effects": [
+      {
+       "op": "multiply",
+       "path": "company.pricing.seatPrice",
+       "value": 0.85
+      },
+      {
+       "op": "multiply",
+       "path": "company.tail.avgMrr",
+       "value": 0.92
+      }
+     ],
+     "result": "انخفض متوسط إيراد العميل فورًا."
+    },
+    {
+     "id": "value_bundle",
+     "label": "حافظ على السعر وأبرز القيمة (التكاملات والدعم المحلي)",
+     "quality": 0.85,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": 4
+      },
+      {
+       "op": "trust",
+       "who": "marketing_lead",
+       "value": 5
+      }
+     ]
+    },
+    {
+     "id": "annual_plan",
+     "label": "أطلق خصمًا على الاشتراك السنوي فقط",
+     "quality": 0.7,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.tail.avgHealth",
+       "value": 3
+      },
+      {
+       "op": "multiply",
+       "path": "company.pricing.seatPrice",
+       "value": 0.96
+      },
+      {
+       "op": "multiply",
+       "path": "company.tail.avgMrr",
+       "value": 0.98
+      }
+     ]
+    },
+    {
+     "id": "ignore",
+     "label": "لا ترد",
+     "quality": 0.3,
+     "effects": []
+    }
+   ],
+   "onExpire": {
+    "result": "لم يصدر موقف رسمي، وفريق المبيعات ارتجل خصومات.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.brand",
+      "value": -3
+     },
+     {
+      "op": "multiply",
+      "path": "company.tail.avgMrr",
+      "value": 0.98
+     }
+    ]
+   }
+  },
+  {
+   "id": "d8_interviews",
+   "day": 8,
+   "type": "message",
+   "from": "ux",
+   "priority": "normal",
+   "dueInDays": 3,
+   "skills": [
+    "decisions"
+   ],
+   "title": "مقابلات المستخدمين",
+   "body": "ريم: أقترح 5 مقابلات مع عملاء ألغوا اشتراكهم لفهم السبب. تحتاج منك ساعتين يوميًا لثلاثة أيام.",
+   "options": [
+    {
+     "id": "run",
+     "label": "وافق وشارك في المقابلات",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": 8
+      },
+      {
+       "op": "schedule",
+       "inDays": 3,
+       "note": "نتائج المقابلات: العملاء يتركون المنتج بسبب صعوبة البدء.",
+       "effects": [
+        {
+         "op": "add",
+         "path": "company.productQuality",
+         "value": 2
+        },
+        {
+         "op": "flag",
+         "name": "interview_insights"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "skip",
+     "label": "أجّلها، لا وقت الآن",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": -8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d10_investor_update",
+   "day": 10,
+   "type": "task",
+   "category": "task",
+   "from": "ceo",
+   "priority": "critical",
+   "dueInDays": 2,
+   "skills": [
+    "output",
+    "communication"
+   ],
+   "title": "عاجل من الرئيس التنفيذي: تحديث للمستثمرين",
+   "body": "أحتاج صفحة واحدة عن المنتج للمستثمرين غدًا: الأرقام، ما أنجزناه، المخاطر، والخطوات القادمة.",
+   "deliverable": {
+    "minWords": 80,
+    "passScore": 0.6,
+    "sections": [
+     {
+      "id": "metrics",
+      "label": "الأرقام الأساسية",
+      "keywords": [
+       "الإيرادات",
+       "mrr",
+       "العملاء",
+       "%"
+      ]
+     },
+     {
+      "id": "progress",
+      "label": "ما تم إنجازه",
+      "keywords": [
+       "أنجزنا",
+       "أطلقنا",
+       "تقدم",
+       "إنجاز"
+      ]
+     },
+     {
+      "id": "risks",
+      "label": "المخاطر",
+      "keywords": [
+       "مخاطر",
+       "خطر",
+       "تحديات",
+       "تحدي"
+      ]
+     },
+     {
+      "id": "next",
+      "label": "الخطوات القادمة",
+      "keywords": [
+       "القادم",
+       "القادمة",
+       "الخطوات",
+       "سنعمل"
+      ]
+     }
+    ],
+    "onGood": {
+     "result": "سلطان: هذا بالضبط ما أحتاجه. أرسلته للمستثمرين.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": 10
+      },
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": 2
+      }
+     ]
+    },
+    "onWeak": {
+     "result": "سلطان أعاد كتابة التحديث بنفسه.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ceo",
+       "value": -5
+      }
+     ]
+    }
+   },
+   "onExpire": {
+    "result": "أرسل الرئيس التنفيذي التحديث دون قسم المنتج.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "ceo",
+      "value": -12
+     }
+    ]
+   }
+  },
+  {
+   "id": "d11_promise_check",
+   "day": 11,
+   "type": "notice",
+   "condition": [
+    {
+     "path": "flags.promised_ufuq",
+     "op": "exists"
+    },
+    {
+     "path": "flags.reports_fixed",
+     "op": "notExists"
+    }
+   ],
+   "body": "مرّ موعد الإصلاح الذي وُعدت به مجموعة الأفق دون تنفيذ. ثقة العميل تراجعت بشدة.",
+   "tone": "bad",
+   "onFire": {
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "ufuq",
+      "value": -25
+     },
+     {
+      "op": "trust",
+      "who": "cs_lead",
+      "value": -6
+     },
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -5
+     }
+    ]
+   }
+  },
+  {
+   "id": "d12_churn_pattern",
+   "day": 12,
+   "type": "message",
+   "from": "analyst",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "decisions",
+    "analysis"
+   ],
+   "title": "نمط في الإلغاءات",
+   "body": "فهد: 60% من الإلغاءات تحدث في أول 45 يومًا، ومعظمها لعملاء لم يكملوا إعداد الحساب.",
+   "options": [
+    {
+     "id": "onboarding",
+     "label": "أضف تحسين رحلة التهيئة إلى خارطة الطريق",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "onboarding",
+        "title": "تحسين رحلة تهيئة العملاء الجدد",
+        "effort": 18,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.tail.avgHealth",
+          "value": 6
+         },
+         {
+          "op": "add",
+          "path": "company.model.organicMonthly",
+          "value": 2
+         },
+         {
+          "op": "trust",
+          "who": "cs_lead",
+          "value": 6
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "delegate_cs",
+     "label": "اطلب من نجاح العملاء متابعة العملاء الجدد يدويًا",
+     "quality": 0.6,
+     "effects": [
+      {
+       "op": "schedule",
+       "inDays": 2,
+       "effects": [
+        {
+         "op": "add",
+         "path": "company.tail.avgHealth",
+         "value": 2
+        }
+       ]
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": -2
+      }
+     ]
+    },
+    {
+     "id": "ignore",
+     "label": "سجّل الملاحظة لاحقًا",
+     "quality": 0.1,
+     "effects": []
+    }
+   ],
+   "onExpire": {
+    "result": "لم يُتخذ إجراء حيال نمط الإلغاء.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.tail.avgHealth",
+      "value": -2
+     }
+    ]
+   }
+  },
+  {
+   "id": "d15_budget_cut",
+   "day": 15,
+   "type": "meeting",
+   "from": "cfo",
+   "priority": "high",
+   "dueInDays": 2,
+   "skills": [
+    "decisions"
+   ],
+   "title": "تخفيض الميزانيات 15%",
+   "body": "هيفاء: المستثمرون طلبوا إطالة المدرج المالي. خُفّضت ميزانية التسويق 15%، ونحتاج منك اقتراحًا إضافيًا للتوفير من جهة المنتج.",
+   "onFire": {
+    "result": "الإدارة خفّضت ميزانية التسويق 15%.",
+    "tone": "bad",
+    "effects": [
+     {
+      "op": "multiply",
+      "path": "company.marketing.monthlyBudget",
+      "value": 0.85
+     }
+    ]
+   },
+   "options": [
+    {
+     "id": "pause_contractors",
+     "label": "أوقف التعاقدات الخارجية غير الحرجة",
+     "quality": 0.8,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.costs.payrollMonthly",
+       "value": -20000
+      },
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": -2
+      },
+      {
+       "op": "trust",
+       "who": "cfo",
+       "value": 6
+      }
+     ]
+    },
+    {
+     "id": "cut_ads",
+     "label": "خفّض الإعلانات المدفوعة أكثر وحافظ على الفريق",
+     "quality": 0.65,
+     "effects": [
+      {
+       "op": "multiply",
+       "path": "company.marketing.monthlyBudget",
+       "value": 0.85
+      },
+      {
+       "op": "trust",
+       "who": "cfo",
+       "value": 4
+      }
+     ]
+    },
+    {
+     "id": "cut_tools",
+     "label": "ألغِ أدوات التطوير المدفوعة",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.costs.infraMonthly",
+       "value": -6000
+      },
+      {
+       "op": "add",
+       "path": "company.team.devCapacityPerDay",
+       "value": -0.4
+      },
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": -6
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -6
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "قررت المالية التوفير نيابة عنك من أدوات التطوير.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.team.devCapacityPerDay",
+      "value": -0.4
+     },
+     {
+      "op": "trust",
+      "who": "cfo",
+      "value": -5
+     }
+    ]
+   }
+  },
+  {
+   "id": "d18_dev_burnout",
+   "day": 18,
+   "type": "message",
+   "from": "eng_lead",
+   "priority": "high",
+   "dueInDays": 2,
+   "skills": [
+    "communication",
+    "decisions"
+   ],
+   "title": "نورة قد تغادر",
+   "body": "عبدالله: نورة مرهقة ولديها عرض من شركة أخرى. خسارتها ستؤخر كل شيء.",
+   "options": [
+    {
+     "id": "talk_plan",
+     "label": "اجلس معها: خفّف الضغط واتفق على خطة نمو واضحة",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": 6
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": 5
+      }
+     ],
+     "result": "نورة قررت البقاء."
+    },
+    {
+     "id": "raise",
+     "label": "اطلب زيادة في راتبها",
+     "quality": 0.6,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.costs.payrollMonthly",
+       "value": 4000
+      },
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": 3
+      }
+     ]
+    },
+    {
+     "id": "later",
+     "label": "ليس الآن، بعد الإطلاق",
+     "quality": 0.1,
+     "effects": [
+      {
+       "op": "schedule",
+       "inDays": 4,
+       "note": "استقالت نورة السبيعي.",
+       "effects": [
+        {
+         "op": "add",
+         "path": "company.team.devCapacityPerDay",
+         "value": -0.9
+        },
+        {
+         "op": "add",
+         "path": "company.team.morale",
+         "value": -8
+        },
+        {
+         "op": "add",
+         "path": "company.costs.payrollMonthly",
+         "value": -22000
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "لم يتحدث معها أحد.",
+    "effects": [
+     {
+      "op": "schedule",
+      "inDays": 3,
+      "note": "استقالت نورة السبيعي.",
+      "effects": [
+       {
+        "op": "add",
+        "path": "company.team.devCapacityPerDay",
+        "value": -0.9
+       },
+       {
+        "op": "add",
+        "path": "company.team.morale",
+        "value": -8
+       },
+       {
+        "op": "add",
+        "path": "company.costs.payrollMonthly",
+        "value": -22000
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "d20_release",
+   "day": 20,
+   "type": "meeting",
+   "from": "eng_lead",
+   "priority": "high",
+   "dueInDays": 2,
+   "skills": [
+    "decisions"
+   ],
+   "title": "جاهزية الإصدار الشهري",
+   "body": "الإصدار جاهز بنسبة 90% مع أخطاء معروفة غير حرجة. نطلقه الآن أم نؤجل؟",
+   "options": [
+    {
+     "id": "launch_now",
+     "label": "أطلق الآن",
+     "quality": 0.45,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.productQuality",
+       "value": -5
+      },
+      {
+       "op": "add",
+       "path": "company.supportBacklog",
+       "value": 15
+      },
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": 1
+      }
+     ]
+    },
+    {
+     "id": "qa_week",
+     "label": "خصص أسبوع جودة قبل الإطلاق",
+     "quality": 0.85,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "qa_hardening",
+        "title": "أسبوع جودة وإصلاح أخطاء",
+        "effort": 12,
+        "urgent": true,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.productQuality",
+          "value": 6
+         },
+         {
+          "op": "add",
+          "path": "company.supportBacklog",
+          "value": -12
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": 5
+      }
+     ]
+    },
+    {
+     "id": "beta",
+     "label": "أطلق لمجموعة تجريبية من العملاء أولًا",
+     "quality": 0.8,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.productQuality",
+       "value": 1
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 3
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "انطلق الإصدار تلقائيًا بأخطائه.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.productQuality",
+      "value": -5
+     },
+     {
+      "op": "add",
+      "path": "company.supportBacklog",
+      "value": 15
+     }
+    ]
+   }
+  },
+  {
+   "id": "d22_custom_deal",
+   "day": 22,
+   "type": "message",
+   "from": "sales_head",
+   "priority": "high",
+   "dueInDays": 3,
+   "skills": [
+    "decisions",
+    "communication"
+   ],
+   "title": "رواسي: توسعة مشروطة",
+   "body": "ماجد: رواسي ستضيف 20 مستخدمًا إذا وفّرنا الصلاحيات المتقدمة خلال 3 أسابيع.",
+   "options": [
+    {
+     "id": "accept",
+     "label": "وافق وأضف الصلاحيات الكاملة لخارطة الطريق",
+     "quality": 0.7,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "permissions",
+        "title": "الصلاحيات المتقدمة للفرق الكبيرة",
+        "effort": 30,
+        "onShip": [
+         {
+          "op": "accountMrr",
+          "id": "rawasi",
+          "value": 6000
+         },
+         {
+          "op": "accountHealth",
+          "id": "rawasi",
+          "value": 20
+         },
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 2
+         }
+        ]
+       }
+      },
+      {
+       "op": "accountHealth",
+       "id": "rawasi",
+       "value": 8
+      }
+     ]
+    },
+    {
+     "id": "negotiate",
+     "label": "فاوض على نسخة أولى أصغر بموعد واقعي",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "permissions_lite",
+        "title": "صلاحيات الفرق — نسخة أولى",
+        "effort": 14,
+        "onShip": [
+         {
+          "op": "accountMrr",
+          "id": "rawasi",
+          "value": 4000
+         },
+         {
+          "op": "accountHealth",
+          "id": "rawasi",
+          "value": 15
+         }
+        ]
+       }
+      },
+      {
+       "op": "accountHealth",
+       "id": "rawasi",
+       "value": 6
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": 4
+      }
+     ]
+    },
+    {
+     "id": "decline",
+     "label": "اعتذر: ليست ضمن الاستراتيجية",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "rawasi",
+       "value": -12
+      },
+      {
+       "op": "trust",
+       "who": "sales_head",
+       "value": -8
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "رواسي لم تتلق ردًا.",
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "rawasi",
+      "value": -10
+     },
+     {
+      "op": "trust",
+      "who": "sales_head",
+      "value": -6
+     }
+    ]
+   }
+  },
+  {
+   "id": "d25_outage",
+   "day": 25,
+   "type": "complaint",
+   "from": "cs_lead",
+   "priority": "critical",
+   "dueInDays": 1,
+   "skills": [
+    "communication",
+    "decisions"
+   ],
+   "title": "انقطاع الخدمة 3 ساعات",
+   "body": "تعطّل النظام صباح اليوم. العملاء يسألون عمّا حدث.",
+   "onFire": {
+    "result": "انقطعت الخدمة 3 ساعات.",
+    "tone": "bad",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.productQuality",
+      "value": -3
+     },
+     {
+      "op": "add",
+      "path": "company.supportBacklog",
+      "value": 20
+     }
+    ]
+   },
+   "options": [
+    {
+     "id": "transparent",
+     "label": "تواصل بشفافية: ما حدث، ما تم إصلاحه، وما سيمنع تكراره",
+     "quality": 1.0,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": 3
+      },
+      {
+       "op": "add",
+       "path": "company.tail.avgHealth",
+       "value": 3
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 5
+      }
+     ]
+    },
+    {
+     "id": "quiet_fix",
+     "label": "أصلح بهدوء دون إعلان",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": -3
+      }
+     ]
+    },
+    {
+     "id": "blame_vendor",
+     "label": "حمّل مزود الاستضافة المسؤولية",
+     "quality": 0.2,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": -5
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -5
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "العملاء لم يتلقوا أي توضيح.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.brand",
+      "value": -6
+     },
+     {
+      "op": "add",
+      "path": "company.tail.avgHealth",
+      "value": -4
+     }
+    ]
+   }
+  },
+  {
+   "id": "d27_prd",
+   "day": 27,
+   "type": "task",
+   "category": "task",
+   "from": "cpo",
+   "priority": "high",
+   "dueInDays": 4,
+   "skills": [
+    "output"
+   ],
+   "title": "وثيقة متطلبات (PRD) للربع القادم",
+   "body": "اكتب وثيقة متطلبات لأهم مبادرة في الربع القادم: المشكلة، المستخدمون، الأهداف والمؤشرات، المتطلبات، ما هو خارج النطاق، المخاطر، والجدول.",
+   "deliverable": {
+    "minWords": 200,
+    "passScore": 0.6,
+    "sections": [
+     {
+      "id": "problem",
+      "label": "المشكلة",
+      "keywords": [
+       "المشكلة",
+       "التحدي"
+      ]
+     },
+     {
+      "id": "users",
+      "label": "المستخدمون المستهدفون",
+      "keywords": [
+       "المستخدم",
+       "المستخدمين",
+       "الشريحة",
+       "العملاء"
+      ]
+     },
+     {
+      "id": "goals",
+      "label": "الأهداف والمؤشرات",
+      "keywords": [
+       "هدف",
+       "الأهداف",
+       "مؤشر",
+       "kpi",
+       "قياس"
+      ]
+     },
+     {
+      "id": "requirements",
+      "label": "المتطلبات",
+      "keywords": [
+       "المتطلبات",
+       "يجب",
+       "متطلب"
+      ]
+     },
+     {
+      "id": "out_of_scope",
+      "label": "خارج النطاق",
+      "keywords": [
+       "خارج النطاق",
+       "لن"
+      ]
+     },
+     {
+      "id": "risks",
+      "label": "المخاطر",
+      "keywords": [
+       "مخاطر",
+       "خطر",
+       "الاعتمادية"
+      ]
+     },
+     {
+      "id": "timeline",
+      "label": "الجدول الزمني",
+      "keywords": [
+       "أسبوع",
+       "أسابيع",
+       "مراحل",
+       "الجدول"
+      ]
+     }
+    ],
+    "onGood": {
+     "result": "خالد: وثيقة متطلبات بمستوى احترافي.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": 10
+      }
+     ]
+    },
+    "onWeak": {
+     "result": "خالد: الوثيقة تحتاج تحديدًا أكثر للنطاق والمؤشرات.",
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cpo",
+       "value": -4
+      }
+     ]
+    }
+   },
+   "onExpire": {
+    "result": "لم تُسلَّم وثيقة المتطلبات.",
+    "effects": [
+     {
+      "op": "trust",
+      "who": "cpo",
+      "value": -12
+     }
+    ]
+   }
+  },
+  {
+   "id": "d30_review",
+   "day": 30,
+   "type": "notice",
+   "body": "اليوم الأخير في الشهر الأول: مراجعة الأداء مع خالد. افتح تقريرك المهني.",
+   "tone": "info"
+  }
+ ],
+ "randomEvents": [
+  {
+   "id": "r_backlog_spike",
+   "minDay": 4,
+   "weight": 3,
+   "condition": {
+    "path": "company.supportBacklog",
+    "op": "gt",
+    "value": 40
+   },
+   "type": "complaint",
+   "from": "cs_lead",
+   "priority": "high",
+   "dueInDays": 2,
+   "skills": [
+    "prioritization",
+    "decisions"
+   ],
+   "title": "تراكم تذاكر الدعم",
+   "body": "أمل: تذاكر الدعم المفتوحة تجاوزت 40، ووقت الرد تضاعف.",
+   "options": [
+    {
+     "id": "bug_week",
+     "label": "خصص أسبوع جودة لإصلاح الأخطاء المتكررة",
+     "quality": 0.85,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "qa_hardening",
+        "title": "أسبوع جودة وإصلاح أخطاء",
+        "effort": 12,
+        "urgent": true,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.productQuality",
+          "value": 6
+         },
+         {
+          "op": "add",
+          "path": "company.supportBacklog",
+          "value": -12
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 5
+      }
+     ]
+    },
+    {
+     "id": "join_triage",
+     "label": "انضم للفريق في فرز التذاكر يومين",
+     "quality": 0.7,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.supportBacklog",
+       "value": -10
+      },
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": 6
+      }
+     ]
+    },
+    {
+     "id": "ignore",
+     "label": "هذه مسؤولية الدعم",
+     "quality": 0.2,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "cs_lead",
+       "value": -8
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "استمر تراكم التذاكر.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.tail.avgHealth",
+      "value": -2
+     },
+     {
+      "op": "trust",
+      "who": "cs_lead",
+      "value": -5
+     }
+    ]
+   }
+  },
+  {
+   "id": "r_renewal_discount",
+   "minDay": 4,
+   "weight": 2,
+   "type": "message",
+   "from": "sales_head",
+   "priority": "normal",
+   "dueInDays": 2,
+   "skills": [
+    "decisions",
+    "communication"
+   ],
+   "title": "مسار يطلب خصم 30% للتجديد",
+   "body": "ماجد: مسار للخدمات اللوجستية تريد خصم 30% وإلا لن تجدد.",
+   "options": [
+    {
+     "id": "value_review",
+     "label": "اعقد مراجعة قيمة توضح العائد الذي حققوه",
+     "quality": 0.85,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "masar",
+       "value": 10
+      }
+     ]
+    },
+    {
+     "id": "discount",
+     "label": "امنح الخصم",
+     "quality": 0.45,
+     "effects": [
+      {
+       "op": "accountMrr",
+       "id": "masar",
+       "value": -3500
+      },
+      {
+       "op": "accountHealth",
+       "id": "masar",
+       "value": 14
+      }
+     ]
+    },
+    {
+     "id": "refuse",
+     "label": "ارفض",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "masar",
+       "value": -15
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "مسار لم تتلق ردًا.",
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "masar",
+      "value": -12
+     }
+    ]
+   }
+  },
+  {
+   "id": "r_competitor_ai",
+   "minDay": 9,
+   "weight": 2,
+   "type": "message",
+   "from": "marketing_lead",
+   "priority": "normal",
+   "dueInDays": 3,
+   "skills": [
+    "decisions"
+   ],
+   "title": "رائد أطلق مساعد ذكاء اصطناعي",
+   "body": "سارة: المنافس رائد أطلق مساعدًا ذكيًا للمبيعات. هل نلحق بهم؟",
+   "options": [
+    {
+     "id": "research",
+     "label": "افهم أولًا: هل يطلبه عملاؤنا فعلًا؟",
+     "quality": 0.85,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "marketing_lead",
+       "value": 2
+      }
+     ]
+    },
+    {
+     "id": "copy_fast",
+     "label": "ابدأ بناء ميزة مشابهة فورًا",
+     "quality": 0.3,
+     "effects": [
+      {
+       "op": "roadmapAdd",
+       "item": {
+        "id": "ai_assistant",
+        "title": "مساعد ذكاء اصطناعي للمبيعات",
+        "effort": 35,
+        "onShip": [
+         {
+          "op": "add",
+          "path": "company.brand",
+          "value": 5
+         },
+         {
+          "op": "add",
+          "path": "company.productQuality",
+          "value": -2
+         }
+        ]
+       }
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -5
+      }
+     ]
+    },
+    {
+     "id": "ignore",
+     "label": "تجاهل",
+     "quality": 0.4,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.brand",
+       "value": -2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "r_press",
+   "minDay": 6,
+   "weight": 1,
+   "condition": {
+    "path": "company.brand",
+    "op": "gt",
+    "value": 52
+   },
+   "type": "notice",
+   "body": "نشرت منصة تقنية محلية مقالًا إيجابيًا عن NOVA TECH.",
+   "tone": "good",
+   "onFire": {
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.brand",
+      "value": 3
+     }
+    ]
+   }
+  },
+  {
+   "id": "r_team_conflict",
+   "minDay": 5,
+   "weight": 2,
+   "type": "meeting",
+   "from": "ux",
+   "priority": "normal",
+   "dueInDays": 2,
+   "skills": [
+    "communication"
+   ],
+   "title": "خلاف بين التصميم والتطوير",
+   "body": "ريم وعبدالله مختلفان على تصميم شاشة التقارير: ريم تريد إعادة تصميم كاملة، وعبدالله يرى أنها ستضاعف الجهد.",
+   "options": [
+    {
+     "id": "facilitate",
+     "label": "أدر نقاشًا يركز على مشكلة المستخدم واتفقا على حل مرحلي",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "add",
+       "path": "company.team.morale",
+       "value": 4
+      },
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": 3
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": 3
+      }
+     ]
+    },
+    {
+     "id": "side_eng",
+     "label": "ادعم رأي التطوير",
+     "quality": 0.5,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": -6
+      },
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": 3
+      }
+     ]
+    },
+    {
+     "id": "side_ux",
+     "label": "ادعم رأي التصميم",
+     "quality": 0.5,
+     "effects": [
+      {
+       "op": "trust",
+       "who": "eng_lead",
+       "value": -6
+      },
+      {
+       "op": "trust",
+       "who": "ux",
+       "value": 3
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "استمر الخلاف وتأثرت روح الفريق.",
+    "effects": [
+     {
+      "op": "add",
+      "path": "company.team.morale",
+      "value": -4
+     }
+    ]
+   }
+  },
+  {
+   "id": "r_ufuq_risk",
+   "minDay": 3,
+   "weight": 4,
+   "condition": {
+    "path": "company.accounts.0.health",
+    "op": "lt",
+    "value": 30
+   },
+   "type": "complaint",
+   "from": "cs_lead",
+   "priority": "critical",
+   "dueInDays": 1,
+   "skills": [
+    "decisions",
+    "communication"
+   ],
+   "title": "مجموعة الأفق على وشك الإلغاء",
+   "body": "أمل: مجموعة الأفق طلبت عرض أسعار من منافس.",
+   "options": [
+    {
+     "id": "exec_call",
+     "label": "رتّب اتصالًا من الإدارة بخطة إصلاح واضحة",
+     "quality": 0.9,
+     "effects": [
+      {
+       "op": "accountHealth",
+       "id": "ufuq",
+       "value": 15
+      }
+     ]
+    },
+    {
+     "id": "discount",
+     "label": "قدّم خصمًا مؤقتًا",
+     "quality": 0.5,
+     "effects": [
+      {
+       "op": "accountMrr",
+       "id": "ufuq",
+       "value": -4000
+      },
+      {
+       "op": "accountHealth",
+       "id": "ufuq",
+       "value": 12
+      }
+     ]
+    }
+   ],
+   "onExpire": {
+    "result": "لم يتحرك أحد لإنقاذ الحساب.",
+    "effects": [
+     {
+      "op": "accountHealth",
+      "id": "ufuq",
+      "value": -10
+     }
+    ]
+   }
+  }
+ ]
+}

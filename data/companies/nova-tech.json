@@ -1,0 +1,84 @@
+{
+  "id": "nova-tech",
+  "name": "NOVA TECH",
+  "tagline": "منصة لإدارة مبيعات المنشآت الصغيرة والمتوسطة",
+  "city": "الرياض",
+  "stage": "Startup — جولة Seed مكتملة",
+  "headcount": 32,
+  "product": {
+    "name": "Nova Sales",
+    "description": "نظام سحابي لإدارة العملاء المحتملين وفرص البيع وفرق المبيعات، مع تكامل واتساب وتطبيق جوال.",
+    "pricing": "اشتراك شهري لكل مستخدم"
+  },
+  "departments": [
+    { "id": "exec", "name": "الإدارة التنفيذية", "headcount": 3 },
+    { "id": "product", "name": "إدارة المنتجات والتصميم", "headcount": 4 },
+    { "id": "engineering", "name": "الهندسة", "headcount": 11 },
+    { "id": "data", "name": "البيانات", "headcount": 2 },
+    { "id": "sales", "name": "المبيعات وتطوير الأعمال", "headcount": 5 },
+    { "id": "marketing", "name": "التسويق", "headcount": 3 },
+    { "id": "cs", "name": "نجاح العملاء والدعم", "headcount": 3 },
+    { "id": "ops", "name": "المالية والموارد البشرية", "headcount": 1 }
+  ],
+  "people": [
+    { "id": "ceo", "name": "م. سلطان الحربي", "title": "الرئيس التنفيذي والمؤسس", "dept": "exec", "agent": true,
+      "persona": "مستعجل، يفكر في المستثمرين والنمو، يريد أرقامًا مختصرة وقرارات واضحة.", "cares": ["النمو", "المدرج المالي", "سمعة الشركة"] },
+    { "id": "cfo", "name": "هيفاء العتيبي", "title": "المديرة المالية", "dept": "exec", "agent": true,
+      "persona": "دقيقة ومتحفظة، تعترض على أي إنفاق دون عائد واضح.", "cares": ["التكلفة", "المدرج المالي", "هامش الربح"] },
+    { "id": "cpo", "name": "خالد الشمري", "title": "مدير المنتجات (المدير المباشر)", "dept": "product", "agent": true,
+      "persona": "داعم لكنه متطلب، يسأل دائمًا: ما المشكلة؟ ما الدليل؟ كيف سنقيس النجاح؟", "cares": ["الأدلة", "أثر المنتج", "وضوح التفكير"] },
+    { "id": "ux", "name": "ريم القحطاني", "title": "مصممة تجربة المستخدم", "dept": "product", "agent": true,
+      "persona": "تدافع عن المستخدم، تحب المقابلات والنماذج الأولية، تنزعج من القرارات دون بحث.", "cares": ["تجربة المستخدم", "البحث"] },
+    { "id": "eng_lead", "name": "عبدالله الزهراني", "title": "قائد فريق التطوير", "dept": "engineering", "agent": true,
+      "persona": "واقعي، يحمي فريقه من الضغط، يرفض الوعود بلا تقدير جهد.", "cares": ["الجودة التقنية", "طاقة الفريق", "الدين التقني"] },
+    { "id": "dev2", "name": "نورة السبيعي", "title": "مطورة أولى", "dept": "engineering", "agent": true,
+      "persona": "موهوبة وتعمل بصمت، معرضة للإرهاق، تبحث عن تقدير ونمو.", "cares": ["النمو المهني", "وضوح المتطلبات"] },
+    { "id": "analyst", "name": "فهد المطيري", "title": "محلل بيانات", "dept": "data", "agent": true,
+      "persona": "يجيب بالأرقام فقط، يحتاج أسئلة محددة.", "cares": ["دقة البيانات"] },
+    { "id": "sales_head", "name": "ماجد الدوسري", "title": "مدير المبيعات", "dept": "sales", "agent": true,
+      "persona": "حماسي وضاغط، يعد العملاء بخصائص قبل اعتمادها، يقيس كل شيء بالصفقات.", "cares": ["الصفقات", "رضا العملاء الكبار"] },
+    { "id": "cs_lead", "name": "أمل الغامدي", "title": "مديرة نجاح العملاء", "dept": "cs", "agent": true,
+      "persona": "قريبة من العملاء، تنبه مبكرًا للمخاطر، تحتاج دعمًا من المنتج.", "cares": ["الاحتفاظ بالعملاء", "تراكم التذاكر"] },
+    { "id": "marketing_lead", "name": "سارة الحمدان", "title": "مديرة التسويق", "dept": "marketing", "agent": true,
+      "persona": "مبدعة، تريد قصصًا ومزايا تنافسية واضحة لتسويقها.", "cares": ["العلامة", "تكلفة الاستحواذ"] }
+  ],
+  "customersOverview": "180 منشأة تقريبًا: 8 حسابات استراتيجية + قاعدة واسعة من المنشآت الصغيرة.",
+  "state": {
+    "cash": 5800000,
+    "pricing": { "seatPrice": 89 },
+    "marketing": { "monthlyBudget": 60000 },
+    "costs": { "payrollMonthly": 610000, "infraMonthly": 45000 },
+    "productQuality": 66,
+    "brand": 48,
+    "supportBacklog": 34,
+    "team": { "morale": 64, "devCapacityPerDay": 3.2 },
+    "model": {
+      "baseCac": 3200,
+      "organicMonthly": 4,
+      "supportCapacityPerDay": 8.6,
+      "keyAccountRiskHealth": 28
+    },
+    "features": {
+      "pipeline": { "name": "إدارة فرص البيع", "usage": 82, "trend": 0 },
+      "reports": { "name": "التقارير", "usage": 41, "trend": -0.4 },
+      "whatsapp": { "name": "تكامل واتساب", "usage": 23, "trend": 0.05 },
+      "mobile": { "name": "تطبيق الجوال", "usage": 37, "trend": 0 }
+    },
+    "accounts": [
+      { "id": "ufuq", "name": "مجموعة الأفق للتجارة", "segment": "تجزئة", "mrr": 18500, "health": 34, "status": "active", "strategic": true },
+      { "id": "rawasi", "name": "رواسي للمقاولات", "segment": "مقاولات", "mrr": 14200, "health": 61, "status": "active", "strategic": true },
+      { "id": "zad", "name": "زاد للأغذية", "segment": "أغذية", "mrr": 12800, "health": 72, "status": "active", "strategic": true },
+      { "id": "masar", "name": "مسار للخدمات اللوجستية", "segment": "لوجستيات", "mrr": 11600, "health": 55, "status": "active", "strategic": true },
+      { "id": "wahat", "name": "واحات العقارية", "segment": "عقار", "mrr": 10900, "health": 68, "status": "active", "strategic": true },
+      { "id": "nakheel", "name": "نخيل للأجهزة الطبية", "segment": "صحة", "mrr": 9800, "health": 63, "status": "active", "strategic": true },
+      { "id": "sanabel", "name": "سنابل التعليمية", "segment": "تعليم", "mrr": 8700, "health": 70, "status": "active", "strategic": true },
+      { "id": "bayan", "name": "بيان للسيارات", "segment": "سيارات", "mrr": 8400, "health": 58, "status": "active", "strategic": true }
+    ],
+    "tail": { "count": 172, "avgMrr": 1900, "avgHealth": 58 },
+    "competitors": [
+      { "id": "qimma", "name": "قمة CRM", "seatPrice": 79, "positioning": "الأرخص، واجهة بسيطة" },
+      { "id": "raed", "name": "رائد للمبيعات", "seatPrice": 109, "positioning": "متقدم للمنشآت المتوسطة" }
+    ],
+    "roadmap": { "active": null, "queue": [], "shipped": [] }
+  }
+}
