@@ -113,3 +113,19 @@ test('الأعمال المعتمدة تظهر في السجل الموثّق د
     assert.equal(rec.realWork.items[0].org, 'جهة تجريبية');
   });
 });
+
+test('مشروع داخلي لمحاكي: نوع بيع خدماتنا، بلا أجر وبعمولة اختيارية، والتسليم مسودة يعتمدها المشرف', async () => {
+  await withServer(async ({ user }) => {
+    const fac = await user('هيا', 'fac@example.com');
+    const t = await user('سارة العتيبي', 't@example.com');
+    const { gig: g } = (await fac('POST', '/api/work', { title: 'التواصل مع 10 جامعات لعرض محاكي', org: 'محاكي', kind: 'sales', internal: true, commission: '10% من أول دفعة', description: 'جهّز رسالة تعريفية وقائمة الجهات.', minDays: 0, amount: 0 })).data;
+    const list = (await t('GET', '/api/work')).data.gigs[0];
+    assert.deepEqual([list.internal, list.commission, list.paid, list.kindLabel], [true, '10% من أول دفعة', null, 'التواصل مع الجهات لبيع خدماتنا']);
+    const app = (await t('POST', `/api/work/${g.id}/apply`, {})).data.application;
+    await fac('POST', `/api/work/apps/${app.id}/decide`, { action: 'accept' });
+    await t('POST', `/api/work/apps/${app.id}/submit`, { text: 'مسودة الرسالة: السلام عليكم، نقدم في محاكي محاكاة عمل لطلابكم... وقائمة 10 جامعات.' });
+    const q = (await fac('GET', '/api/work/review')).data.applications[0];
+    assert.equal(q.status, 'submitted', 'لا يخرج شيء قبل اعتماد المشرف');
+    assert.equal(q.gig.internal, true);
+  });
+});

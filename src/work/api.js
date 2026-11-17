@@ -19,6 +19,8 @@ export const KINDS = {
   excel: 'ملف إكسل وتحليل بيانات',
   marketing: 'تسويق',
   legal: 'قضية أو عقد',
+  sales: 'التواصل مع الجهات لبيع خدماتنا',
+  social: 'محتوى إعلاني وإدارة حساباتنا',
   other: 'أخرى',
 };
 const STATUS = ['pending', 'assigned', 'submitted', 'approved', 'revise', 'rejected', 'withdrawn'];
@@ -67,6 +69,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       link: mine && ['assigned', 'revise', 'submitted', 'approved'].includes(mine.status) ? g.link : null, // الرابط للمكلَّفين فقط
       paid: g.paid, points: g.points, slots: g.slots, left: Math.max(0, g.slots - taken(g)), deadline: g.deadline, status: g.status,
       unlock: g.unlock, locked: lockReason(g, rd), mine: mine && appPublic(mine, g),
+      internal: !!g.internal, commission: g.commission ?? null,
     };
   }
   const appPublic = (a, g) => ({ id: a.id, status: a.status, note: a.note, submission: a.submission, feedback: a.feedback, rating: a.rating, earned: earned(a, g), payout: g.paid?.amount ? a.payout ?? 'none' : null, at: a.at, updatedAt: a.updatedAt });
@@ -99,6 +102,9 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       deadline: Number.isNaN(Date.parse(b.deadline)) ? null : new Date(b.deadline).toISOString(),
       unlock: { minDays: Math.min(30, Math.max(0, Math.round(Number(b.minDays ?? 10)))), minPoints: Math.min(1000, Math.max(0, Math.round(Number(b.minPoints) || 0))) },
       reviewerEmail: str(b.reviewerEmail, 120).toLowerCase() || null,
+      // مشروع داخلي لمحاكي: كل تواصل أو منشور يُرسَل مسودة، ولا يخرج إلا بعد اعتماد المشرف
+      internal: b.internal === true || b.internal === 'on',
+      commission: str(b.commission, 120) || null,
       status: 'open', createdBy: fac.id, createdAt: clock(),
     };
     W.gigs[g.id] = g;
@@ -160,7 +166,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       .filter((a) => W.gigs[a.gigId] && canReview(u, W.gigs[a.gigId]) && a.status !== 'withdrawn')
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((a) => { const g = W.gigs[a.gigId]; const t = store.users[a.userId]; const rd = readiness(a.userId);
-        return { ...appPublic(a, g), gig: { id: g.id, title: g.title, org: g.org, kindLabel: KINDS[g.kind], paid: g.paid }, trainee: { name: t?.name ?? '—', days: rd.days, points: rd.points } }; });
+        return { ...appPublic(a, g), gig: { id: g.id, title: g.title, org: g.org, kindLabel: KINDS[g.kind], paid: g.paid, internal: !!g.internal }, trainee: { name: t?.name ?? '—', days: rd.days, points: rd.points } }; });
   }
 
   const routes = {

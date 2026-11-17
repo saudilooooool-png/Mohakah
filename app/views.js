@@ -218,7 +218,7 @@ function mailRow(session, m, activeId, filterQ = '') {
   const label = { report: 'تقرير', memo: 'تعميم', doc: 'المكتبة' }[m.kind];
   return `<a class="item ${m.id === activeId ? 'on' : ''} ${session.opened?.[m.id] ? '' : 'unread'}" href="#/inbox/${encodeURIComponent(m.id)}${filterQ}">
     <span class="ico">${icon(m.kind === 'report' ? 'chart' : m.kind === 'doc' ? 'book' : 'mail')}</span>
-    <span><div class="tt">${esc(m.title)}</div><div class="meta"><span>${esc(from.name)}</span><span class="pill t-pill">${label}</span></div></span>
+    <span><div class="tt">${m.title.startsWith('FYI') ? '' : '<abbr class="tag fyi" title="For Your Information: للعلم فقط">FYI</abbr>'}${esc(m.title)}</div><div class="meta"><span>${esc(from.name)}</span><span class="pill t-pill">${label}</span></div></span>
     <span class="due">يوم ${m.day}</span></a>`;
 }
 
@@ -229,7 +229,7 @@ function itemRow(session, item, activeId, filterQ = '') {
   return `<a class="item ${item.id === activeId ? 'on' : ''} ${item.status !== 'open' ? 'done' : ''} ${item.status !== 'open' || session.opened?.[item.id] ? '' : 'unread'}" href="#/inbox/${encodeURIComponent(item.id)}${filterQ}">
     <span class="ico">${typeIcon(item.type)}</span>
     <span>
-      <div class="tt">${esc(item.title)}</div>
+      <div class="tt">${mailTags(item, sim)}${esc(item.title)}</div>
       <div class="meta"><span>${esc(from.name)}</span>
         ${item.status === 'open' ? `<span class="pill p-${item.priority}">${PRIORITY[item.priority]}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
         <span class="pill t-pill">${item.deliverable ? 'مستند' : item.dialogue?.mode === 'chat' ? 'محادثة' : TYPE[item.type] ?? ''}</span>
@@ -281,8 +281,8 @@ function mailDetail(session, m) {
   const from = session.person(m.from);
   return `<div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
     <div class="chips"><span class="pill t-pill">${{ report: 'تقرير يومي', memo: 'تعميم', doc: 'المكتبة' }[m.kind]}</span><span class="pill t-pill">يوم ${m.day}</span><span class="pill t-pill">للاطلاع</span></div>
-    <h1>${esc(m.title)}</h1>
-    <div class="mail-body">${mailBody(session, m, esc)}</div>`;
+    <h1>${jg(session, esc(m.title))}</h1>
+    <div class="mail-body">${mailBody(session, m, (x) => jg(session, esc(x)))}</div>`;
 }
 
 export function itemDetail(session, item, drafts = {}, ui = {}) {
@@ -297,8 +297,8 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
       <span class="pill t-pill">وصل يوم ${item.createdDay}</span>
       ${item.status === 'open' ? `<span class="pill ${item.dueDay <= sim.day ? 'p-critical' : 't-pill'}">${due}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
     </div>
-    <h1>${esc(item.title)}</h1>
-    <p class="body">${esc(item.body)}</p>
+    <h1>${jg(session, esc(item.title))}</h1>
+    <p class="body">${jg(session, esc(item.body))}</p>
     ${attachmentsBlock(session, item)}`;
 
   if (item.status === 'open' && item.deliverable) {
@@ -332,7 +332,8 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
 
   // رسالة قراءة: مرفق للاطلاع وتأكيد واحد
   if (item.status === 'open' && item.attachments?.length && item.options.length === 1) {
-    const unread = item.attachments.filter((a) => !session.read?.[a]);
+    // يكفي فتح المرفق الأساسي (الأول)، والبقية للاستزادة
+    const unread = item.attachments.slice(0, 1).filter((a) => !session.read?.[a]);
     return `${head}<div class="actions">
       <button class="btn primary" data-act="ack-read" data-item="${esc(item.id)}" ${unread.length ? 'disabled' : ''}>${esc(item.options[0].label)}</button>
       ${unread.length ? '<span class="small muted">افتح المرفق واقرأه أولًا.</span>' : ''}</div>`;
@@ -1487,7 +1488,8 @@ function attachmentsBlock(session, item) {
 
 export function library(session, docId) {
   const docs = libraryDocs(session);
-  const doc = docs.find((d) => d.id === docId);
+  const raw = docs.find((d) => d.id === docId);
+  const doc = raw?.fromGlossary ? { ...raw, sections: (session.world.library.glossary ?? []).map((t) => ({ h: `${t.term} — ${t.full}`, body: t.ar })) } : raw;
   const locked = (session.world.library?.docs ?? []).filter((d) => session.sim.day < (d.fromDay ?? 1));
   const list = `<section class="card inbox-list"><h2>المستندات</h2><div class="items">${docs.map((d) => `<a class="item ${d.id === docId ? 'on' : ''}" href="#/library/${esc(d.id)}">
       <span class="ico">${icon('book')}</span>
@@ -1500,7 +1502,7 @@ export function library(session, docId) {
     detail = `<div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
       <div class="chips"><span class="pill t-pill">${esc(doc.kind)}</span><span class="pill t-pill">${doc.minutes} دقائق قراءة</span></div>
       <h1>${esc(doc.title)}</h1><p class="muted">${esc(doc.summary)}</p>
-      <article class="doc-body">${doc.sections.map((x) => `<h3>${esc(x.h)}</h3><p>${esc(x.body)}</p>`).join('')}</article>
+      <article class="doc-body">${doc.sections.map((x) => `<h3>${esc(x.h)}</h3><p>${jg(session, esc(x.body))}</p>`).join('')}</article>
       ${ins ? (ins.reported ? `<div class="outcome good"><b>أبلغت عن هذه الملاحظة.</b> ${esc(ins.result ?? '')}</div>`
         : `<div class="outcome info insight"><b>هل لاحظت شيئًا مهمًا في هذا المستند؟</b><p class="small">من يقرأ بانتباه ويبلّغ صاحب الشأن في الوقت المناسب، يصنع فرقًا.</p>
           <button class="btn teal" data-act="report-insight" data-id="${esc(ins.id)}">${esc(ins.label)}</button></div>`) : ''}`;
@@ -1632,7 +1634,12 @@ export function leaguePage(l) {
 
 const WORK_STATUS = { pending: 'بانتظار القبول', assigned: 'مكلَّف: ابدأ العمل', submitted: 'سُلِّم: بانتظار المراجعة', approved: 'معتمد', revise: 'مطلوب تعديل', rejected: 'لم يُقبل', withdrawn: 'منسحب' };
 const WORK_PILL = { pending: 't-pill', assigned: 'p-high', submitted: 'p-normal', approved: 's-done', revise: 'p-critical', rejected: 's-expired', withdrawn: 's-expired' };
-const KIND_ICON = { customers: '📞', ux: '🧭', report: '📝', excel: '📊', marketing: '📣', legal: '⚖️', other: '💼' };
+const KIND_ICON = { customers: '📞', ux: '🧭', report: '📝', excel: '📊', marketing: '📣', legal: '⚖️', sales: '🤝', social: '📱', other: '💼' };
+const INTERNAL_RULES = `<div class="outcome info internal-rules"><b>قواعد المشروع الداخلي لمحاكي</b><ul>
+  <li>كل رسالة لجهة وكل منشور يُرسَل <b>مسودة</b> في التسليم، ولا يخرج إلا بعد <b>اعتماد المشرف</b>.</li>
+  <li>لا تُشارك كلمات مرور حساباتنا: ينشر فريق محاكي المحتوى المعتمد من الحسابات الرسمية.</li>
+  <li>قدّم محاكي بصدق: لا وعود بأسعار أو مزايا غير معتمدة، ولا تواصل مع جهة طلبت عدم التواصل.</li>
+  <li>سجّل كل تواصل (الجهة، والتاريخ، والنتيجة) في تسليمك.</li></ul></div>`;
 
 function realWorkCard(s) {
   if (!s?.count) return '';
@@ -1670,7 +1677,8 @@ export function workPage(state, gigId) {
 
 function gigCard(g) {
   return `<a class="card gig ${g.locked ? 'locked' : ''}" href="#/work/${esc(g.id)}">
-    <div class="gig-h"><span class="gig-k">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : '<span class="pill t-pill">تطوعية</span>'}</div>
+    <div class="gig-h"><span class="gig-k">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : g.commission ? `<span class="pill s-done">عمولة: ${esc(g.commission)}</span>` : '<span class="pill t-pill">تطوعية</span>'}</div>
+    ${g.internal ? '<span class="pill p-normal" style="margin-top:6px;display:inline-block">مشروع داخلي لمحاكي</span>' : ''}
     <h3>${esc(g.title)}</h3><p class="small muted">${esc(g.org)}</p>
     <div class="meta"><span class="pill t-pill">حتى ${g.points} نقطة</span><span class="pill t-pill">${g.left} من ${g.slots} مقاعد</span>${g.deadline ? `<span class="pill t-pill">حتى ${esc(new Date(g.deadline).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' }))}</span>` : ''}</div>
     ${g.mine ? `<p style="margin:8px 0 0"><span class="pill ${WORK_PILL[g.mine.status]}">${WORK_STATUS[g.mine.status]}</span></p>` : g.locked ? `<p class="small" style="margin:8px 0 0">🔒 ${esc(g.locked)}</p>` : ''}
@@ -1696,7 +1704,8 @@ function gigDetail(g) {
   }
   return `<section class="card detail"><a class="back-link" href="#/work">→ كل الفرص</a>
     <div class="chips"><span class="pill t-pill">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : '<span class="pill t-pill">تطوعية</span>'}<span class="pill t-pill">حتى ${g.points} نقطة</span></div>
-    <h1>${esc(g.title)}</h1><p class="muted">${esc(g.org)}</p>
+    <h1>${esc(g.title)}</h1><p class="muted">${esc(g.org)}${g.internal ? ' · مشروع داخلي' : ''}${g.commission ? ` · عمولة: ${esc(g.commission)}` : ''}</p>
+    ${g.internal ? INTERNAL_RULES : ''}
     <h3 class="section-t">المطلوب</h3><p class="body">${esc(g.description)}</p>
     ${g.deliverable ? `<h3 class="section-t">المخرَج المتوقع</h3><p>${esc(g.deliverable)}</p>` : ''}
     ${g.link ? `<p><a href="${esc(g.link)}" target="_blank" rel="noopener">رابط العمل ↗</a></p>` : ''}
@@ -1714,7 +1723,7 @@ function reviewList(apps) {
     ${a.status === 'pending' ? `<div class="actions"><button class="btn primary" data-act="work-decide" data-app="${esc(a.id)}" data-action="accept">قبول وتكليف</button><button class="btn ghost" data-act="work-decide" data-app="${esc(a.id)}" data-action="reject">اعتذار</button></div>` : ''}
     ${a.status === 'submitted' ? `<form data-form="work-review" data-app="${esc(a.id)}"><div class="field"><label>التقييم</label><span class="seg">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="rating" value="${n}"><span>${n}</span></label>`).join('')}</span></div>
       <div class="field"><label>ملاحظة للمتدرب</label><textarea name="feedback" rows="2"></textarea></div>
-      <div class="actions"><button class="btn primary" name="action" value="approve" type="submit">اعتماد</button><button class="btn" name="action" value="revise" type="submit">طلب تعديل</button><button class="btn ghost" name="action" value="reject" type="submit">رفض</button></div></form>` : ''}
+      <div class="actions"><button class="btn primary" name="action" value="approve" type="submit">${a.gig.internal ? 'اعتماد للإرسال والنشر' : 'اعتماد'}</button><button class="btn" name="action" value="revise" type="submit">طلب تعديل</button><button class="btn ghost" name="action" value="reject" type="submit">رفض</button></div></form>` : ''}
     ${a.status === 'approved' && a.payout === 'due' ? `<div class="actions"><button class="btn" data-act="work-decide" data-app="${esc(a.id)}" data-action="paid">تأكيد صرف الأجر</button></div>` : ''}
   </section>`).join('');
 }
@@ -1724,7 +1733,9 @@ function newGigForm() {
   <form data-form="work-new" class="grid" style="gap:10px">
     <div class="field"><label>العنوان</label><input name="title" required placeholder="مثال: اختبار تجربة الاستخدام لموقع حجز"></div>
     <div class="field"><label>الجهة</label><input name="org" required></div>
-    <div class="field"><label>النوع</label><select name="kind">${Object.entries({ customers: 'التواصل مع عملاء', ux: 'اختبار تجربة مستخدم', report: 'تقرير', excel: 'ملف إكسل وتحليل بيانات', marketing: 'تسويق', legal: 'قضية أو عقد', other: 'أخرى' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <label class="consent"><input type="checkbox" name="internal"><span><b>مشروع داخلي لمحاكي</b> (بيع خدماتنا، ومنشوراتنا، وحساباتنا): كل تواصل أو منشور مسودة لا يخرج إلا باعتماد المشرف.</span></label>
+    <div class="field"><label>عمولة <span class="muted small">(اختياري، مثل: 10% من أول دفعة لكل جهة تشترك)</span></label><input name="commission"></div>
+    <div class="field"><label>النوع</label><select name="kind">${Object.entries({ sales: 'التواصل مع الجهات لبيع خدماتنا', social: 'محتوى إعلاني وإدارة حساباتنا', customers: 'التواصل مع عملاء', ux: 'اختبار تجربة مستخدم', report: 'تقرير', excel: 'ملف إكسل وتحليل بيانات', marketing: 'تسويق', legal: 'قضية أو عقد', other: 'أخرى' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
     <div class="field"><label>المطلوب</label><textarea name="description" rows="3" required></textarea></div>
     <div class="field"><label>المخرَج المتوقع</label><textarea name="deliverable" rows="2"></textarea></div>
     <div class="field"><label>رابط العمل <span class="muted small">(يظهر للمكلَّفين فقط)</span></label><input name="link" dir="ltr"></div>
@@ -1734,4 +1745,30 @@ function newGigForm() {
     <div class="field"><label>بريد مراجع من الجهة <span class="muted small">(اختياري: يراجع ويعتمد بنفسه)</span></label><input name="reviewerEmail" type="email" dir="ltr"></div>
     <div class="actions"><button class="btn primary" type="submit">نشر الفرصة</button></div>
   </form></section>`;
+}
+
+// ——— مصطلحات بيئة العمل (FYA وFYI…) ———
+
+let jgCache = null;
+/** يضع شرحًا عند المرور على كل مصطلح عمل في النص (النص مُهرَّب مسبقًا). */
+export function jg(session, html) {
+  const terms = session.world.library?.glossary ?? [];
+  if (!terms.length) return html;
+  if (!jgCache || jgCache.terms !== terms) {
+    const map = new Map(terms.map((t) => [t.term.toLowerCase(), t]));
+    const alt = terms.map((t) => t.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((a, b) => b.length - a.length).join('|');
+    jgCache = { terms, map, re: new RegExp(`(?<![A-Za-z0-9])(${alt})(?![A-Za-z0-9])`, 'gi') };
+  }
+  return html.replace(jgCache.re, (m) => {
+    const t = jgCache.map.get(m.toLowerCase());
+    // الاختصارات بالأحرف الكبيرة فقط، والكلمات (sync, deck…) بأي حالة
+    if (!t || (t.term === t.term.toUpperCase() && m !== t.term)) return m;
+    return `<abbr class="jg" title="${esc(`${t.full}: ${t.ar}`)}">${m}</abbr>`;
+  });
+}
+
+function mailTags(item, sim) {
+  if (item.status !== 'open') return '';
+  const asap = item.priority === 'critical' || item.dueDay <= sim.day;
+  return `<abbr class="tag fya" title="For Your Action: مطلوب منك إجراء">FYA</abbr>${asap ? '<abbr class="tag asap" title="As Soon As Possible: عاجل">ASAP</abbr>' : ''}`;
 }

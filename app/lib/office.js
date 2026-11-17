@@ -78,7 +78,7 @@ function moveTo(id, [x, y], ms = 1600) {
   return new Promise((r) => setTimeout(r, ms));
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const near = ([x, y], dx = 38) => [x + dx, y - 8];
+const near = ([x, y], dx = 56) => [x + dx, y - 4];
 
 function say(text) {
   caption = text;
@@ -86,13 +86,23 @@ function say(text) {
   if (el) el.textContent = text;
 }
 
-async function trip(id, target, { hold = 1400, label } = {}) {
+function carry(id, glyph) {
+  const el = node(id);
+  if (!el) return;
+  el.querySelector('.carry')?.remove();
+  if (glyph) el.insertAdjacentHTML('beforeend', `<text class="carry" x="16" y="-14" text-anchor="middle">${glyph}</text>`);
+}
+
+async function trip(id, target, { hold = 1400, label, glyph, back = null } = {}) {
   if (!SEATS[id] || busy.has(id)) return;
   busy.add(id);
   if (label) say(label);
+  carry(id, glyph);
   await moveTo(id, target);
   await wait(hold);
+  carry(id, back);
   await moveTo(id, SEATS[id]);
+  carry(id, null);
   busy.delete(id);
 }
 
@@ -141,26 +151,58 @@ export async function play(scene, session) {
   say('');
 }
 
-/** حركة عفوية: زميل يذهب إلى المطبخ أو المستودع أو يزور زميلًا. */
+/**
+ * مهام روتينية مبررة: كل حركة لها سبب من حالة الشركة الآن (تقرير يومي، تذاكر متراكمة،
+ * عميل في خطر، عمل على خارطة الطريق، تكليف أسندته…). قد تتكرر، لكنها لا تكون عشوائية أبدًا.
+ */
+export function routines(session) {
+  const sim = session.sim;
+  const c = sim.state.company;
+  const n = (id) => session.person(id).name.replace(/^(م\.|أ\.)\s*/, '').split(' ')[0];
+  const fmt = (x) => Math.round(x).toLocaleString('en');
+  const day = sim.day;
+  const list = [];
+  const add = (id, to, label, glyph, back = null, weight = 1) => { if (SEATS[id] && (SEATS[to] || Array.isArray(to))) list.push({ id, to, label, glyph, back, weight }); };
+  add('analyst', 'cpo', `${n('analyst')} يسلّم ${n('cpo')} تقرير الأرقام اليومي (FYI): الإيراد ${fmt(sim.history.at(-1).mrr)} ر.س.`, '📄');
+  if (c.supportBacklog > 22) add('cs_lead', 'eng_lead', `${n('cs_lead')} تصعّد لـ${n('eng_lead')} ${fmt(c.supportBacklog)} تذكرة مفتوحة (ASAP).`, '🎫', null, 2);
+  const risk = c.accounts.filter((a) => a.status === 'active' && a.health < 40)[0];
+  if (risk) add('cs_lead', 'cpo', `${n('cs_lead')} تبلغ ${n('cpo')}: ${risk.name} في خطر (رضا ${Math.round(risk.health)}).`, '⚠️', null, 2);
+  const active = c.roadmap.active;
+  if (active) {
+    add('eng_lead', SPOTS.store[0], `${n('eng_lead')} يجلب جهاز اختبار لـ«${active.title}» (${Math.round((active.progress / active.effort) * 100)}%، WIP).`, '💻', '💻');
+    add('dev2', 'eng_lead', `${n('dev2')} تراجع كود «${active.title}» مع ${n('eng_lead')}.`, '💬');
+    add('ux', 'eng_lead', `${n('ux')} تسلّم ${n('eng_lead')} تصاميم «${active.title}».`, '🎨');
+  } else {
+    add('eng_lead', 'cpo', `${n('eng_lead')} يسأل ${n('cpo')}: ما أولوية السبرنت؟ الفريق ينتظر قرارًا (blocker).`, '❓', null, 2);
+  }
+  add('sales_head', 'marketing_lead', `${n('sales_head')} ينسق مع ${n('marketing_lead')} حملة الشهر (sync).`, '📣');
+  add('marketing_lead', 'cfo', `${n('marketing_lead')} تعرض على ${n('cfo')} ميزانية التسويق: ${fmt(c.marketing.monthlyBudget)} ر.س.`, '📊');
+  add('cfo', 'ceo', `${n('cfo')} تراجع التدفق النقدي مع ${n('ceo')}: النقد ${fmt(c.cash)} ر.س.`, '💰');
+  add('cfo', SPOTS.store[2], `${n('cfo')} تجلب ملفات العقود من الأرشيف لمراجعة التجديدات.`, '🗂️', '🗂️');
+  if (c.team.morale < 60) add('ceo', 'eng_lead', `${n('ceo')} يمر على فريق التطوير: المعنويات ${Math.round(c.team.morale)}/100.`, '🤝', null, 2);
+  if (day <= 5) add('mentor', 'me', `${n('mentor')} تمر عليك: هل تحتاج شيئًا في أسبوعك الأول؟`, '☕', null, 2);
+  else add('mentor', 'ux', `${n('mentor')} تراجع مع ${n('ux')} نتائج مقابلات العملاء.`, '📝');
+  const pending = sim.items.find((i) => i.status === 'delegated');
+  if (pending && SEATS.junior && day >= 6) add('junior', 'analyst', `${n('junior')} يعمل على تكليفك «${pending.title}»: يجمع البيانات من ${n('analyst')}.`, '📋', '📋', 3);
+  const open = sim.inbox()[0];
+  if (open && SEATS[open.from] && open.from !== 'cpo') add(open.from, 'cpo', `متابعة (follow-up) بين ${n(open.from)} و${n('cpo')} بشأن «${open.title}»: البند ما زال بانتظار ردك.`, '📌');
+  return list;
+}
+
 function ambient(session) {
   clearTimeout(ambientTimer);
   const tick = async () => {
     if (!host || !document.body.contains(host)) { host = null; return; }
     if (!document.hidden) {
-      const ids = people(session).filter((id) => id !== 'me' && !busy.has(id));
-      const id = ids[Math.floor(Math.random() * ids.length)];
-      const r = Math.random();
-      const nm = session.person(id).name.replace(/^(م\.|أ\.)\s*/, '').split(' ')[0];
-      if (r < 0.45) trip(id, SPOTS.kitchen[Math.floor(Math.random() * 3)], { hold: 2500, label: `${nm} في المطبخ.` }).then(() => say(''));
-      else if (r < 0.7) trip(id, SPOTS.store[Math.floor(Math.random() * 3)], { hold: 2000, label: `${nm} يزور المستودع.` }).then(() => say(''));
-      else {
-        const other = ids.filter((x) => x !== id)[Math.floor(Math.random() * (ids.length - 1))];
-        if (other) trip(id, near(SEATS[other]), { hold: 2200, label: `${nm} يناقش شيئًا مع ${session.person(other).name.split(' ')[0]}.` }).then(() => say(''));
-      }
+      const options = routines(session).filter((r) => !busy.has(r.id) && (Array.isArray(r.to) || !busy.has(r.to)));
+      const total = options.reduce((x, r) => x + r.weight, 0);
+      let pick = Math.random() * total;
+      const r = options.find((o) => (pick -= o.weight) <= 0);
+      if (r) trip(r.id, Array.isArray(r.to) ? r.to : near(SEATS[r.to]), { hold: 2400, label: r.label, glyph: r.glyph, back: r.back }).then(() => say(''));
     }
-    ambientTimer = setTimeout(tick, 5000 + Math.random() * 5000);
+    ambientTimer = setTimeout(tick, 6000 + Math.random() * 4000);
   };
-  ambientTimer = setTimeout(tick, 2500);
+  ambientTimer = setTimeout(tick, 2000);
 }
 
 /** يرسم المكتب في الحاوية ويشغّل المشهد المعلّق إن وُجد. */

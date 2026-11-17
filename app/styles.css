@@ -346,6 +346,13 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .gig .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .card-lite { margin-top: 12px; }
 .review-item + .review-item { margin-top: 12px; }
+abbr.jg { text-decoration: underline dotted var(--teal); text-underline-offset: 3px; cursor: help; font-weight: 700; }
+abbr.tag { display: inline-block; font: 700 10.5px var(--num, system-ui); letter-spacing: .4px; padding: 1px 6px; border-radius: 6px; margin-inline-end: 6px; vertical-align: 2px; text-decoration: none; cursor: help; }
+abbr.tag.fya { background: #fff4d6; color: #8a6200; }
+abbr.tag.asap { background: #fde2e2; color: #b42318; }
+abbr.tag.fyi { background: #e0f8fa; color: #00808a; }
+.internal-rules ul { margin: 6px 0 0; padding-inline-start: 18px; }
+.internal-rules li { margin: 3px 0; }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }
@@ -516,3 +523,5 @@ tr:last-child td { border-bottom: 0; }
 }
 .office .ppl-i { font-size: 16px; }
 .office .ppl-i.me-i { font-size: 13px; }
+.office .carry { font-size: 16px; pointer-events: none; }
+.office.mini .carry { font-size: 22px; }
