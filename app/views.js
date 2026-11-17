@@ -525,6 +525,7 @@ export function report(session, ui = {}) {
     </div>
   </section>
   ${pointsCard(session, r)}
+  ${challengeCard(session, session.user, ui)}
   ${collabCard(ui.collab)}
   <div class="grid g-2" style="margin-top:16px">
     <section class="card"><h2>المهارات</h2>
@@ -1173,4 +1174,86 @@ export function peerModerationPage(state) {
       ${r.hidden && r.hiddenReason ? `<p class="small muted">سبب الإخفاء: ${esc(r.hiddenReason)}</p>` : ''}
       <div class="actions">${r.hidden ? `<button class="btn" data-act="peer-moderate" data-id="${esc(r.id)}" data-hide="0">إظهار</button>` : `<button class="btn ghost" data-act="peer-moderate" data-id="${esc(r.id)}" data-hide="1">إخفاء</button>`}</div>
     </article>`).join('') : '<div class="empty"><b>لا توجد مراجعات أقران بعد</b></div>';
+}
+
+// ——— تحداني على نفس الشركة ———
+
+export const challengeUrl = (code) => `${location.origin}/c/${code}`;
+
+function shareText(c) {
+  return c.owner.finished
+    ? `أنهيت شهري مديرًا للمنتجات في ${c.company} بـ${c.owner.points} نقطة من 1000. نفس الشركة ونفس الأحداث بالضبط، تقدر تتفوق علي؟`
+    : `${c.owner.points} نقطة بعد ${c.owner.days} أيام عمل كمدير منتجات في ${c.company}. جرّب نفس الشركة بنفس الأحداث، تقدر تتفوق علي؟`;
+}
+
+function shareButtons(c) {
+  const url = challengeUrl(c.code);
+  const text = shareText(c);
+  const enc = encodeURIComponent;
+  return `<div class="share-row">
+    <button class="btn primary" data-act="share-challenge" data-code="${esc(c.code)}">مشاركة</button>
+    <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(`${text}\n${url}`)}">واتساب</a>
+    <a class="btn" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${enc(text)}&url=${enc(url)}">X</a>
+    <a class="btn" target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=${enc(url)}">لينكدإن</a>
+    <button class="btn ghost" data-act="copy-challenge" data-code="${esc(c.code)}">نسخ الرابط</button>
+  </div>
+  <p class="small muted" dir="ltr" style="text-align:right;margin:6px 0 0">${esc(url)}</p>`;
+}
+
+function boardTable(c) {
+  return `<table class="board"><thead><tr><th>#</th><th>المتدرب</th><th>النقاط</th><th>الأيام</th></tr></thead><tbody>
+    ${c.board.map((b, i) => `<tr class="${b.you ? 'you' : ''}"><td class="num">${i + 1}</td><td>${esc(b.name)}${b.owner ? ' <span class="pill t-pill">صاحب التحدي</span>' : ''}${b.you ? ' <span class="pill s-done">أنت</span>' : ''}</td>
+      <td class="num"><b>${b.points}</b></td><td class="num">${b.finished ? '✓ 30' : `${b.days} من ${c.lengthDays}`}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+/** بطاقة في "تطورك المهني": إنشاء رابط تحدٍّ ومشاركته، أو موقفك في التحدي الذي انضممت إليه. */
+export function challengeCard(session, user, ui = {}) {
+  if (session.challenge) {
+    const c = ui.joinedChallenge;
+    if (!c) return '';
+    const me = c.board.find((b) => b.you);
+    const owner = c.owner;
+    const ahead = me && me.points > owner.points;
+    return `<section class="card challenge-card" style="margin-top:16px">
+      <h2>تحدي ${esc(owner.name)}</h2>
+      <p style="margin-top:0">${me ? `أنت <b class="num">${me.points}</b> مقابل <b class="num">${owner.points}</b> لـ${esc(owner.name)}. ${ahead ? 'أنت في الصدارة الآن 👏' : 'ما زالت أمامك فرصة.'}` : 'سجّل الدخول ليظهر اسمك في لوحة التحدي.'}</p>
+      <a class="btn" href="#/challenge/${esc(c.code)}">لوحة التحدي (${c.participants + 1} متدربين)</a></section>`;
+  }
+  if (!session.log.some((a) => a.t === 'endDay')) return '';
+  const c = ui.myChallenge;
+  return `<section class="card challenge-card" style="margin-top:16px">
+    <h2>تحدَّ أصدقاءك على نفس الشركة</h2>
+    <p class="small" style="margin-top:0">رابط يفتح لصديقك <b>العالم نفسه بالضبط</b>: نفس الشركة ونفس الأحداث ونفس البداية. ثم تظهر نتائجكم جنبًا إلى جنب. لا يظهر إلا اسمك الأول ونقاطك.</p>
+    ${!user ? '<button class="btn primary" data-act="open-auth" data-mode="register">أنشئ حسابًا لتحصل على رابط تحدٍّ</button>'
+      : c ? `${shareButtons(c)}<div class="actions" style="margin-top:8px"><a class="btn ghost" href="#/challenge/${esc(c.code)}">اللوحة (${c.participants} انضموا)</a><button class="btn ghost" data-act="revoke-challenge" data-code="${esc(c.code)}">إلغاء الرابط</button></div>`
+      : '<button class="btn primary" data-act="create-challenge">أنشئ رابط التحدي</button>'}
+  </section>`;
+}
+
+/** صفحة التحدي العامة: تعمل دون حساب ودون جلسة. */
+export function challengePage(state, { session, user } = {}) {
+  const frame = (inner) => `<div class="verify-wrap"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}
+    <p class="disclaimer verify-note">NOVA TECH شركة افتراضية. محاكي بيئة تدريب ومحاكاة لوظائف حقيقية في السوق السعودي.</p></div>`;
+  if (state.loading) return frame('<section class="card"><div class="empty">جارٍ التحميل…</div></section>');
+  if (state.error) return frame(`<section class="card"><div class="empty"><b>لا يوجد تحدٍّ بهذا الرابط</b>${esc(state.error)}</div><div class="actions"><a class="btn primary" href="#/desk">ابدأ شهرك الخاص</a></div></section>`);
+  const c = state.challenge;
+  const inThis = session?.challenge === c.code || (c.mine && session?.seed === c.seed);
+  const hasOther = session && !inThis && session.log.length > 0;
+  const action = inThis
+    ? '<a class="btn primary" href="#/desk">أكمل شهرك في التحدي</a>'
+    : `<button class="btn primary" data-act="accept-challenge" data-code="${esc(c.code)}">اقبل التحدي وابدأ</button>
+       ${hasOther ? `<p class="small" style="color:var(--red,#c0392b)">سيبدأ شهر جديد ويحلّ محل تقدمك الحالي (اليوم ${session.sim.day}). سجلاتك الموثّقة الصادرة لا تتأثر.</p>` : ''}`;
+  return frame(`
+  <section class="card challenge-hero">
+    <div class="muted small">تحدٍّ في محاكي</div>
+    <h1>تحدٍّ من ${esc(c.owner.name)}: <span class="num">${c.owner.points}</span> نقطة ${c.owner.finished ? 'بعد شهر كامل' : `بعد ${c.owner.days} أيام عمل`}</h1>
+    <p>شهر كامل في دور <b>${esc(c.role)}</b> في <b>${esc(c.company)}</b>، شركة SaaS سعودية افتراضية: قرارات لها عواقب، واجتماعات مع زملاء يعترضون، ومستندات تُقيَّم. <b>ستلعب العالم نفسه بالضبط</b>، فالمقارنة عادلة.</p>
+    <div class="actions">${action}</div>
+    ${!user && !inThis ? '<p class="small muted">تبدأ اليوم الأول ضيفًا دون تسجيل. لتظهر في اللوحة، أنشئ حسابًا بعده.</p>' : ''}
+    ${user && !inThis ? '<p class="small muted">بانضمامك يظهر اسمك الأول ونقاطك في لوحة هذا التحدي فقط.</p>' : ''}
+  </section>
+  <section class="card" style="margin-top:14px"><h2>اللوحة</h2>${boardTable(c)}
+    ${c.participants === 0 ? '<p class="small muted">لم ينضم أحد بعد. كن الأول.</p>' : ''}
+    ${c.mine ? shareButtons(c) : ''}</section>`);
 }

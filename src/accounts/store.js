@@ -13,6 +13,8 @@ export class FileStore {
     this.tokens = this._read('tokens.json', {});
     // المجتمع: تصحيحات المُيسِّر، والجلسات الحية ونتائجها، ومراجعات الأقران
     this.community = { reviews: {}, sessions: {}, liveResults: {}, peer: {}, ...this._read('community.json', {}) };
+    // العرض: روابط التحدي وملفات الأعمال العامة
+    this.showcase = { challenges: {}, portfolios: {}, ...this._read('showcase.json', {}) };
   }
 
   _read(name, fallback) {
@@ -32,6 +34,7 @@ export class FileStore {
   saveRecords() { this._write('records.json', this.records); }
   saveTokens() { this._write('tokens.json', this.tokens); }
   saveCommunity() { this._write('community.json', this.community); }
+  saveShowcase() { this._write('showcase.json', this.showcase); }
   /** كل ملفات التقدم: [userId, progress] */
   allProgress() {
     return readdirSync(join(this.dir, 'progress')).filter((f) => f.endsWith('.json'))

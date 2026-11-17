@@ -9,6 +9,7 @@ import { FileStore } from './accounts/store.js';
 import { outboxMailer, smtpMailer } from './accounts/mailer.js';
 import { createMeter } from './agents/meter.js';
 import { createCommunityApi } from './community/api.js';
+import { createShowcaseApi } from './showcase/api.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -38,6 +39,7 @@ export function createMohakiServer({
   world = loadWorld(root),
   accountsApi = createAccountsApi({ store, world, mailer: lazy(mailer) }),
   communityApi = createCommunityApi({ store, world, accountsApi }),
+  showcaseApi = createShowcaseApi({ store, world, accountsApi }),
   agentApi = createAgentApi({
     root,
     meter: createMeter({ dir: join(dataDir, 'usage') }),
@@ -48,7 +50,8 @@ export function createMohakiServer({
   }),
 }) {
   return createServer(async (req, res) => {
-    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res))) return;
+    if (req.url.startsWith('/c/') && await showcaseApi(req, res)) return;
+    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res))) return;
     if (req.url.startsWith('/api/')) { res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end('{"error":"غير موجود"}'); }
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (path === '/') { res.writeHead(302, { Location: '/app/' }); return res.end(); }

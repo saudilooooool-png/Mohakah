@@ -16,6 +16,25 @@ let session = null;
 let user = null;
 const saver = debouncedSaver();
 let verifyState = { loading: true };
+let challengeState = { loading: true };
+
+async function loadChallenge() {
+  challengeState = { loading: true };
+  render();
+  try { challengeState = { challenge: await account.challenge(parseRoute().itemId) }; } catch (err) { challengeState = { error: err.message }; }
+  render();
+}
+
+/** تحدياتي في صفحة التقرير: رابطي إن وُجد، وموقفي في التحدي الذي انضممت إليه. */
+async function loadChallengesForReport() {
+  if (!session) return;
+  if (session.challenge) {
+    ui.joinedChallenge = await account.challenge(session.challenge).catch(() => null);
+  } else if (user) {
+    ui.myChallenge = await account.myChallenge();
+  }
+  render();
+}
 let confirmState = { loading: true };
 let resetState = {};
 let facState = { filter: 'pending', list: [], selected: null, calibration: null, loading: true, error: '' };
@@ -116,7 +135,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -126,6 +145,11 @@ function render() {
   if (route.page === 'verify') {
     app.innerHTML = V.verifyPage(verifyState);
     document.title = verifyState.record?.name ? `سجل ${verifyState.record.name} — محاكي` : 'التحقق من سجل — محاكي';
+    return;
+  }
+  if (route.page === 'challenge') {
+    app.innerHTML = V.challengePage(challengeState, { session, user });
+    document.title = challengeState.challenge ? `تحدٍّ من ${challengeState.challenge.owner.name} — محاكي` : 'تحدٍّ — محاكي';
     return;
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
@@ -237,6 +261,42 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  async 'create-challenge'() {
+    try {
+      // لا بد أن يكون آخر تقدم على الخادم قبل حساب نقاط صاحب التحدي
+      await account.saveProgress(session.saveData());
+      ui.myChallenge = await account.challengeCreate();
+      toast('رابط التحدي جاهز. شاركه مع أصدقائك.', 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+    render();
+  },
+  async 'share-challenge'(e) {
+    const code = e.target.closest('[data-code]').dataset.code;
+    const url = V.challengeUrl(code);
+    if (navigator.share) { try { await navigator.share({ title: 'تحداني في محاكي', url }); return; } catch { /* أُلغي */ } }
+    actions['copy-challenge'](e);
+  },
+  async 'copy-challenge'(e) {
+    const url = V.challengeUrl(e.target.closest('[data-code]').dataset.code);
+    try { await navigator.clipboard.writeText(url); toast('نُسخ الرابط.', 'good'); } catch { prompt('انسخ الرابط:', url); }
+  },
+  async 'revoke-challenge'(e) {
+    if (!confirm('إلغاء رابط التحدي؟ سيتوقف الرابط عن العمل لكل من لديه.')) return;
+    try { await account.challengeRevoke(e.target.closest('[data-code]').dataset.code); ui.myChallenge = null; toast('أُلغي الرابط.', 'good'); } catch (err) { toast(err.message, 'bad'); }
+    render();
+  },
+  'accept-challenge'(e) {
+    const c = challengeState.challenge;
+    if (session && session.log.length && session.challenge !== c.code && !confirm(`سيبدأ شهر جديد بعالم ${c.owner.name} ويحلّ محل تقدمك الحالي (اليوم ${session.sim.day}). متابعة؟`)) return;
+    Session.clear();
+    drafts = {}; saveDrafts();
+    for (const k of Object.keys(meetings)) delete meetings[k];
+    saveMeetings();
+    session = attach(Session.start(world, c.seed, { challenge: c.code }));
+    if (user) saver.save(session.saveData());
+    toast(`بدأ التحدي. نفس عالم ${c.owner.name} بالضبط. بالتوفيق!`, 'good');
+    location.hash = '#/desk';
+  },
   'peer-tab'(e) { peerState.tab = e.target.closest('[data-tab]').dataset.tab; peerState.error = ''; render(); },
   async 'peer-helpful'(e) {
     const el = e.target.closest('[data-id]');
@@ -612,7 +672,8 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'facilitator') { loadFacilitator(); return; }
   if (parseRoute().page === 'live') { loadLive(); return; }
   if (parseRoute().page === 'peer') { loadPeer(); return; }
-  if (parseRoute().page === 'report') loadCollab();
+  if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
+  if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
@@ -627,11 +688,11 @@ window.addEventListener('hashchange', () => {
     refreshAgents();
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
+    if (parseRoute().page === 'challenge') loadChallenge();
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
     if (parseRoute().page === 'facilitator') loadFacilitator();
     if (parseRoute().page === 'live') loadLive();
     if (parseRoute().page === 'peer') loadPeer();
-    if (parseRoute().page === 'report') loadCollab();
     await loadLiveResults();
     if (user) {
       const remote = await account.progress().catch(() => null);
@@ -644,6 +705,7 @@ window.addEventListener('hashchange', () => {
       session = attach(Session.resume(world));
     }
     render();
+    if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="boot"><div><b>تعذر فتح نظام الشركة</b><p class="muted">${esc(err.message)}</p><p class="muted small">شغّل الواجهة عبر خادم محلي: <code>npm start</code></p></div></div>`;

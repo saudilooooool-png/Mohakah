@@ -38,6 +38,8 @@ export class Session {
     this.threads = save.threads ?? {};
     // تصحيحات المُيسِّر من الخادم: تُطبَّق فوق الأفعال عند إعادة البناء
     this.reviews = save.reviews ?? {};
+    // رمز التحدي الذي انضم إليه المتدرب (نفس البذرة)، إن وُجد
+    this.challenge = save.challenge ?? null;
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -60,10 +62,10 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
 
-  static start(world, seed = Math.floor(Math.random() * 1e6) + 1) {
-    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [] });
+  static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null } = {}) {
+    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge });
     s._persist();
     return s;
   }
