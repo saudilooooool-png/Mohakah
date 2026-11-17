@@ -7,6 +7,8 @@
 // - السجل ليس "شهادة خبرة" ولا "شهادة خدمة" (المادة 64 من نظام العمل يصدرها صاحب العمل)،
 //   ولا "شهادة تدريب معتمدة" قبل ترخيص البرنامج.
 import { collaborationSummary, forgetUser } from '../community/collab.js';
+
+import { realWorkSummary } from '../work/summary.js';
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { replay } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
@@ -305,6 +307,11 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         delete store.showcase.portfolios?.[u.id];
         store.saveShowcase?.();
       }
+      // مكتبة الأعمال الواقعية: تُحذف طلباته وتسليماته
+      if (store.work) {
+        for (const [k, a] of Object.entries(store.work.apps ?? {})) if (a.userId === u.id) delete store.work.apps[k];
+        store.saveWork?.();
+      }
       // المحادثات مع الزميل الحقيقي: تُحذف رسائله، ويخرج من الفرق وقائمة الانتظار
       if (store.teams) {
         for (const p of Object.values(store.teams.pairs ?? {})) if (p.members.includes(u.id)) { p.messages = p.messages.filter((m) => m.from !== u.id); p.endsAt = clock(); }
@@ -362,7 +369,13 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       const reviews = store.community.reviews[u.id] ?? {};
       const logHash = sha256(JSON.stringify({ seed: p.seed, log: p.log, reviews: Object.keys(reviews).length ? reviews : undefined }));
       const existing = Object.values(store.records).find((r) => r.userId === u.id && r.logHash === logHash && !r.revoked);
-      if (existing) return existing;
+      if (existing) {
+        // نفس الأفعال = نفس النقاط، لكن الأدلة المنفصلة (التعاون والأعمال الواقعية) قد تتحدث
+        existing.collaboration = collaborationSummary(store.community, u.id);
+        existing.realWork = realWorkSummary(store, u.id);
+        store.saveRecords();
+        return existing;
+      }
       const report = sim.report();
       const points = computePoints(report, { finished: true });
       let code;
@@ -385,6 +398,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         occupation: report.occupation && { code: report.occupation.code, titleAr: report.occupation.titleAr, status: report.occupation.status, match: report.occupation.match },
         evidence: { decisions: report.evidence.decisions.length, deliverables: report.evidence.deliverables.length, shipped: report.evidence.shipped.map((s) => s.title) },
         collaboration: collaborationSummary(store.community, u.id),
+        realWork: realWorkSummary(store, u.id),
         logHash,
         verifiedBy: 'server-replay',
       };

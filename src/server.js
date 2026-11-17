@@ -12,6 +12,7 @@ import { createCommunityApi } from './community/api.js';
 import { createShowcaseApi } from './showcase/api.js';
 import { createLeadsApi } from './leads/api.js';
 import { createTeamsApi } from './teams/api.js';
+import { createWorkApi } from './work/api.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -44,6 +45,7 @@ export function createMohakiServer({
   showcaseApi = createShowcaseApi({ store, world, accountsApi }),
   leadsApi = createLeadsApi({ store, mailer: lazy(mailer) }),
   teamsApi = createTeamsApi({ store, world, accountsApi }),
+  workApi = createWorkApi({ store, world, accountsApi }),
   agentApi = createAgentApi({
     root,
     meter: createMeter({ dir: join(dataDir, 'usage') }),
@@ -55,7 +57,7 @@ export function createMohakiServer({
 }) {
   return createServer(async (req, res) => {
     if (/^\/[cp]\//.test(req.url) && await showcaseApi(req, res)) return;
-    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res) || await leadsApi(req, res) || await teamsApi(req, res))) return;
+    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res) || await leadsApi(req, res) || await teamsApi(req, res) || await workApi(req, res))) return;
     if (req.url.startsWith('/api/')) { res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end('{"error":"غير موجود"}'); }
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (path === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }

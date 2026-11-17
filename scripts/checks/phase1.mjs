@@ -1,0 +1,47 @@
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const O = 'http://localhost:4173/app/';
+const SH = process.env.SHOTS || '/tmp';
+const errs = [];
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(O);
+await p.getByRole('button', { name: 'جرّب يومك الأول كضيف' }).click();
+await p.waitForSelector('.guide');
+await p.screenshot({ path: `${SH}/p1-desk.png` });
+// الجولة
+await p.evaluate(async () => (await import('./lib/tour.js')).startTour());
+await p.waitForSelector('.tour-card');
+await p.screenshot({ path: `${SH}/p1-tour-1.png` });
+for (let k = 0; k < 3; k++) await p.click('.tour-card [data-t="next"]');
+await p.screenshot({ path: `${SH}/p1-tour-4.png` });
+await p.click('.tour-card [data-t="end"] >> nth=-1');
+if (await p.locator('.tour').count()) errs.push('tour not closed');
+// صندوق اليوم الأول
+await p.goto(`${O}#/inbox`);
+await p.waitForSelector('.inbox-list');
+const titles = await p.locator('.inbox-list .item .tt').allTextContents();
+console.log('day1:', titles.join(' | '));
+await p.locator('.inbox-list .item', { hasText: 'دليل الموظف' }).click();
+await p.waitForSelector('.attach');
+if (!(await p.locator('[data-act="ack-read"]').isDisabled())) errs.push('ack enabled before reading');
+await p.screenshot({ path: `${SH}/p1-handbook-item.png` });
+await p.click('.attach');
+await p.waitForSelector('.doc-body');
+await p.screenshot({ path: `${SH}/p1-library.png`, fullPage: true });
+await p.goBack();
+await p.waitForSelector('[data-act="ack-read"]');
+if (await p.locator('[data-act="ack-read"]').isDisabled()) errs.push('ack still disabled after reading');
+await p.click('[data-act="ack-read"]');
+// محادثة سلمى
+await p.goto(`${O}#/inbox`);
+await p.locator('.inbox-list .item', { hasText: 'سلمى' }).click();
+await p.getByRole('button', { name: 'ابدأ المحادثة' }).click();
+await p.fill('textarea', 'منتجنا Nova Sales لإدارة فرص البيع للمنشآت الصغيرة والمتوسطة، وعندنا نحو 180 عميلًا منهم حسابات استراتيجية أكبرها الأفق.');
+await p.getByRole('button', { name: 'إرسال', exact: true }).click();
+await p.waitForTimeout(1200);
+await p.waitForSelector('textarea');
+await p.screenshot({ path: `${SH}/p1-mentor.png` });
+await b.close();
+console.log(errs.length ? errs.join('\n') : 'ok');

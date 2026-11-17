@@ -1,0 +1,54 @@
+import { createRequire } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { goodRun } from '../lib/runs.js';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const O = 'http://localhost:4173'; const DATA = process.env.MOHAKI_DATA_DIR;
+const SH = process.env.SHOTS || '/tmp';
+const st = Date.now();
+const link = (to) => { for (const f of readdirSync(join(DATA, 'outbox')).sort().reverse()) { const m = JSON.parse(readFileSync(join(DATA, 'outbox', f), 'utf8')); if (m.to === to && m.link?.includes('confirm-email')) return m.link; } };
+async function acct(name, email) {
+  let cookie = '';
+  const call = async (m, p, b) => { const r = await fetch(O + p, { method: m, headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) }, body: b ? JSON.stringify(b) : undefined }); const s = r.headers.get('set-cookie'); if (s) cookie = s.split(';')[0]; return r.json().catch(() => ({})); };
+  const r = await call('POST', '/api/auth/register', { name, email, password: 'secret-123', consents: { processing: true } });
+  if (r.error) await call('POST', '/api/auth/login', { email, password: 'secret-123' }); // الحساب موجود من فحص سابق
+  else await call('POST', '/api/auth/verify', { token: link(email).split('/').pop() });
+  call.cookie = () => cookie.split('=')[1];
+  return call;
+}
+const errs = [];
+const b = await chromium.launch();
+const pageFor = async (c, vp = { width: 1280, height: 900 }) => { const ctx = await b.newContext({ viewport: vp }); await ctx.addCookies([{ name: 'mohaki_session', value: c.cookie(), url: O }]); const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); return p; };
+const fac = await acct('هيا المُيسِّرة', 'fac@example.com');
+const t = await acct('سارة العتيبي', `t${st}@x.sa`);
+await t('PUT', '/api/progress', goodRun(9, { stopDay: 11 }));
+const pf = await pageFor(fac);
+await pf.goto(`${O}/app/#/work`);
+await pf.waitForSelector('[data-tab="new"]').catch(() => errs.push('facilitator has no new tab (needs session?)'));
+await pf.screenshot({ path: `${SH}/p5-fac.png` });
+// المُيسِّر بلا جلسة محاكاة: ينشر عبر الواجهة البرمجية إن لم تظهر الواجهة
+await fac('POST', '/api/work', { title: 'اختبار تجربة الاستخدام لموقع حجز', org: 'جهة شريكة تجريبية', kind: 'ux', description: 'اختبر رحلة الحجز على الجوال واكتب أهم 5 مشكلات مرتبة بالأولوية.', deliverable: 'تقرير قصير مع لقطات.', link: 'https://example.org', amount: 300, points: 80, slots: 3, minDays: 10 });
+await fac('POST', '/api/work', { title: 'تنظيف ملف عملاء وتحليله في إكسل', org: 'جمعية تجريبية', kind: 'excel', description: 'ملف فيه 2,000 سجل متبرع: نظّفه واستخرج 5 مؤشرات.', points: 60, slots: 2, minDays: 20 });
+const pt = await pageFor(t);
+await pt.goto(`${O}/app/#/work`);
+await pt.waitForSelector('.gig');
+await pt.screenshot({ path: `${SH}/p5-gigs.png`, fullPage: true });
+await pt.locator('.gig', { hasText: 'تجربة الاستخدام' }).click();
+await pt.waitForSelector('form[data-form="work-apply"]');
+await pt.fill('#w-note', 'أكملت 11 يوم عمل كمدير منتجات في المحاكاة.');
+await pt.getByRole('button', { name: 'تقدّم للفرصة' }).click();
+await pt.waitForSelector('.outcome.info');
+const app = (await t('GET', '/api/work')).data?.gigs ?? (await t('GET', '/api/work')).gigs;
+const appId = app.find((g) => g.mine).mine.id;
+await fac('POST', `/api/work/apps/${appId}/decide`, { action: 'accept' });
+await pt.reload(); await pt.waitForSelector('form[data-form="work-submit"]');
+await pt.fill('#w-text', 'وجدت 5 مشكلات مرتبة بالأولوية: 1) زر الدفع مخفي على الجوال 2) حقل التاريخ لا يقبل الهجري 3) ...');
+await pt.getByRole('button', { name: 'تسليم العمل' }).click();
+await pt.waitForTimeout(800);
+await fac('POST', `/api/work/apps/${appId}/decide`, { action: 'approve', rating: 5, feedback: 'تقرير واضح ومفيد.' });
+await pt.reload(); await pt.waitForSelector('.outcome.good');
+await pt.screenshot({ path: `${SH}/p5-approved.png`, fullPage: true });
+await pt.goto(`${O}/app/#/report`); await pt.waitForTimeout(1200);
+if (!(await pt.content()).includes('أعمال واقعية موثّقة')) errs.push('report card missing');
+await b.close();
+console.log(errs.length ? errs.join('\n') : 'ok');

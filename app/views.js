@@ -20,6 +20,7 @@ export const NAV = [
   { id: 'files', label: 'ملفات الشركة', sub: 'بيانات وتقارير ومستندات', icon: 'files' },
   { id: 'library', label: 'المكتبة', sub: 'أدلة وسياسات ودراسات', icon: 'book' },
   { id: 'company', label: 'نتائج الشركة', sub: 'الأداء والنمو والمؤشرات', icon: 'chart' },
+  { id: 'work', label: 'أعمال واقعية', sub: 'فرص حقيقية تُفتح بتقدمك', icon: 'briefcase' },
   { id: 'feed', label: 'سجل الشركة', sub: 'ما الذي حدث ولماذا', icon: 'feed' },
   { id: 'report', label: 'تطورك المهني', sub: 'متابعة مستمرة', icon: 'growth' },
 ];
@@ -45,6 +46,7 @@ export function shell(session, route, content) {
           ${badges[n.id] ? `<span class="badge">${badges[n.id]}</span>` : ''}
         </a>`).join('')}
       </nav>
+      ${route.page !== 'desk' ? '<div class="office-mini-wrap" aria-label="المكتب"><div id="office-mini" class="office mini"></div><a href="#/desk" class="office-mini-open">المكتب ↗</a></div>' : ''}
       <div class="side-foot">
         <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
         <div>${esc(sim.scenario.role)}</div>
@@ -66,7 +68,6 @@ export function shell(session, route, content) {
           ? '<a class="btn teal" href="#/report">السجل المهني</a>'
           : `<button class="btn primary" type="button" data-act="end-day">${icon('clock').replace('<svg', '<svg width="16" height="16"')}<span>إنهاء يوم العمل</span></button>`}
       </header>
-      ${route.page !== 'desk' ? '<div class="office-mini-wrap" aria-label="المكتب"><div id="office-mini" class="office mini"></div><a href="#/desk" class="office-mini-open">المكتب ↗</a></div>' : ''}
       <main class="content" id="content">${session.user && !session.user.emailVerified ? `<div class="verify-banner">
         <span>أرسلنا رابط تأكيد إلى <b dir="ltr">${esc(session.user.email)}</b>. أكّد بريدك لتتمكن من إصدار سجلك الموثّق ومشاركته مع جهات التوظيف.</span>
         <button class="btn sm" data-act="resend-verification">إعادة الإرسال</button></div>` : ''}${content}</main>
@@ -580,6 +581,7 @@ export function report(session, ui = {}) {
     </div>
   </section>
   ${pointsCard(session, r)}
+  ${realWorkCard(ui.realWork)}
   ${challengeCard(session, session.user, ui)}
   ${session.user ? portfolioCard() : ''}
   ${collabCard(ui.collab)}
@@ -964,6 +966,7 @@ export function verifyPage(state) {
       <div><div class="points"><span class="num">${r.points}</span><small> / 1000</small></div><span class="pill s-done">${esc(r.band.label)}</span></div>
       <div class="breakdown">${r.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.score}%</span>${bar(b.score)}</div>`).join('')}</div>
     </div>
+    ${r.realWork?.count ? `<p class="small"><b>أعمال واقعية معتمدة</b> (منفصلة عن نقاط المحاكاة): ${r.realWork.items.map((x) => `${esc(x.title)} لدى ${esc(x.org)} (تقييم <span class="num">${x.rating}</span> من 5)`).join('، ')} · <span class="num">${r.realWork.points}</span> نقطة إنجاز واقعي.</p>` : ''}
     ${r.collaboration && (r.collaboration.rolesPlayed || r.collaboration.reviewsGiven) ? `<p class="small"><b>التعاون ودعم الزملاء</b> (منفصل عن النقاط): لعب <span class="num">${r.collaboration.rolesPlayed}</span> دورًا في جلسات زملائه${r.collaboration.avgRoleRating ? ` بتقييم <span class="num">${r.collaboration.avgRoleRating}</span> من 5` : ''} · راجع <span class="num">${r.collaboration.reviewsGiven}</span> مستندًا، وجد أصحابها <span class="num">${r.collaboration.reviewsHelpful}</span> منها مفيدة.</p>` : ''}
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
     <p class="small muted">تاريخ الإصدار: ${d(r.issuedAt)} · احتُسبت النتيجة بإعادة تشغيل كل القرارات على خادم محاكي · بصمة سجل الأفعال: <span class="num" style="word-break:break-all">${esc(r.logHash.slice(0, 16))}…</span></p>
@@ -1419,6 +1422,8 @@ export function portfolioPage(state) {
     </div>
     ${p.shipped.length ? `<p class="small"><b>ما أُطلق خلال الشهر:</b> ${p.shipped.map((s) => esc(s.title)).join('، ')}</p>` : ''}
   </section>
+  ${p.realWork?.count ? `<section class="card"><h2>أعمال واقعية معتمدة</h2><p class="small muted" style="margin-top:0">أعمال حقيقية لجهات حقيقية، راجعها واعتمدها مراجع من الجهة أو مُيسِّر.</p>
+    ${p.realWork.items.map((x) => `<article class="pf-item"><h3>${esc(x.title)}</h3><p class="small">${esc(x.org)} · تقييم المراجع <b class="num">${x.rating}</b> من 5</p></article>`).join('')}</section>` : ''}
   <section class="card"><h2>المهارات</h2><div class="grid" style="gap:12px">${p.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score}%</span>${bar(s.score)}</div>`).join('')}</div></section>
   ${p.decisions.length ? `<section class="card"><h2>قرارات مختارة</h2>${p.decisions.map((x) => `<article class="pf-item"><div class="small muted">اليوم ${x.day}${x.dialogue ? ` · حوار أجاب فيه ${x.addressed} من ${x.concerns} اعتراضات` : ''}</div><h3>${esc(x.title)}</h3><p><b>القرار:</b> ${esc(x.choice)}</p>${x.rationale ? `<p class="pf-quote">«${esc(x.rationale)}»</p>` : ''}</article>`).join('')}</section>` : ''}
   ${p.quotes.length ? `<section class="card"><h2>من الاجتماعات</h2>${p.quotes.map((x) => `<blockquote class="pf-quote">«${esc(x.text)}»<footer class="small muted">${esc(x.title)} · اليوم ${x.day}</footer></blockquote>`).join('')}</section>` : ''}
@@ -1621,4 +1626,112 @@ export function leaguePage(l) {
     </div>
     ${l.myTeam ? `<section class="card"><h2>فريقك</h2><ul class="feed">${l.myTeam.members.map((m) => `<li><span class="dot"></span><b>${esc(m.name)}</b>${m.you ? ' (أنت)' : ''} · ${m.joined ? `يوم ${m.day}` : '<span class="muted">لم يبدأ بعد</span>'}</li>`).join('')}</ul></section>` : ''}
   </div>`;
+}
+
+// ——— مكتبة الأعمال الواقعية ———
+
+const WORK_STATUS = { pending: 'بانتظار القبول', assigned: 'مكلَّف: ابدأ العمل', submitted: 'سُلِّم: بانتظار المراجعة', approved: 'معتمد', revise: 'مطلوب تعديل', rejected: 'لم يُقبل', withdrawn: 'منسحب' };
+const WORK_PILL = { pending: 't-pill', assigned: 'p-high', submitted: 'p-normal', approved: 's-done', revise: 'p-critical', rejected: 's-expired', withdrawn: 's-expired' };
+const KIND_ICON = { customers: '📞', ux: '🧭', report: '📝', excel: '📊', marketing: '📣', legal: '⚖️', other: '💼' };
+
+function realWorkCard(s) {
+  if (!s?.count) return '';
+  return `<section class="card" style="margin-top:16px"><h2>أعمال واقعية موثّقة</h2>
+    <p class="small muted" style="margin-top:0">أعمال حقيقية لجهات حقيقية، اعتمدها مراجع. تظهر في سجلك الموثّق وملف أعمالك، منفصلة عن نقاط المحاكاة.</p>
+    <div class="pf-stats small-stats"><div><b class="num">${s.count}</b><span>أعمال معتمدة</span></div><div><b class="num">${s.points}</b><span>نقاط إنجاز واقعي</span></div></div>
+    <ul class="feed" style="margin-top:10px">${s.items.map((x) => `<li><span class="dot"></span>${esc(x.title)} · ${esc(x.org)} · ${x.rating} من 5</li>`).join('')}</ul></section>`;
+}
+
+export function workPage(state, gigId) {
+  if (state.loading) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  if (state.error) return `<section class="card"><div class="empty"><b>تعذر التحميل</b>${esc(state.error)}</div></section>`;
+  const d = state.data;
+  const tab = state.tab ?? 'gigs';
+  const t = (id, label) => `<button class="${tab === id ? 'on' : ''}" data-act="work-tab" data-tab="${id}">${label}</button>`;
+  const head = `<div class="page-h"><div><h1>أعمال واقعية</h1><p>فرص عمل حقيقية من جهات حقيقية، مدفوعة أو تطوعية: تواصل مع عملاء، واختبار تجربة مستخدم، وتقارير وملفات إكسل، وتسويق، وقضايا وعقود. تُفتح بتقدمك في المحاكاة، ويعتمدها مراجع، وتُضاف إلى سجلك الموثّق.</p></div></div>
+    <section class="card readiness"><b>جاهزيتك:</b> أكملت <span class="num">${d.readiness.days}</span> يوم عمل · <span class="num">${d.readiness.points}</span> نقطة · أعمال معتمدة <span class="num">${d.summary.count}</span> (${d.summary.points} نقطة إنجاز واقعي)</section>`;
+  const tabs = `<div class="tabs fac-tabs" style="margin:14px 0">${t('gigs', 'الفرص')}${t('mine', 'أعمالي')}${d.reviewer ? t('review', 'المراجعة') : ''}${d.facilitator ? t('new', 'فرصة جديدة') : ''}</div>`;
+  const gig = gigId && d.gigs.find((g) => g.id === gigId);
+  if (gig) return `${head}${tabs}${gigDetail(gig)}`;
+  let body = '';
+  if (tab === 'gigs') {
+    const open = d.gigs.filter((g) => g.status === 'open');
+    body = open.length ? `<div class="grid g-2">${open.map(gigCard).join('')}</div>` : '<section class="card"><div class="empty"><b>لا توجد فرص مفتوحة الآن</b>تُضاف الفرص من الجهات الشريكة تباعًا. أكمل أيام عملك في المحاكاة لتكون جاهزًا حين تُفتح.</div></section>';
+  } else if (tab === 'mine') {
+    const mine = d.gigs.filter((g) => g.mine);
+    body = mine.length ? `<div class="grid g-2">${mine.map(gigCard).join('')}</div>` : '<section class="card"><div class="empty"><b>لم تتقدم لأي فرصة بعد</b></div></section>';
+  } else if (tab === 'review') {
+    body = reviewList(state.review ?? []);
+  } else if (tab === 'new') {
+    body = newGigForm();
+  }
+  return `${head}${tabs}${body}`;
+}
+
+function gigCard(g) {
+  return `<a class="card gig ${g.locked ? 'locked' : ''}" href="#/work/${esc(g.id)}">
+    <div class="gig-h"><span class="gig-k">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : '<span class="pill t-pill">تطوعية</span>'}</div>
+    <h3>${esc(g.title)}</h3><p class="small muted">${esc(g.org)}</p>
+    <div class="meta"><span class="pill t-pill">حتى ${g.points} نقطة</span><span class="pill t-pill">${g.left} من ${g.slots} مقاعد</span>${g.deadline ? `<span class="pill t-pill">حتى ${esc(new Date(g.deadline).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' }))}</span>` : ''}</div>
+    ${g.mine ? `<p style="margin:8px 0 0"><span class="pill ${WORK_PILL[g.mine.status]}">${WORK_STATUS[g.mine.status]}</span></p>` : g.locked ? `<p class="small" style="margin:8px 0 0">🔒 ${esc(g.locked)}</p>` : ''}
+  </a>`;
+}
+
+function gigDetail(g) {
+  const m = g.mine;
+  let action = '';
+  if (!m && g.locked) action = `<div class="outcome info">🔒 ${esc(g.locked)}</div>`;
+  else if (!m && !g.left) action = '<div class="outcome info">اكتملت المقاعد.</div>';
+  else if (!m) action = `<form data-form="work-apply" data-id="${esc(g.id)}" class="card-lite"><div class="field"><label for="w-note">لماذا أنت مناسب؟ <span class="muted small">(اختياري)</span></label><textarea id="w-note" name="note" rows="2" maxlength="800"></textarea></div>
+      <div class="actions"><button class="btn primary" type="submit">تقدّم للفرصة</button></div></form>`;
+  else {
+    action = `<div class="outcome ${m.status === 'approved' ? 'good' : m.status === 'revise' || m.status === 'rejected' ? 'bad' : 'info'}"><b>${WORK_STATUS[m.status]}</b>
+      ${m.feedback ? `<p class="small"><b>ملاحظة المراجع:</b> ${esc(m.feedback)}</p>` : ''}
+      ${m.status === 'approved' ? `<p class="small">التقييم ${m.rating} من 5 · ${m.earned} نقطة إنجاز واقعي${m.payout ? ` · الدفع: ${m.payout === 'paid' ? 'تم' : 'مستحق'}` : ''}</p>` : ''}</div>
+      ${['assigned', 'revise'].includes(m.status) ? `<form data-form="work-submit" data-app="${esc(m.id)}" class="card-lite">
+        <div class="field"><label for="w-text">ما أنجزته</label><textarea id="w-text" name="text" rows="5" maxlength="8000" placeholder="ملخص العمل والنتائج.">${esc(m.submission?.text ?? '')}</textarea></div>
+        <div class="field"><label for="w-link">رابط العمل <span class="muted small">(مستند أو ملف مشترك)</span></label><input id="w-link" name="link" dir="ltr" value="${esc(m.submission?.link ?? '')}"></div>
+        <div class="actions"><button class="btn primary" type="submit">تسليم العمل</button><button class="btn ghost" type="button" data-act="work-withdraw" data-app="${esc(m.id)}">انسحاب</button></div></form>` : ''}
+      ${m.status === 'pending' ? `<div class="actions"><button class="btn ghost" data-act="work-withdraw" data-app="${esc(m.id)}">سحب الطلب</button></div>` : ''}`;
+  }
+  return `<section class="card detail"><a class="back-link" href="#/work">→ كل الفرص</a>
+    <div class="chips"><span class="pill t-pill">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : '<span class="pill t-pill">تطوعية</span>'}<span class="pill t-pill">حتى ${g.points} نقطة</span></div>
+    <h1>${esc(g.title)}</h1><p class="muted">${esc(g.org)}</p>
+    <h3 class="section-t">المطلوب</h3><p class="body">${esc(g.description)}</p>
+    ${g.deliverable ? `<h3 class="section-t">المخرَج المتوقع</h3><p>${esc(g.deliverable)}</p>` : ''}
+    ${g.link ? `<p><a href="${esc(g.link)}" target="_blank" rel="noopener">رابط العمل ↗</a></p>` : ''}
+    ${g.paid ? '<p class="small muted">الأجر اتفاق بين الجهة والمتدرب ويُصرف خارج المنصة وفق الأنظمة (مثل وثيقة العمل الحر). المنصة تسجّل الحالة فقط.</p>' : ''}
+    ${g.kind === 'legal' ? '<p class="small muted">الأعمال القانونية تحت إشراف مختص من الجهة، ولا تُعد استشارة قانونية.</p>' : ''}
+    ${action}</section>`;
+}
+
+function reviewList(apps) {
+  if (!apps.length) return '<section class="card"><div class="empty"><b>لا توجد طلبات للمراجعة</b></div></section>';
+  return apps.map((a) => `<section class="card review-item">
+    <div class="office-h"><h3 style="margin:0">${esc(a.gig.title)} <span class="small muted">· ${esc(a.gig.org)}</span></h3><span class="pill ${WORK_PILL[a.status]}">${WORK_STATUS[a.status]}</span></div>
+    <p class="small">المتدرب: <b>${esc(a.trainee.name)}</b> · أكمل ${a.trainee.days} يوم عمل · ${a.trainee.points} نقطة${a.note ? ` · «${esc(a.note)}»` : ''}</p>
+    ${a.submission ? `<div class="peer-doc">${esc(a.submission.text)}${a.submission.link ? `\n\n${esc(a.submission.link)}` : ''}</div>` : ''}
+    ${a.status === 'pending' ? `<div class="actions"><button class="btn primary" data-act="work-decide" data-app="${esc(a.id)}" data-action="accept">قبول وتكليف</button><button class="btn ghost" data-act="work-decide" data-app="${esc(a.id)}" data-action="reject">اعتذار</button></div>` : ''}
+    ${a.status === 'submitted' ? `<form data-form="work-review" data-app="${esc(a.id)}"><div class="field"><label>التقييم</label><span class="seg">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="rating" value="${n}"><span>${n}</span></label>`).join('')}</span></div>
+      <div class="field"><label>ملاحظة للمتدرب</label><textarea name="feedback" rows="2"></textarea></div>
+      <div class="actions"><button class="btn primary" name="action" value="approve" type="submit">اعتماد</button><button class="btn" name="action" value="revise" type="submit">طلب تعديل</button><button class="btn ghost" name="action" value="reject" type="submit">رفض</button></div></form>` : ''}
+    ${a.status === 'approved' && a.payout === 'due' ? `<div class="actions"><button class="btn" data-act="work-decide" data-app="${esc(a.id)}" data-action="paid">تأكيد صرف الأجر</button></div>` : ''}
+  </section>`).join('');
+}
+
+function newGigForm() {
+  return `<section class="card"><h2>فرصة جديدة من جهة شريكة</h2>
+  <form data-form="work-new" class="grid" style="gap:10px">
+    <div class="field"><label>العنوان</label><input name="title" required placeholder="مثال: اختبار تجربة الاستخدام لموقع حجز"></div>
+    <div class="field"><label>الجهة</label><input name="org" required></div>
+    <div class="field"><label>النوع</label><select name="kind">${Object.entries({ customers: 'التواصل مع عملاء', ux: 'اختبار تجربة مستخدم', report: 'تقرير', excel: 'ملف إكسل وتحليل بيانات', marketing: 'تسويق', legal: 'قضية أو عقد', other: 'أخرى' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div class="field"><label>المطلوب</label><textarea name="description" rows="3" required></textarea></div>
+    <div class="field"><label>المخرَج المتوقع</label><textarea name="deliverable" rows="2"></textarea></div>
+    <div class="field"><label>رابط العمل <span class="muted small">(يظهر للمكلَّفين فقط)</span></label><input name="link" dir="ltr"></div>
+    <div class="round-row"><input name="amount" type="number" min="0" placeholder="الأجر (ر.س) أو 0"><input name="points" type="number" min="10" max="200" value="50" title="النقاط"><input name="slots" type="number" min="1" max="50" value="1" title="المقاعد"></div>
+    <div class="round-row"><input name="minDays" type="number" min="0" max="30" value="10" title="يُفتح بعد أيام"><input name="minPoints" type="number" min="0" max="1000" value="0" title="الحد الأدنى من النقاط"><input name="deadline" type="date" dir="ltr" title="الموعد"></div>
+    <span class="small muted">الأجر · النقاط · المقاعد — ثم: يُفتح بعد كم يوم عمل · الحد الأدنى من النقاط · الموعد</span>
+    <div class="field"><label>بريد مراجع من الجهة <span class="muted small">(اختياري: يراجع ويعتمد بنفسه)</span></label><input name="reviewerEmail" type="email" dir="ltr"></div>
+    <div class="actions"><button class="btn primary" type="submit">نشر الفرصة</button></div>
+  </form></section>`;
 }

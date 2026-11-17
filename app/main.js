@@ -22,6 +22,26 @@ let pfState = { loading: true };        // المحرر
 let pairState = { pair: null };
 let pairPoll = null;
 let leaguesState = { loading: true };
+let workState = { loading: true, tab: 'gigs' };
+
+async function loadWork() {
+  if (!user) { workState = { error: 'سجّل الدخول لتصل إلى الأعمال الواقعية.' }; render(); return; }
+  const tab = workState.tab ?? 'gigs';
+  if (!workState.data) { workState = { loading: true, tab }; render(); }
+  try {
+    if (session) await account.saveProgress(session.saveData()).catch(() => {});
+    const data = await account.work();
+    const review = data.reviewer ? await account.workReview().catch(() => []) : [];
+    workState = { data, review, tab };
+  } catch (err) { workState = { error: err.message, tab }; }
+  render();
+}
+
+async function loadRealWork() {
+  if (!user) { ui.realWork = null; return; }
+  ui.realWork = await account.workSummary();
+  render();
+}
 let leagueState = { league: null };
 
 async function loadPairs() {
@@ -226,6 +246,7 @@ function parseRoute() {
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
   const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league'];
+  // "أعمال واقعية" في القائمة الرئيسية (NAV)
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -249,6 +270,10 @@ function render() {
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
   if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
+  if (route.page === 'work' && user && !session) {
+    app.innerHTML = `<div class="content" style="margin:0 auto">${V.workPage(workState, route.itemId)}</div>`;
+    return;
+  }
   if (['leagues', 'league'].includes(route.page) && user && !session) {
     app.innerHTML = `<div class="content" style="margin:0 auto">${route.page === 'leagues' ? V.leaguesPage(user, leaguesState) : V.leaguePage(leagueState.league)}</div>`;
     return;
@@ -295,6 +320,7 @@ function render() {
     case 'pair': body = V.pairChat(pairState.pair); break;
     case 'leagues': body = user ? V.leaguesPage(user, leaguesState) : '<section class="card"><div class="empty"><b>سجّل الدخول للدوري</b></div></section>'; break;
     case 'league': body = V.leaguePage(leagueState.league); break;
+    case 'work': body = V.workPage(workState, route.itemId); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -425,6 +451,17 @@ const actions = {
     render();
   },
   async tour() { (await import('./lib/tour.js')).startTour(); },
+  'work-tab'(e) { workState.tab = e.target.closest('[data-tab]').dataset.tab; location.hash = '#/work'; render(); },
+  async 'work-withdraw'(e) {
+    if (!confirm('الانسحاب من هذه الفرصة؟')) return;
+    try { await account.workWithdraw(e.target.closest('[data-app]').dataset.app); toast('تم الانسحاب.', 'good'); } catch (err) { toast(err.message, 'bad'); }
+    loadWork();
+  },
+  async 'work-decide'(e) {
+    const el = e.target.closest('[data-app]');
+    try { await account.workDecide(el.dataset.app, { action: el.dataset.action }); toast('تم.', 'good'); } catch (err) { toast(err.message, 'bad'); }
+    loadWork();
+  },
   async 'pair-request'() {
     try { const r = await account.pairRequest(); toast(r.pair ? `زميلك الجديد: ${r.pair.partner}` : 'نبحث لك عن زميل. سنقرنك بأول متدرب يطلب زميلًا.', 'good'); } catch (err) { toast(err.message, 'bad'); }
     loadPairs();
@@ -744,6 +781,29 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'work-apply') {
+    account.workApply(form.dataset.id, String(new FormData(form).get('note') || ''))
+      .then(() => { toast('وصل طلبك. سيراجعه المسؤول عن الفرصة.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'work-submit') {
+    const f = new FormData(form);
+    account.workSubmit(form.dataset.app, { text: f.get('text'), link: f.get('link') })
+      .then(() => { toast('سُلِّم العمل. يصلك التقييم بعد المراجعة.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'work-review') {
+    const f = new FormData(form);
+    const action = e.submitter?.value || 'approve';
+    account.workDecide(form.dataset.app, { action, rating: Number(f.get('rating')), feedback: f.get('feedback') })
+      .then(() => { toast('تم حفظ المراجعة.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'work-new') {
+    const f = Object.fromEntries(new FormData(form).entries());
+    account.workCreate(f).then(() => { toast('نُشرت الفرصة.', 'good'); workState.tab = 'gigs'; loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'pair-say') {
     const text = String(new FormData(form).get('text') || '').trim();
     if (!text) return;
@@ -933,11 +993,12 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'facilitator') { loadFacilitator(); return; }
   if (parseRoute().page === 'live') { loadLive(); return; }
   if (parseRoute().page === 'peer') { loadPeer(); return; }
-  if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
+  if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); loadRealWork(); }
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
   if (parseRoute().page === 'video') { loadVideo(); return; }
   if (parseRoute().page === 'pair') { loadPair(); return; }
+  if (parseRoute().page === 'work') { loadWork(); return; }
   if (['leagues', 'league'].includes(parseRoute().page)) { loadLeagues(); return; }
   if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   stopPreview?.(); stopPreview = null;
@@ -973,10 +1034,11 @@ window.addEventListener('hashchange', () => {
       session = attach(Session.resume(world));
     }
     render();
-    if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
+    if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); loadRealWork(); }
     if (parseRoute().page === 'portfolio' && !parseRoute().itemId) loadPortfolio();
     if (parseRoute().page === 'video') loadVideo();
     if (parseRoute().page === 'pair') loadPair();
+    if (parseRoute().page === 'work') loadWork();
     if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();
     if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   } catch (err) {

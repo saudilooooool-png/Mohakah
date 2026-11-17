@@ -7,6 +7,7 @@ import { replay } from '../replay.js';
 import { computePoints } from '../points.js';
 import { Simulation } from '../engine/simulation.js';
 import { HttpError } from '../accounts/api.js';
+import { realWorkSummary } from '../work/summary.js';
 
 const str = (v, n = 200) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const now = () => new Date().toISOString();
@@ -214,6 +215,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
       deliverables: by('deliverables'), decisions: by('decisions'), quotes: by('quotes'),
       record: record ? { code: record.code, points: record.points } : null,
       challenge: challenge?.code ?? null,
+      realWork: realWorkSummary(store, userId),
       updatedAt: pf.updatedAt,
       verifiedBy: 'server-replay',
     };
