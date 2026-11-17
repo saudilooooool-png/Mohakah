@@ -17,6 +17,7 @@ export function applyAction(sim, a, reviews = null) {
   if (a.t === 'deliver') return sim.submitDeliverable(a.itemId, a.text);
   if (a.t === 'endDay') return sim.endDay();
   if (a.t === 'insight') return sim.reportInsight(a.id);
+  if (a.t === 'delegate') return sim.delegate(a.itemId, a.brief);
   throw new Error(`فعل غير معروف: ${a.t}`);
 }
 

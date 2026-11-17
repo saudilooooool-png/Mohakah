@@ -115,3 +115,25 @@ test('كل الآثار والأحداث في السيناريو صالحة', ()
     }
   }
 });
+
+test('الزميل المنفّذ: التكليف الواضح يعود بنتيجة جيدة، والعام يعود ناقصًا، ولا يمكن الإسناد قبل انضمامه', () => {
+  const at = (day, seed = 2) => { const s = newSim(seed); while (s.day < day) s.endDay(); return s; };
+  const clear = at(8);
+  const item = clear.inbox().find((i) => i.eventId === 'd8_interviews');
+  assert.ok(item.delegable);
+  const r = clear.delegate(item.id, 'يا ريان، رتّب مع ريم 5 مقابلات مع عملاء ألغوا اشتراكهم، والهدف معرفة سبب الإلغاء، وأرسل لي ملخصًا قبل الخميس.');
+  assert.equal(r.good, true);
+  assert.equal(item.status, 'delegated');
+  assert.throws(() => clear.respond(item.id, 'run', {}), 'البند المُسند لا يُرد عليه مرة أخرى');
+  while (clear.day <= r.returnDay) clear.endDay();
+  assert.equal(item.status, 'done');
+  assert.ok(clear.feed.some((f) => f.text.includes('أنهيا 5 مقابلات')));
+
+  const vague = at(8);
+  const v = vague.delegate(vague.inbox().find((i) => i.eventId === 'd8_interviews').id, 'شوف موضوع المقابلات لو سمحت');
+  assert.equal(v.good, false);
+  while (vague.day <= v.returnDay) vague.endDay();
+  assert.ok(vague.feed.some((f) => f.text.includes('مقابلتين فقط')));
+  const people = (s) => s.report().skills.find((x) => x.id === 'people').score;
+  assert.ok(people(clear) > people(vague), 'وضوح التكليف يُحتسب في إدارة الأشخاص');
+});

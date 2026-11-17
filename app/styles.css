@@ -310,6 +310,25 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .feed-list li.good::marker { color: #1fa065; }
 .feed-list li.bad::marker { color: #d64545; }
 .memo li { margin: 6px 0; }
+.delegate { border: 1.5px dashed var(--teal); border-radius: 12px; padding: 10px 14px; margin: 0 0 14px; background: #f5fdfe; }
+.delegate summary { cursor: pointer; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.delegate form { margin-top: 10px; }
+.s-delegated { background: #e0f8fa; color: #00808a; }
+.office-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.office-svg { width: 100%; height: auto; display: block; }
+.office .room-l { font-size: 15px; fill: #8a96ad; font-weight: 600; font-family: var(--font); }
+.office .ppl { cursor: pointer; transition: transform 1.6s ease-in-out; }
+.office .ppl.me { cursor: default; }
+.office .ppl:focus { outline: none; }
+.office .ppl:focus circle, .office .ppl:hover circle { stroke: var(--teal); }
+.office .ppl-i { fill: #fff; font-size: 14px; font-weight: 700; font-family: var(--font); pointer-events: none; }
+.office .ppl-n { fill: #33415c; font-size: 13px; font-weight: 600; font-family: var(--font); pointer-events: none; }
+.office-cap { min-height: 24px; text-align: center; color: var(--teal-ink, #00808a); font-weight: 600; font-size: 14px; margin-top: 6px; }
+.office-mini-wrap { position: fixed; bottom: 18px; left: 18px; width: 280px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(11,31,68,.16); padding: 6px 6px 4px; z-index: 30; }
+.office.mini .ppl-n, .office.mini .room-l { display: none; }
+.office.mini .office-cap { font-size: 12px; min-height: 18px; margin-top: 2px; }
+.office-mini-open { position: absolute; top: 6px; right: 10px; font-size: 12px; text-decoration: none; background: rgba(255,255,255,.9); padding: 2px 8px; border-radius: 8px; }
+@media (max-width: 1100px) { .office-mini-wrap { display: none; } }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }
@@ -478,3 +497,6 @@ tr:last-child td { border-bottom: 0; }
   .content { padding: 0; max-width: none; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+@media (min-width: 1101px) { body:has(.office-mini-wrap) #toast-root { left: 316px; } }
+.office .ppl-i { font-size: 16px; }
+.office .ppl-i.me-i { font-size: 13px; }

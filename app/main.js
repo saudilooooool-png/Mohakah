@@ -1,4 +1,5 @@
 // المتحكم: يربط الشاشات بالجلسة، ويدير التنقل والأحداث والمسودات والنوافذ.
+import * as Office from './lib/office.js';
 import { Session, loadWorld } from './lib/session.js';
 import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
@@ -254,6 +255,9 @@ function render() {
   const keepScroll = route.page === 'inbox' ? window.scrollY : 0;
   app.innerHTML = V.shell(session, route, body);
   if (route.page === 'video' && videoState.data && !videoState.recording) startPreview();
+  // المكتب الحي: بطاقة كبيرة في "مكتبي"، ونافذة صغيرة في بقية الصفحات
+  const officeEl = app.querySelector('#office') || app.querySelector('#office-mini');
+  if (officeEl) { Office.mount(officeEl, session, ui.officeScene); ui.officeScene = null; }
   const nav = V.NAV.find((n) => n.id === route.page);
   document.title = `${nav?.label ?? 'مكتبي'} · NOVA TECH — محاكي`;
   window.scrollTo(0, keepScroll);
@@ -359,12 +363,14 @@ const actions = {
     const itemId = e.target.closest('[data-item]').dataset.item;
     const item = session.sim.items.find((i) => i.id === itemId);
     const opt = session.respond(itemId, item.options[0].id, '');
+    ui.officeScene = { kind: 'reply', from: item.from };
     toast(opt.result || 'تم.', 'good');
     location.hash = nextOpenItemHref();
     render();
   },
   'report-insight'(e) {
     const x = session.insight(e.target.closest('[data-id]').dataset.id);
+    ui.officeScene = { kind: 'insight', to: x.to };
     toast(x.result || 'وصلت ملاحظتك.', 'good');
     render();
   },
@@ -603,6 +609,7 @@ async function meetingStep(itemId, message, { closing = false } = {}) {
     delete meetings[itemId]; saveMeetings();
     delete drafts[itemId]; saveDrafts();
     const isChat = item.dialogue.mode === 'chat';
+    ui.officeScene = isChat ? { kind: 'reply', from: item.dialogue.chair } : { kind: 'meeting', people: item.dialogue.participants };
     const good = r.addressed.length >= Math.min(2, item.dialogue.concerns.length);
     toast(`${isChat ? 'انتهت المحادثة' : 'انتهى الاجتماع'}: ${opt.label}`, good ? 'good' : 'bad');
     render();
@@ -661,6 +668,17 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'delegate') {
+    const itemId = form.dataset.item;
+    const brief = String(new FormData(form).get('brief') || '').trim();
+    if (words(brief) < 5) { toast('اكتب تكليفًا واضحًا: الهدف، والمطلوب، والموعد.', 'bad'); return; }
+    const r = session.delegate(itemId, brief);
+    delete drafts[`delegate:${itemId}`]; saveDrafts();
+    ui.officeScene = { kind: 'delegate', to: session.sim.items.find((i) => i.id === itemId).delegable.to };
+    toast(`أُرسل التكليف. يعود يوم ${r.returnDay}.`, 'good');
+    render();
+    return;
+  }
   if (form.dataset.form === 'portfolio') {
     const f = new FormData(form);
     const d = pfState.draft;
@@ -770,6 +788,8 @@ function onSubmit(e) {
       if (!option) { toast('اختر قرارًا أولًا.', 'bad'); return; }
       const result = session.respond(itemId, option, String(data.get('rationale') || '').trim());
       delete drafts[itemId]; saveDrafts();
+      const it = session.sim.items.find((i) => i.id === itemId);
+      ui.officeScene = it.type === 'meeting' ? { kind: 'meeting', people: [it.from, 'mentor', 'ux', 'eng_lead'] } : { kind: 'reply', from: it.from };
       toast(result.result || 'تم اعتماد القرار. ستظهر آثاره في نتائج الشركة.', result.tone === 'bad' ? 'bad' : 'good');
       location.hash = `#/inbox/${encodeURIComponent(itemId)}`;
       render();
@@ -778,6 +798,7 @@ function onSubmit(e) {
       if (words(text) < 15) { toast('المستند قصير جدًا للتسليم.', 'bad'); return; }
       const ev = session.deliver(itemId, text);
       delete drafts[itemId]; saveDrafts();
+      ui.officeScene = { kind: 'deliver' };
       toast(`تم تسليم العمل — الدرجة ${Math.round(ev.score * 100)}%`, ev.score >= 0.6 ? 'good' : 'bad');
       location.hash = `#/inbox/${encodeURIComponent(itemId)}`;
       render();

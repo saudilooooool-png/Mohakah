@@ -66,6 +66,7 @@ export function shell(session, route, content) {
           ? '<a class="btn teal" href="#/report">السجل المهني</a>'
           : `<button class="btn primary" type="button" data-act="end-day">${icon('clock').replace('<svg', '<svg width="16" height="16"')}<span>إنهاء يوم العمل</span></button>`}
       </header>
+      ${route.page !== 'desk' ? '<div class="office-mini-wrap" aria-label="المكتب"><div id="office-mini" class="office mini"></div><a href="#/desk" class="office-mini-open">المكتب ↗</a></div>' : ''}
       <main class="content" id="content">${session.user && !session.user.emailVerified ? `<div class="verify-banner">
         <span>أرسلنا رابط تأكيد إلى <b dir="ltr">${esc(session.user.email)}</b>. أكّد بريدك لتتمكن من إصدار سجلك الموثّق ومشاركته مع جهات التوظيف.</span>
         <button class="btn sm" data-act="resend-verification">إعادة الإرسال</button></div>` : ''}${content}</main>
@@ -152,6 +153,11 @@ export function desk(session) {
   </section>
 
   ${!first && !open.length && !sim.finished ? whatNow(session) : ''}
+
+  <section class="card office-card" style="margin-top:16px">
+    <div class="office-h"><h2>المكتب الآن</h2><span class="small muted">زملاؤك أثناء عملهم. اضغط على أي زميل لمراسلته.</span></div>
+    <div id="office" class="office"></div>
+  </section>
 
   ${first ? `<section class="card guide" style="margin-top:16px">
     <h2>كيف تعمل محاكي</h2>
@@ -321,7 +327,7 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
       <span class="small muted">تُطبَّق على الشركة كما حكم بها المُيسِّر، ولا يمكن تعديلها.</span></div></div>
       ${minutes(session, r.transcript.map((l) => ({ speaker: l.speaker, text: l.text })), { full: true })}`;
   }
-  if (item.status === 'open' && item.dialogue) return `${head}${meetingRoom(session, item, ui)}`;
+  if (item.status === 'open' && item.dialogue) return `${head}${delegateBlock(session, item, drafts)}${meetingRoom(session, item, ui)}`;
 
   // رسالة قراءة: مرفق للاطلاع وتأكيد واحد
   if (item.status === 'open' && item.attachments?.length && item.options.length === 1) {
@@ -353,6 +359,13 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
 function closedOutcome(session, item) {
   const sim = session.sim;
   const act = sim.actions.find((a) => a.itemId === item.id);
+  if (item.status === 'delegated' || act?.delegated) {
+    const who = session.person(item.delegable?.to ?? 'junior');
+    const back = item.status === 'delegated';
+    return `<div class="outcome ${back ? 'info' : act.briefOk ? 'good' : 'bad'}"><h3>${back ? `مُسند إلى ${esc(who.name)}: يعود يوم ${item.resolution.returnDay}` : act.briefOk ? `${esc(who.name)} أنجز التكليف` : `عاد التكليف من ${esc(who.name)} ناقصًا`}</h3>
+      <p class="small"><b>تكليفك:</b> «${esc(act.rationale)}»</p>
+      ${!act.briefOk ? `<p class="small muted">التكليف الواضح يحدد الهدف، والمطلوب بالتحديد، والموعد. ${esc(item.delegable?.criteria ?? '')}</p>` : ''}</div>`;
+  }
   if (item.status === 'expired') {
     return `<div class="outcome bad"><h3>فات الموعد دون تصرف</h3>
       ${item.onExpire?.result ? `<p>${esc(item.onExpire.result)}</p>` : '<p>أُغلق البند دون رد.</p>'}</div>`;
@@ -1508,4 +1521,20 @@ function whatNow(session) {
     <ul>${tips.join('')}</ul>
     <div class="actions"><button class="btn primary" data-act="end-day">إنهاء يوم العمل</button></div>
   </section>`;
+}
+
+// ——— الزميل المنفّذ ———
+
+function delegateBlock(session, item, drafts) {
+  const spec = item.delegable;
+  if (!spec || session.sim.day < (spec.fromDay ?? 1)) return '';
+  const who = session.person(spec.to);
+  const draft = drafts[`delegate:${item.id}`] ?? '';
+  return `<details class="delegate card-lite"><summary>${avatar(who, 'sm')} <b>أو كلّف ${esc(who.name)} بالتنفيذ</b> <span class="small muted">· ينفذ ولا يقرر، ويعود بالنتيجة خلال ${spec.days ?? 2} أيام</span></summary>
+    <form data-form="delegate" data-item="${esc(item.id)}">
+      <div class="field"><label for="brief">نص التكليف</label>
+        <textarea id="brief" name="brief" rows="3" data-draft="delegate:${esc(item.id)}" placeholder="ما الهدف؟ ما المطلوب بالتحديد؟ ما شكل المخرج؟ ومتى تريده؟">${esc(draft)}</textarea>
+        <div class="hint"><span>التكليف الواضح يعود بنتيجة جيدة. والعام يعود ناقصًا.</span><span class="num" data-wc>${words(draft)} كلمة</span></div></div>
+      <div class="actions"><button class="btn teal" type="submit">إرسال التكليف</button></div>
+    </form></details>`;
 }

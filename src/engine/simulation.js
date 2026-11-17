@@ -42,6 +42,7 @@ export class Simulation {
     this.feed = [];           // سجل الشركة: ما الذي حدث ولماذا
     this.actions = [];        // سجل أفعال المتدرب (الأدلة)
     this.reported = new Set(); // الاكتشافات التي أبلغ عنها من المكتبة
+    this.delegations = [];     // بنود أُسندت إلى الزميل المنفّذ وتعود في يوم محدد
     this.history = [];        // لقطة يومية من مؤشرات الشركة
     this._seq = 0;
 
@@ -87,6 +88,34 @@ export class Simulation {
     return option;
   }
 
+  /**
+   * إسناد بند إلى الزميل المنفّذ (لا يتخذ قرارًا، ينفذ فقط). جودة التنفيذ تعتمد على وضوح
+   * التكليف: كلمات دالة على الهدف والمطلوب والموعد في نص التكليف. يُقيَّم فورًا ضمن "إدارة الأشخاص"،
+   * ويظهر أثره على الشركة يوم يعود العمل.
+   */
+  delegate(itemId, brief = '') {
+    const item = this._openItem(itemId);
+    const spec = item.delegable;
+    if (!spec) throw new Error(`${itemId} لا يمكن إسناده`);
+    if (this.day < (spec.fromDay ?? 1)) throw new Error('الزميل المنفّذ لم ينضم بعد');
+    const text = String(brief);
+    const hits = (spec.keywords ?? []).filter((k) => text.includes(k)).length;
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const good = hits >= (spec.minHits ?? 2) && words >= (spec.minWords ?? 12);
+    const opt = item.options.find((o) => o.id === spec.good);
+    const returnDay = this.day + Math.max(1, spec.days ?? 2) - 1;
+    this._recordAction(item, {
+      kind: 'decision', optionId: spec.good, rationale: text, delegated: true, briefOk: good,
+      quality: good ? (opt?.quality ?? 0.85) : 0.35,
+      skills: [...new Set([...(item.skills ?? []), 'people'])],
+    });
+    item.status = 'delegated';
+    item.resolution = { day: this.day, delegatedTo: spec.to, returnDay: returnDay + 1, ok: good };
+    this.delegations.push({ itemId: item.id, day: returnDay, good });
+    if (spec.assigned) this.log(spec.assigned, 'info');
+    return { good, returnDay: returnDay + 1, hits };
+  }
+
   /** الاكتشافات المتاحة الآن: مستند في المكتبة فيه ملاحظة يكافأ من يقرؤها ويبلّغ صاحب الشأن. */
   insights() {
     return (this.scenario.insights ?? []).filter((x) => this.day >= (x.fromDay ?? 1)).map((x) => ({ ...x, reported: this.reported.has(x.id) }));
@@ -129,6 +158,20 @@ export class Simulation {
       this.actions.push({ day: this.day, itemId: item.id, eventId: item.eventId, kind: 'expired', priority: item.priority, onTime: false, category: item.category, skills: item.skills });
       if (item.onExpire?.result) this.log(item.onExpire.result, 'bad');
       applyEffects(this.state, item.onExpire?.effects, { sim: this });
+    }
+    // 1ب) البنود المُسندة إلى الزميل المنفّذ التي يحين موعدها اليوم
+    for (const d of this.delegations.filter((x) => x.day === this.day)) {
+      const item = this.items.find((i) => i.id === d.itemId);
+      const spec = item.delegable;
+      item.status = 'done';
+      if (d.good) {
+        const opt = item.options.find((o) => o.id === spec.good);
+        this.log(spec.doneGood ?? opt?.result ?? `أُنجز: ${item.title}`, 'good');
+        applyEffects(this.state, opt?.effects, { sim: this });
+      } else {
+        this.log(spec.doneWeak?.result ?? `عاد التكليف ناقصًا: ${item.title}`, 'bad');
+        applyEffects(this.state, spec.doneWeak?.effects, { sim: this });
+      }
     }
     // 2) الآثار المؤجلة المستحقة اليوم
     for (const s of this.scheduledEffects.filter((x) => x.day === this.day)) {
@@ -251,6 +294,7 @@ export class Simulation {
       deliverable: def.deliverable ?? null,
       dialogue: def.dialogue ?? null,
       attachments: def.attachments ?? [],
+      delegable: def.delegable ?? null,
       onExpire: def.onExpire ?? null,
       skills: def.skills ?? [],
       status: 'open',

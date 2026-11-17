@@ -21,7 +21,7 @@ export const PRIORITY = {
 export const TYPE = {
   message: 'رسالة', meeting: 'اجتماع', complaint: 'شكوى', task: 'مهمة',
 };
-export const STATUS = { open: 'مفتوح', done: 'منجز', expired: 'فات موعده' };
+export const STATUS = { open: 'مفتوح', done: 'منجز', expired: 'فات موعده', delegated: 'مُسند للتنفيذ' };
 
 export function dueLabel(item, day) {
   if (item.status !== 'open') return '';

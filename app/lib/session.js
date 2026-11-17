@@ -87,6 +87,11 @@ export class Session {
     return this._do({ t: 'endDay' });
   }
 
+  /** إسناد بند إلى الزميل المنفّذ بنص تكليف. */
+  delegate(itemId, brief) {
+    return this._do({ t: 'delegate', itemId, brief });
+  }
+
   /** إبلاغ عن اكتشاف من المكتبة (فعل يُعاد تشغيله على الخادم كأي قرار). */
   insight(id) {
     return this._do({ t: 'insight', id });
