@@ -19,6 +19,49 @@ const saver = debouncedSaver();
 let verifyState = { loading: true };
 let challengeState = { loading: true };
 let pfState = { loading: true };        // المحرر
+let pairState = { pair: null };
+let pairPoll = null;
+let leaguesState = { loading: true };
+let leagueState = { league: null };
+
+async function loadPairs() {
+  if (!user) { ui.pairs = null; return; }
+  ui.pairs = await account.pairsMine().catch(() => ({ pairs: [] }));
+  render();
+  // من ينتظر زميلًا يرى الإقران فور حدوثه
+  if (ui.pairs.waiting) setTimeout(() => { if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs(); }, 5000);
+}
+
+async function loadPair() {
+  clearInterval(pairPoll); pairPoll = null;
+  const id = parseRoute().itemId;
+  if (!user || !id) return;
+  const pick = (d) => d.pairs.find((p) => p.id === id) ?? null;
+  pairState.pair = pick(await account.pairsMine().catch(() => ({ pairs: [] })));
+  render();
+  pairPoll = setInterval(async () => {
+    if (parseRoute().page !== 'pair' || parseRoute().itemId !== id) { clearInterval(pairPoll); return; }
+    const next = pick(await account.pairsMine().catch(() => ({ pairs: [] })));
+    if (next && pairState.pair && next.messages.length !== pairState.pair.messages.length) {
+      pairState.pair = next;
+      const box = app.querySelector('[data-pair-msgs]');
+      if (box) { box.innerHTML = V.pairMessages(next); box.scrollTop = box.scrollHeight; }
+    }
+  }, 3000);
+}
+
+async function loadLeagues() {
+  const id = parseRoute().itemId;
+  if (!user) { render(); return; }
+  if (parseRoute().page === 'leagues') {
+    leaguesState = { loading: true }; render();
+    leaguesState = { leagues: await account.leagues().catch(() => []) };
+  } else if (id) {
+    leagueState = { league: null }; render();
+    try { leagueState = { league: await account.league(id) }; } catch (err) { toast(err.message, 'bad'); }
+  }
+  render();
+}
 let pfPublic = { loading: true };       // الصفحة العامة
 let videoState = { loading: true };
 let stopPreview = null;
@@ -182,7 +225,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -206,6 +249,10 @@ function render() {
   }
   if (route.page === 'confirm-email') { app.innerHTML = V.confirmEmailPage(confirmState); document.title = 'تأكيد البريد — محاكي'; return; }
   if (route.page === 'reset-password') { app.innerHTML = V.resetPasswordPage(resetState); document.title = 'كلمة مرور جديدة — محاكي'; return; }
+  if (['leagues', 'league'].includes(route.page) && user && !session) {
+    app.innerHTML = `<div class="content" style="margin:0 auto">${route.page === 'leagues' ? V.leaguesPage(user, leaguesState) : V.leaguePage(leagueState.league)}</div>`;
+    return;
+  }
   if (route.page === 'peer' && user && !session) {
     app.innerHTML = `<div class="content" style="margin:0 auto">${V.peerPage(user, peerState)}</div>`;
     return;
@@ -233,7 +280,7 @@ function render() {
       body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
     case 'team': body = route.itemId
       ? V.colleagueChat(session, session.person(route.itemId), { ...ui, drafts })
-      : V.team(session); break;
+      : V.team(session, ui); break;
     case 'meetings': body = V.meetings(session); break;
     case 'files': body = V.files(session); break;
     case 'library':
@@ -245,6 +292,9 @@ function render() {
     case 'report': body = V.report(session, ui); break;
     case 'portfolio': body = V.portfolioEditor(pfState); break;
     case 'video': body = V.videoPage(videoState); break;
+    case 'pair': body = V.pairChat(pairState.pair); break;
+    case 'leagues': body = user ? V.leaguesPage(user, leaguesState) : '<section class="card"><div class="empty"><b>سجّل الدخول للدوري</b></div></section>'; break;
+    case 'league': body = V.leaguePage(leagueState.league); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -375,6 +425,32 @@ const actions = {
     render();
   },
   async tour() { (await import('./lib/tour.js')).startTour(); },
+  async 'pair-request'() {
+    try { const r = await account.pairRequest(); toast(r.pair ? `زميلك الجديد: ${r.pair.partner}` : 'نبحث لك عن زميل. سنقرنك بأول متدرب يطلب زميلًا.', 'good'); } catch (err) { toast(err.message, 'bad'); }
+    loadPairs();
+  },
+  async 'pair-cancel'() { await account.pairCancel().catch(() => {}); loadPairs(); },
+  async 'toggle-ai'(e) {
+    try {
+      user = await account.update({ consents: { aiTraining: e.target.checked } });
+      if (session) session.user = user;
+      toast(e.target.checked ? 'شكرًا. تُستخدم محادثاتك (دون اسمك) لتحسين المحاكاة إذا وافق زميلك أيضًا.' : 'سُحبت الموافقة.', 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+    render();
+  },
+  'league-join'(e) {
+    const el = e.target.closest('[data-id]');
+    const seed = Number(el.dataset.seed);
+    if (session && session.log.length && !confirm('سيبدأ شهر الدوري ويحلّ محل تقدمك الحالي. متابعة؟')) return;
+    Session.clear();
+    drafts = {}; saveDrafts();
+    for (const k of Object.keys(meetings)) delete meetings[k];
+    saveMeetings();
+    session = attach(Session.start(world, seed, { league: el.dataset.id }));
+    if (user) saver.save(session.saveData());
+    toast('بدأ شهر الدوري: نفس الشركة والأحداث لكل الفرق. بالتوفيق!', 'good');
+    location.hash = '#/desk';
+  },
   async 'copy-url'(e) {
     const url = e.target.closest('[data-url]').dataset.url;
     try { await navigator.clipboard.writeText(url); toast('نُسخ الرابط.', 'good'); } catch { prompt('انسخ الرابط:', url); }
@@ -668,6 +744,22 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'pair-say') {
+    const text = String(new FormData(form).get('text') || '').trim();
+    if (!text) return;
+    account.pairSay(form.dataset.id, text).then((p) => { pairState.pair = p; render(); app.querySelector('#pair-msg')?.focus(); const box = app.querySelector('[data-pair-msgs]'); if (box) box.scrollTop = box.scrollHeight; })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'league-create') {
+    const f = new FormData(form);
+    const teams = [1, 2, 3, 4].map((i) => ({ name: f.get(`team${i}`), emails: String(f.get(`emails${i}`) || '').split(/[\s,،]+/).filter(Boolean) })).filter((t) => t.emails.length);
+    const rounds = [1, 2, 3].map((i) => ({ title: f.get(`rt${i}`), untilDay: Number(f.get(`rd${i}`)), deadline: f.get(`rx${i}`) || undefined })).filter((r) => r.title && r.untilDay);
+    account.leagueCreate({ name: f.get('name'), teams, rounds })
+      .then((l) => { toast('أُنشئ الدوري.', 'good'); location.hash = `#/league/${l.id}`; })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'delegate') {
     const itemId = form.dataset.item;
     const brief = String(new FormData(form).get('brief') || '').trim();
@@ -845,6 +937,9 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
   if (parseRoute().page === 'video') { loadVideo(); return; }
+  if (parseRoute().page === 'pair') { loadPair(); return; }
+  if (['leagues', 'league'].includes(parseRoute().page)) { loadLeagues(); return; }
+  if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   stopPreview?.(); stopPreview = null;
   if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
@@ -881,6 +976,9 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
     if (parseRoute().page === 'portfolio' && !parseRoute().itemId) loadPortfolio();
     if (parseRoute().page === 'video') loadVideo();
+    if (parseRoute().page === 'pair') loadPair();
+    if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();
+    if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="boot"><div><b>تعذر فتح نظام الشركة</b><p class="muted">${esc(err.message)}</p><p class="muted small">شغّل الواجهة عبر خادم محلي: <code>npm start</code></p></div></div>`;

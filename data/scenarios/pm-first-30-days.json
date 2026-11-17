@@ -5,10 +5,12 @@
  "roleId": "product-manager",
  "manager": "cpo",
  "team": [
+  "mentor",
   "ux",
   "eng_lead",
   "dev2",
-  "analyst"
+  "analyst",
+  "junior"
  ],
  "lengthDays": 30,
  "randomEventChance": 0.3,

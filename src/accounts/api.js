@@ -175,6 +175,8 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       processing: consents.processing === true,
       employerSharing: consents.employerSharing === true,
       peerReview: consents.peerReview === true,
+      // استخدام محادثاتي مع الزميل الحقيقي (دون اسمي) لتحسين نماذج المحاكاة
+      aiTraining: consents.aiTraining === true,
     };
     for (const [k, v] of Object.entries(next)) {
       if (user.consents?.[k] !== v) user.consentHistory.push({ consent: k, value: v, at: clock() });
@@ -303,6 +305,13 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         delete store.showcase.portfolios?.[u.id];
         store.saveShowcase?.();
       }
+      // المحادثات مع الزميل الحقيقي: تُحذف رسائله، ويخرج من الفرق وقائمة الانتظار
+      if (store.teams) {
+        for (const p of Object.values(store.teams.pairs ?? {})) if (p.members.includes(u.id)) { p.messages = p.messages.filter((m) => m.from !== u.id); p.endsAt = clock(); }
+        store.teams.queue = (store.teams.queue ?? []).filter((x) => x !== u.id);
+        for (const l of Object.values(store.teams.leagues ?? {})) for (const tm of l.teams) tm.members = tm.members.filter((m) => m !== u.id);
+        store.saveTeams?.();
+      }
       store.saveUsers(); store.saveSessions(); store.saveRecords();
       res.setHeader?.('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
       return { ok: true };
@@ -323,8 +332,11 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       // الانضمام لتحدٍّ: يُقبل فقط إن كان التحدي قائمًا وبالبذرة نفسها
       const ch = store.showcase?.challenges?.[str(body.challenge, 12)];
       const challenge = ch && !ch.revoked && ch.seed === seed && ch.ownerId !== u.id ? ch.code : undefined;
+      // الانضمام لدوري فرق: عضو في أحد فرقه، وبذرة الدوري نفسها
+      const lg = store.teams?.leagues?.[str(body.league, 64)];
+      const league = lg && lg.seed === seed && lg.teams.some((tm) => tm.members.includes(u.id)) ? lg.id : undefined;
       const before = store.progress(u.id);
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), ...(challenge ? { challenge } : {}) });
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
       maybeDigest(u, before, store.progress(u.id)).catch(() => {});
       return { ok: true };
     },

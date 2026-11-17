@@ -41,6 +41,7 @@ export class Session {
     this.reviews = save.reviews ?? {};
     // رمز التحدي الذي انضم إليه المتدرب (نفس البذرة)، إن وُجد
     this.challenge = save.challenge ?? null;
+    this.league = save.league ?? null;
     this.read = save.read ?? {};
     this.opened = save.opened ?? {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
@@ -65,10 +66,10 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
 
-  static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null } = {}) {
-    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge });
+  static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null, league = null } = {}) {
+    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge, league });
     s._persist();
     return s;
   }

@@ -17,6 +17,8 @@ export class FileStore {
     this.showcase = { challenges: {}, portfolios: {}, ...this._read('showcase.json', {}) };
     // موقع التسويق: طلبات العروض وعدّاد الزيارات
     this.leads = { requests: [], hits: {}, ...this._read('leads.json', {}) };
+    // العمل مع زملاء حقيقيين ودوري الفرق
+    this.teams = { pairs: {}, queue: [], leagues: {}, ...this._read('teams.json', {}) };
   }
 
   _read(name, fallback) {
@@ -38,6 +40,7 @@ export class FileStore {
   saveCommunity() { this._write('community.json', this.community); }
   saveShowcase() { this._write('showcase.json', this.showcase); }
   saveLeads() { this._write('leads.json', this.leads); }
+  saveTeams() { this._write('teams.json', this.teams); }
   /** كل ملفات التقدم: [userId, progress] */
   allProgress() {
     return readdirSync(join(this.dir, 'progress')).filter((f) => f.endsWith('.json'))

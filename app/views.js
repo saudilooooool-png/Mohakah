@@ -49,7 +49,7 @@ export function shell(session, route, content) {
         <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
         <div>${esc(sim.scenario.role)}</div>
         ${session.user
-          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
+          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a> · <a href="#/leagues" class="side-link">الدوري</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
         <div><button type="button" data-act="tour">جولة في المنصة</button> · <button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
@@ -405,10 +405,11 @@ function closedOutcome(session, item) {
 
 // ——— فريقي ———
 
-export function team(session) {
+export function team(session, ui = {}) {
   const sim = session.sim;
   const people = session.world.company.people;
-  const directIds = [sim.scenario.manager, ...sim.scenario.team];
+  // ريان (الزميل المنفّذ) ينضم يوم 6
+  const directIds = [sim.scenario.manager, ...sim.scenario.team].filter((id) => id !== 'junior' || sim.day >= 6);
   const direct = directIds.map((id) => people.find((p) => p.id === id)).filter(Boolean);
   const others = people.filter((p) => !directIds.includes(p.id) && !p.external);
   const card = (p) => {
@@ -424,6 +425,7 @@ export function team(session) {
   };
   return `
   <div class="page-h"><div><h1>فريقي</h1><p>كل شخص في الشركة له أولوياته. الثقة تُبنى بالقرارات وتُفقد بالتجاهل والوعود غير المنفذة. ويمكنك مراسلة أي زميل في أي وقت لتسأله عمّا يعرفه.</p></div></div>
+  ${realPartnerCard(session, ui)}
   <h2 class="section-t">مديرك وفريقك المباشر</h2>
   <div class="grid g-2">${direct.map(card).join('')}</div>
   <h2 class="section-t" style="margin-top:24px">بقية الشركة</h2>
@@ -924,6 +926,7 @@ export function accountPage(session, user) {
       <label class="consent"><input type="checkbox" checked disabled><span><b>معالجة البيانات لأغراض التدريب</b>: مطلوبة لاستخدام المنصة. لسحبها احذف حسابك.</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-sharing" ${user.consents?.employerSharing ? 'checked' : ''}><span><b>مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة</b>: يمكنك تفعيلها أو سحبها في أي وقت، ويُسجَّل تاريخ كل تغيير.</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-digest" ${user.prefs?.dailyDigest ? 'checked' : ''}><span><b>الملخص اليومي على بريدي</b>: بعد كل يوم عمل في المحاكاة تصلك رسالة بأرقام الشركة وما حدث وما ينتظرك (رسالة واحدة في اليوم كحد أقصى).</span></label>
+      <label class="consent"><input type="checkbox" data-act="toggle-ai" ${user.consents?.aiTraining ? 'checked' : ''}><span><b>استخدام محادثاتي مع الزميل الحقيقي لتحسين المحاكاة</b>: دون اسمي، وفقط إذا وافق زميلي أيضًا. يمكنك سحبها في أي وقت.</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-peer" ${user.consents?.peerReview ? 'checked' : ''}><span><b>عرض مستنداتي على متدربين آخرين لمراجعتها دون اسمي</b>: إن سحبتها، لا تُكلَّف مستنداتك لمراجعات جديدة.</span></label>
       <h2 style="margin-top:18px">سجلاتي الموثّقة</h2>
       ${user.records?.length ? `<ul class="feed">${user.records.map((c) => `<li><span class="d"></span><span class="dot"></span><a href="#/verify/${esc(c)}" class="num">${esc(c)}</a></li>`).join('')}</ul>` : '<p class="small muted">لم تُصدر سجلًا بعد. يُصدر بعد إكمال التجربة.</p>'}
@@ -1537,4 +1540,85 @@ function delegateBlock(session, item, drafts) {
         <div class="hint"><span>التكليف الواضح يعود بنتيجة جيدة. والعام يعود ناقصًا.</span><span class="num" data-wc>${words(draft)} كلمة</span></div></div>
       <div class="actions"><button class="btn teal" type="submit">إرسال التكليف</button></div>
     </form></details>`;
+}
+
+// ——— الزميل الحقيقي ———
+
+function realPartnerCard(session, ui) {
+  const user = session.user;
+  const st = ui.pairs;
+  const active = st?.pairs?.find((p) => p.active);
+  let body;
+  if (!user) body = '<p class="small" style="margin:0">سجّل الدخول لتعمل مع متدرب حقيقي.</p><div class="actions"><button class="btn primary" data-act="open-auth" data-mode="register">أنشئ حسابًا</button></div>';
+  else if (!st) body = '<p class="small muted" style="margin:0">جارٍ التحميل…</p>';
+  else if (active) body = `<p style="margin:0">زميلك الآن: <b>${esc(active.partner)}</b> (في يوم العمل ${active.partnerDay}). يستمر العمل المشترك حتى ${esc(new Date(active.endsAt).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' }))}.</p>
+      <div class="actions"><a class="btn primary" href="#/pair/${esc(active.id)}">افتح المحادثة${active.messages.length ? ` (${active.messages.length})` : ''}</a></div>`;
+  else if (st.waiting) body = '<p style="margin:0">نبحث لك عن زميل… سنقرنك بأول متدرب يطلب زميلًا.</p><div class="actions"><button class="btn ghost" data-act="pair-cancel">إلغاء الطلب</button></div>';
+  else body = `<p style="margin:0">اعمل أسبوعًا مع متدرب حقيقي في الشركة نفسها: تتناقشان وتتبادلان الأفكار. القرار في محاكاتك لك وحدك.</p>
+      ${!user.emailVerified ? '<p class="small muted">أكّد بريدك أولًا.</p>' : '<div class="actions"><button class="btn primary" data-act="pair-request">ابحث لي عن زميل</button></div>'}
+      ${st.pairs?.length ? `<p class="small muted">زملاء سابقون: ${st.pairs.map((p) => `<a href="#/pair/${esc(p.id)}">${esc(p.partner)}</a>`).join('، ')}</p>` : ''}`;
+  return `<section class="card real-partner"><div class="rp-h">${icon('team')}<h2>زميل حقيقي</h2><span class="pill t-pill">متدرب مثلك</span></div>${body}
+    <p class="small muted" style="margin:8px 0 0">المحادثة محفوظة السجل للطرفين. لا تُستخدم لتحسين النماذج إلا إذا وافق الطرفان من صفحة "حسابي".</p></section>`;
+}
+
+export function pairChat(pair) {
+  if (!pair) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  return `<div class="page-h"><div><a href="#/team" class="small" style="text-decoration:none">→ فريقي</a><h1>محادثتك مع ${esc(pair.partner)}</h1>
+    <p>${pair.active ? `متدرب حقيقي في يوم العمل ${pair.partnerDay}. حتى ${esc(new Date(pair.endsAt).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' }))}.` : 'انتهت مدة العمل المشترك. السجل محفوظ للاطلاع.'}</p></div></div>
+  <section class="card detail">
+    <div class="minutes chat-thread" data-pair-msgs>${pairMessages(pair)}</div>
+    ${pair.active ? `<form data-form="pair-say" data-id="${esc(pair.id)}" class="live-form">
+      <div class="field"><textarea id="pair-msg" name="text" rows="3" maxlength="1500" placeholder="اسأل زميلك، أو شاركه فكرة. القرار في محاكاة كل منكما لصاحبها."></textarea></div>
+      <div class="actions"><button class="btn primary" type="submit">إرسال</button><span class="small muted">المحادثة محفوظة السجل، وتتحدث تلقائيًا.</span></div></form>` : ''}
+  </section>`;
+}
+
+export function pairMessages(pair) {
+  return pair.messages.map((m) => `<div class="bubble ${m.mine ? 'me' : ''}"><div><div class="who">${m.mine ? 'أنت' : esc(pair.partner)}</div><div class="said">${esc(m.text)}</div></div></div>`).join('')
+    || '<div class="empty" style="padding:24px">ابدأ المحادثة: عرّف بنفسك، وأين وصلت في شهرك.</div>';
+}
+
+// ——— دوري الفرق ———
+
+const dt = (iso) => new Date(iso).toLocaleString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+
+export function leaguesPage(user, state) {
+  const fac = user?.role === 'facilitator';
+  const list = state.leagues ?? [];
+  return `<div class="page-h"><div><h1>دوري الفرق</h1><p>فرق تدير الشركة نفسها بالأحداث نفسها، وتتنافس في جولات بمواعيد محددة. نتيجة الفريق متوسط نقاط أعضائه حتى يوم الجولة.</p></div></div>
+  <div class="grid g-main">
+    <section class="card"><h2>دورياتي</h2>
+      ${state.loading ? '<div class="empty">جارٍ التحميل…</div>' : list.length ? `<div class="items">${list.map((l) => `<a class="item" href="#/league/${esc(l.id)}"><span class="ico">${icon('trophy')}</span><span><div class="tt">${esc(l.name)}</div><div class="meta"><span>${l.teams} فرق</span><span>${l.rounds} جولات</span></div></span><span></span></a>`).join('')}</div>`
+        : '<div class="empty"><b>لست في دوري بعد</b>يضيفك المُيسِّر إلى فريق في دوري.</div>'}
+    </section>
+    ${fac ? `<section class="card"><h2>دوري جديد</h2>
+      <form data-form="league-create" class="grid" style="gap:10px">
+        <div class="field"><label for="lg-n">اسم الدوري</label><input id="lg-n" name="name" required placeholder="مثال: دوري جامعة الملك سعود — نوفمبر"></div>
+        ${[1, 2, 3, 4].map((i) => `<div class="field"><label>الفريق ${i}${i > 2 ? ' <span class="muted small">(اختياري)</span>' : ''}</label><input name="team${i}" placeholder="اسم الفريق"><textarea name="emails${i}" rows="2" dir="ltr" placeholder="بريد الأعضاء، كل بريد في سطر"></textarea></div>`).join('')}
+        <div class="field"><label>الجولات</label>
+          ${[1, 2, 3].map((i) => `<div class="round-row"><input name="rt${i}" placeholder="الجولة ${i}" value="${['الأسبوع الأول', 'الأسبوع الثاني', 'الأسبوع الثالث'][i - 1]}"><input name="rd${i}" type="number" min="1" max="30" value="${i * 5}" title="حتى يوم العمل"><input name="rx${i}" type="datetime-local" dir="ltr" title="الموعد النهائي"></div>`).join('')}
+          <span class="small muted">لكل جولة: حتى أي يوم عمل، والموعد النهائي الذي يجب أن يصل فيه الأعضاء إلى ذلك اليوم.</span></div>
+        <div class="actions"><button class="btn primary" type="submit">إنشاء الدوري</button></div>
+      </form></section>` : ''}
+  </div>`;
+}
+
+export function leaguePage(l) {
+  if (!l) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  const table = (rows) => `<table class="board"><thead><tr><th>#</th><th>الفريق</th><th>النتيجة</th><th>وصلوا</th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr class="${l.myTeam?.id === r.teamId ? 'you' : ''}"><td class="num">${i + 1}</td><td>${esc(r.name)}</td><td class="num"><b>${r.score ?? '—'}</b></td><td class="num">${r.finished} من ${r.members}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="page-h"><div><a href="#/leagues" class="small" style="text-decoration:none">→ دوري الفرق</a><h1>${esc(l.name)}</h1>
+    <p>${l.myTeam ? `فريقك: <b>${esc(l.myTeam.name)}</b>` : 'أنت مُيسِّر هذا الدوري.'}</p></div>
+    ${l.myTeam && !l.joined ? `<button class="btn primary" data-act="league-join" data-id="${esc(l.id)}" data-seed="${l.seed}">ابدأ شهر الدوري</button>` : ''}</div>
+  ${l.myTeam && !l.joined ? '<div class="outcome info" style="margin-bottom:16px">لتُحتسب نتيجتك، ابدأ شهر الدوري: نفس الشركة ونفس الأحداث لكل الفرق. سيحلّ محل تقدمك الحالي (سجلاتك الموثّقة الصادرة لا تتأثر).</div>' : ''}
+  <div class="grid g-main">
+    <div>
+      <section class="card"><h2>الترتيب العام</h2><table class="board"><thead><tr><th>#</th><th>الفريق</th><th>نقاط الدوري</th></tr></thead><tbody>
+        ${l.overall.map((r, i) => `<tr class="${l.myTeam?.id === r.teamId ? 'you' : ''}"><td class="num">${i + 1}</td><td>${esc(r.name)}</td><td class="num"><b>${r.points}</b></td></tr>`).join('')}</tbody></table>
+        <p class="small muted">في كل جولة يحصل الأول على نقاط بعدد الفرق، والثاني أقل بنقطة، وهكذا.</p></section>
+      ${l.rounds.map((r) => `<section class="card" style="margin-top:14px"><div class="office-h"><h2>${esc(r.title)}</h2><span class="pill ${r.closed ? 's-done' : 'p-high'}">${r.closed ? 'انتهت' : `تنتهي ${esc(dt(r.deadline))}`}</span></div>
+        <p class="small muted" style="margin-top:0">التحدي: الوصول إلى نهاية يوم العمل ${r.untilDay} بأفضل أداء قبل الموعد.</p>${table(r.standings)}</section>`).join('')}
+    </div>
+    ${l.myTeam ? `<section class="card"><h2>فريقك</h2><ul class="feed">${l.myTeam.members.map((m) => `<li><span class="dot"></span><b>${esc(m.name)}</b>${m.you ? ' (أنت)' : ''} · ${m.joined ? `يوم ${m.day}` : '<span class="muted">لم يبدأ بعد</span>'}</li>`).join('')}</ul></section>` : ''}
+  </div>`;
 }
