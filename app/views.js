@@ -526,6 +526,7 @@ export function report(session, ui = {}) {
   </section>
   ${pointsCard(session, r)}
   ${challengeCard(session, session.user, ui)}
+  ${session.user ? portfolioCard() : ''}
   ${collabCard(ui.collab)}
   <div class="grid g-2" style="margin-top:16px">
     <section class="card"><h2>المهارات</h2>
@@ -1256,4 +1257,121 @@ export function challengePage(state, { session, user } = {}) {
   <section class="card" style="margin-top:14px"><h2>اللوحة</h2>${boardTable(c)}
     ${c.participants === 0 ? '<p class="small muted">لم ينضم أحد بعد. كن الأول.</p>' : ''}
     ${c.mine ? shareButtons(c) : ''}</section>`);
+}
+
+// ——— ملف الأعمال الموثّق ———
+
+export const portfolioUrl = (slug) => `${location.origin}/p/${slug}`;
+
+/** منحنيان: الإيراد الشهري بقرارات المتدرب مقابل لو لم يفعل شيئًا (العالم نفسه). */
+export function versusChart(you, base, { w = 560, h = 170 } = {}) {
+  const all = [...you, ...base];
+  const min = Math.min(...all) * 0.98; const max = Math.max(...all) * 1.02;
+  const x = (i, n) => (n <= 1 ? 0 : (i / (n - 1)) * (w - 8) + 4);
+  const y = (v) => h - 6 - ((v - min) / (max - min || 1)) * (h - 12);
+  const path = (arr) => arr.map((v, i) => `${i ? 'L' : 'M'}${x(i, arr.length).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" class="versus" role="img" aria-label="الإيراد الشهري: بالقرارات المتخذة مقابل دون قرارات">
+    <path d="${path(base)}" fill="none" stroke="#9aa6bf" stroke-width="2.5" stroke-dasharray="6 5"/>
+    <path d="${path(you)}" fill="none" stroke="#00C2D1" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>
+  <div class="legend small"><span><i style="background:#00C2D1"></i>بالقرارات المتخذة</span><span><i style="background:#9aa6bf"></i>دون أي قرار</span></div>`;
+}
+
+function shareRow(url, text, extra = '') {
+  const enc = encodeURIComponent;
+  return `<div class="share-row">
+    <a class="btn" target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=${enc(url)}">لينكدإن</a>
+    <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(`${text}\n${url}`)}">واتساب</a>
+    <a class="btn" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${enc(text)}&url=${enc(url)}">X</a>
+    <button class="btn ghost" data-act="copy-url" data-url="${esc(url)}">نسخ الرابط</button>${extra}
+  </div><p class="small muted" dir="ltr" style="text-align:right;margin:6px 0 0">${esc(url)}</p>`;
+}
+
+/** محرر ملف الأعمال داخل بيئة العمل. */
+export function portfolioEditor(state) {
+  if (state.loading) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  if (state.error) return `<section class="card"><div class="empty"><b>لا يمكن بناء ملف الأعمال الآن</b>${esc(state.error)}</div></section>`;
+  const d = state.data;
+  const pf = d.portfolio;
+  const sel = state.draft;
+  const group = (key, title, hint, row) => {
+    const list = d.candidates[key];
+    const n = sel.selections[key].length;
+    return `<section class="card pf-group"><h2>${title} <span class="muted small">(${n} من ${d.limits[key]})</span></h2><p class="small muted" style="margin-top:0">${hint}</p>
+      ${list.length ? list.map((x) => {
+        const on = sel.selections[key].includes(x.id);
+        return `<label class="pf-pick ${on ? 'on' : ''}"><input type="checkbox" data-act-change="pf-pick" data-key="${key}" value="${esc(x.id)}" ${on ? 'checked' : ''} ${!on && n >= d.limits[key] ? 'disabled' : ''}><span>${row(x)}</span></label>`;
+      }).join('') : '<div class="empty" style="padding:14px">لا يوجد بعد.</div>'}</section>`;
+  };
+  return `
+  <div class="page-h"><div><h1>ملف أعمالك الموثّق</h1><p>اختر ما يُعرض من شهرك. المحتوى نفسه يُولَّد من سجل أفعالك على الخادم، فلا يمكن تعديله أو تجميله، وهذا ما يجعله موثوقًا لصاحب العمل.</p></div></div>
+  <div class="grid g-main">
+    <div>
+      ${group('deliverables', 'المستندات', 'تظهر كاملة كما سلّمتها، مع الأقسام التي غطّتها.', (x) => `<b>${esc(x.title)}</b> <span class="pill t-pill">اليوم ${x.day}</span> <span class="pill ${x.score >= 70 ? 's-done' : 'p-high'}">${x.score}%</span><br><span class="small muted">${esc(x.excerpt)}…</span>`)}
+      ${group('decisions', 'القرارات', 'القرار الذي اتخذته ومبررك كما كتبته.', (x) => `<b>${esc(x.title)}</b> <span class="pill t-pill">اليوم ${x.day}</span>${x.dialogue ? ` <span class="pill t-pill">حوار · ${x.addressed} من ${x.concerns} اعتراضات</span>` : ''}<br><span class="small">${esc(x.choice)}</span>${x.rationale ? `<br><span class="small muted">«${esc(x.rationale.slice(0, 160))}»</span>` : ''}`)}
+      ${group('quotes', 'من كلامك في الاجتماعات', 'جُمل قلتها أنت فقط، لا كلام زملائك.', (x) => `<span>«${esc(x.text)}»</span><br><span class="small muted">${esc(x.title)} · اليوم ${x.day}</span>`)}
+    </div>
+    <div>
+      <form class="card" data-form="portfolio">
+        <h2>الإعدادات</h2>
+        <div class="field"><label for="pf-h">سطر تعريفي <span class="muted small">(اختياري، 140 حرفًا)</span></label><input id="pf-h" name="headline" maxlength="140" value="${esc(sel.headline)}" placeholder="مثال: مدير منتجات يبني القرار على البيانات"></div>
+        <div class="field"><label>الاسم الظاهر</label>
+          <label class="consent"><input type="radio" name="displayName" value="first" ${sel.displayName !== 'full' ? 'checked' : ''}><span>الاسم الأول فقط (${esc(d.firstName)})</span></label>
+          <label class="consent"><input type="radio" name="displayName" value="full" ${sel.displayName === 'full' ? 'checked' : ''}><span>الاسم الكامل (${esc(d.fullName)}): أنسب لجهات التوظيف</span></label></div>
+        <label class="consent"><input type="checkbox" name="published" ${sel.published ? 'checked' : ''}><span><b>منشور</b>: يراه كل من لديه الرابط. لا يظهر بريدك ولا بيانات تواصلك.</span></label>
+        <div class="actions"><button class="btn primary" type="submit">${pf ? 'حفظ' : 'إنشاء الملف'}</button>
+          ${pf?.published ? `<a class="btn" href="#/portfolio/${esc(pf.slug)}">معاينة</a>` : ''}</div>
+      </form>
+      ${pf?.published ? `<section class="card" style="margin-top:12px"><h2>شارك ملفك</h2>
+        ${shareRow(portfolioUrl(pf.slug), 'هذا ملف أعمالي الموثّق من شهر عمل كمدير منتجات في محاكي: قراراتي ومستنداتي وأثرها على الشركة، كلها موثّقة.')}
+        <p class="small muted">أضِف الرابط إلى قسم "مميز" في لينكدإن، أو إلى سيرتك الذاتية.</p></section>` : ''}
+      ${pf ? '<section class="card" style="margin-top:12px"><h2>إيقاف الملف</h2><p class="small muted">يحذف الملف ويتوقف الرابط نهائيًا. إن نشرت لاحقًا تحصل على رابط جديد.</p><button class="btn ghost" data-act="pf-delete">حذف الملف وإيقاف الرابط</button></section>' : ''}
+    </div>
+  </div>`;
+}
+
+/** الصفحة العامة لملف الأعمال: تعمل دون حساب. */
+export function portfolioPage(state) {
+  const frame = (inner) => `<div class="pf-wrap"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}
+    <p class="disclaimer verify-note">أعمال داخل بيئة محاكاة لشركة افتراضية (NOVA TECH). كل ما في الصفحة يُولَّد من إعادة تشغيل قرارات صاحبها على خادم محاكي، فلا يمكن تعديله يدويًا. ليس شهادة خبرة ولا شهادة تدريب معتمدة.</p></div>`;
+  if (state.loading) return frame('<section class="card"><div class="empty">جارٍ التحميل…</div></section>');
+  if (state.error) return frame(`<section class="card"><div class="empty"><b>ملف الأعمال غير متاح</b>${esc(state.error)}</div></section>`);
+  const p = state.portfolio;
+  const pctDelta = (a, b) => `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`;
+  return frame(`
+  <section class="card pf-hero">
+    <div class="cert-top"><span class="pill s-done">✓ موثّق بإعادة التشغيل</span>${p.record ? `<a class="small" href="#/verify/${esc(p.record.code)}">السجل ${esc(p.record.code)}</a>` : ''}</div>
+    <h1>${esc(p.name)}</h1>
+    ${p.headline ? `<p class="pf-headline">${esc(p.headline)}</p>` : ''}
+    <p class="muted">${esc(p.role)} · ${esc(p.company)} · ${p.finished ? `${p.lengthDays} يوم عمل مكتملة` : `${p.days} من ${p.lengthDays} يوم عمل`}${p.occupation ? ` · التصنيف السعودي للمهن ${esc(p.occupation.code)}` : ''}</p>
+    <div class="pf-stats">
+      <div><b class="num">${p.points}</b><span>نقطة من 1000 · ${esc(p.band)}</span></div>
+      <div><b class="num">${p.counts.decisions}</b><span>قرارًا</span></div>
+      <div><b class="num">${p.counts.dialogues}</b><span>اجتماعًا ومحادثة</span></div>
+      <div><b class="num">${p.counts.deliverables}</b><span>مستندات</span></div>
+    </div>
+  </section>
+  <section class="card"><h2>الأثر على الشركة</h2>
+    <p class="small muted" style="margin-top:0">العالم نفسه بالأحداث نفسها، مرة بالقرارات المتخذة ومرة دون أي قرار.</p>
+    ${versusChart(p.series.you, p.series.baseline)}
+    <div class="pf-stats small-stats">
+      <div><b class="num">${pctDelta(p.impact.mrr, p.impact.mrrBaseline)}</b><span>الإيراد الشهري</span></div>
+      <div><b class="num">${p.impact.customers - p.impact.customersBaseline >= 0 ? '+' : ''}${p.impact.customers - p.impact.customersBaseline}</b><span>عملاء</span></div>
+      <div><b class="num">${p.impact.health - p.impact.healthBaseline >= 0 ? '+' : ''}${p.impact.health - p.impact.healthBaseline}</b><span>رضا العملاء</span></div>
+    </div>
+    ${p.shipped.length ? `<p class="small"><b>ما أُطلق خلال الشهر:</b> ${p.shipped.map((s) => esc(s.title)).join('، ')}</p>` : ''}
+  </section>
+  <section class="card"><h2>المهارات</h2><div class="grid" style="gap:12px">${p.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score}%</span>${bar(s.score)}</div>`).join('')}</div></section>
+  ${p.decisions.length ? `<section class="card"><h2>قرارات مختارة</h2>${p.decisions.map((x) => `<article class="pf-item"><div class="small muted">اليوم ${x.day}${x.dialogue ? ` · حوار أجاب فيه ${x.addressed} من ${x.concerns} اعتراضات` : ''}</div><h3>${esc(x.title)}</h3><p><b>القرار:</b> ${esc(x.choice)}</p>${x.rationale ? `<p class="pf-quote">«${esc(x.rationale)}»</p>` : ''}</article>`).join('')}</section>` : ''}
+  ${p.quotes.length ? `<section class="card"><h2>من الاجتماعات</h2>${p.quotes.map((x) => `<blockquote class="pf-quote">«${esc(x.text)}»<footer class="small muted">${esc(x.title)} · اليوم ${x.day}</footer></blockquote>`).join('')}</section>` : ''}
+  ${p.deliverables.map((x) => `<section class="card"><h2>${esc(x.title)}</h2><div class="chips"><span class="pill t-pill">اليوم ${x.day}</span><span class="pill t-pill">${x.words} كلمة</span><span class="pill ${x.score >= 70 ? 's-done' : 'p-high'}">التقييم ${x.score}%</span>${x.covered.map((c) => `<span class="pill s-done">✓ ${esc(c)}</span>`).join('')}</div>
+    <details><summary>اقرأ المستند كاملًا</summary><div class="peer-doc">${esc(x.text)}</div></details></section>`).join('')}
+  <section class="card pf-cta"><h2>جرّب الشهر نفسه</h2><p class="small"> ${p.challenge ? `تحدٍّ مفتوح من ${esc(p.name)}: نفس الشركة ونفس الأحداث بالضبط.` : 'شهر كامل كمدير منتجات في شركة سعودية افتراضية.'}</p>
+    <a class="btn primary" href="${p.challenge ? `#/challenge/${esc(p.challenge)}` : '#/desk'}">${p.challenge ? 'اقبل التحدي' : 'ابدأ شهرك'}</a></section>`);
+}
+
+function portfolioCard() {
+  return `<section class="card" style="margin-top:16px"><h2>ملف أعمالك الموثّق</h2>
+    <p class="small" style="margin-top:0">صفحة عامة تختار أنت ما يُعرض فيها: مستنداتك، وقراراتك ومبرراتك، وجملك في الاجتماعات، وأثرك على الشركة. كل ما فيها موثّق بإعادة التشغيل.</p>
+    <a class="btn primary" href="#/portfolio">بناء ملف الأعمال</a></section>`;
 }

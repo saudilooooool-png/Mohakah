@@ -91,6 +91,38 @@ check(board.includes('خالد') && board.includes('أنت'), `الصديق لا
 await snap(fp, '3-challenge-board');
 console.log(`✓ التحدي (${code}): إنشاء، معاينة الرابط، قبول ضيف، انضمام مسجل، لوحة`);
 
+// ——— 2) ملف الأعمال الموثّق ———
+await op.goto(`${BASE}#/portfolio`);
+await op.waitForSelector('form[data-form="portfolio"]');
+const picks = op.locator('input[data-act-change="pf-pick"][data-key="deliverables"]');
+await picks.nth(0).check(); await op.waitForTimeout(150);
+await picks.nth(3).check(); await op.waitForTimeout(150);
+const decs = op.locator('input[data-act-change="pf-pick"][data-key="decisions"]');
+for (const i of [0, 4, 5, 6, 8, 9]) { const box = decs.nth(i); if (await box.isEnabled()) { await box.check(); await op.waitForTimeout(120); } }
+check(await op.locator('input[data-key="decisions"]:checked').count() === 5, 'حد القرارات (5) لا يُطبَّق في المحرر');
+await op.fill('#pf-h', 'مديرة منتجات تبني القرار على البيانات');
+await op.check('input[name="displayName"][value="full"]');
+await snap(op, '4-portfolio-editor');
+await op.getByRole('button', { name: 'إنشاء الملف' }).click();
+await op.waitForSelector('text=شارك ملفك');
+const slug = (await op.locator('a[href^="#/portfolio/"]').first().getAttribute('href')).split('/').pop();
+const prev = await (await fetch(`${ORIGIN}/p/${slug}`)).text();
+check(prev.includes('og:title') && prev.includes('سارة العتيبي'), 'معاينة رابط ملف الأعمال');
+const pp = await pageFor(browser, null, { width: 390, height: 844 });
+await pp.goto(`${ORIGIN}/p/${slug}`);
+await pp.waitForSelector('.pf-hero');
+check((await pp.locator('.pf-hero h1').textContent()).includes('سارة العتيبي'), 'الاسم الكامل لا يظهر رغم اختياره');
+check(await pp.locator('.versus').count() === 1, 'منحنى الأثر غير موجود');
+check(await pp.locator('.pf-item').count() === 5, 'القرارات المختارة لا تظهر');
+await pp.locator('details summary').first().click();
+check((await pp.locator('.peer-doc').first().textContent()).length > 100, 'نص المستند لا يظهر');
+await snap(pp, '5-portfolio-public-mobile');
+const desk = await pageFor(browser, null);
+await desk.goto(`${ORIGIN}/p/${slug}`);
+await desk.waitForSelector('.pf-hero');
+await snap(desk, '6-portfolio-public-desktop');
+console.log(`✓ ملف الأعمال (${slug}): اختيار بحدود، نشر بالاسم الكامل، معاينة الرابط، صفحة عامة`);
+
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log('✓ ميزات العرض تعمل');

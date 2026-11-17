@@ -263,6 +263,12 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       delete store.users[u.id];
       store.deleteProgress(u.id);
       forgetUser(store.community, u.id); store.saveCommunity();
+      // روابط العرض العامة تتوقف: التحديات تُلغى، وملف الأعمال يُحذف
+      if (store.showcase) {
+        for (const c of Object.values(store.showcase.challenges ?? {})) if (c.ownerId === u.id) c.revoked = true;
+        delete store.showcase.portfolios?.[u.id];
+        store.saveShowcase?.();
+      }
       store.saveUsers(); store.saveSessions(); store.saveRecords();
       res.setHeader?.('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
       return { ok: true };

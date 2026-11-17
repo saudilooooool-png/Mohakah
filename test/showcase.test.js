@@ -96,3 +96,74 @@ test('رابط المشاركة /c/CODE يعطي معاينة بعنوان ال�
     assert.ok(!page.includes('العتيبي'));
   });
 });
+
+// ——— ملف الأعمال الموثّق ———
+
+test('ملف الأعمال: المرشحون من إعادة التشغيل، والاختيار يُقيَّد بما في السجل وبالحدود', async () => {
+  await withServer(async ({ user }) => {
+    const me = await user('نورة العتيبي', 'noura@example.com');
+    assert.equal((await me('GET', '/api/portfolio/me')).status, 400);
+    await me('PUT', '/api/progress', goodRun(9));
+    const ed = (await me('GET', '/api/portfolio/me')).data;
+    assert.equal(ed.portfolio, null);
+    assert.equal(ed.candidates.deliverables.length, 4);
+    assert.ok(ed.candidates.decisions.length >= 17);
+    assert.ok(!('text' in ed.candidates.deliverables[0]), 'المحرر يكفيه مقتطف');
+    const docs = ed.candidates.deliverables.map((d) => d.id);
+    const decs = ed.candidates.decisions.map((d) => d.id);
+    const saved = (await me('PUT', '/api/portfolio/me', {
+      headline: 'مدير منتجات يحب البيانات', displayName: 'first', published: true,
+      selections: { deliverables: [...docs, 'fake'], decisions: decs, quotes: [] },
+    })).data;
+    assert.equal(saved.portfolio.selections.deliverables.length, 3, 'حد المستندات');
+    assert.equal(saved.portfolio.selections.decisions.length, 5, 'حد القرارات');
+    assert.ok(!saved.portfolio.selections.deliverables.includes('fake'));
+    assert.match(saved.portfolio.slug, /^[A-Z2-9]{8}$/);
+  });
+});
+
+test('ملف الأعمال العام: محتوى موثّق بالاسم المختار، ويتوقف عند الإلغاء أو بدء شهر جديد', async () => {
+  await withServer(async ({ user }) => {
+    const me = await user('نورة العتيبي', 'noura@example.com');
+    await me('PUT', '/api/progress', goodRun(9));
+    const ed = (await me('GET', '/api/portfolio/me')).data;
+    const { slug } = (await me('PUT', '/api/portfolio/me', {
+      headline: 'أبني منتجات بالأرقام', displayName: 'first', published: false,
+      selections: { deliverables: [ed.candidates.deliverables[0].id], decisions: [ed.candidates.decisions[0].id], quotes: [] },
+    })).data.portfolio;
+    const guest = await user();
+    assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 404, 'غير المنشور لا يظهر');
+    await me('PUT', '/api/portfolio/me', { ...ed.portfolio, headline: 'أبني منتجات بالأرقام', published: true, selections: { deliverables: [ed.candidates.deliverables[0].id], decisions: [ed.candidates.decisions[0].id], quotes: [] } });
+    const p = (await guest('GET', `/api/portfolio/${slug}`)).data.portfolio;
+    assert.equal(p.name, 'نورة');
+    assert.ok(p.points > 700 && p.finished);
+    assert.equal(typeof p.band, 'string');
+    assert.equal(p.deliverables.length, 1);
+    assert.ok(p.deliverables[0].text.length > 100, 'المستند كاملًا من السجل');
+    assert.equal(p.series.you.length, p.series.baseline.length);
+    assert.ok(p.impact.mrr > p.impact.mrrBaseline);
+    assert.ok(!JSON.stringify(p).includes('noura@'));
+    const page = (await guest('GET', `/p/${slug}`)).data;
+    assert.ok(page.includes('og:title') && page.includes('نورة'));
+    // شهر جديد: الملف لا يعرض أعمالًا لم تعد في السجل
+    await me('PUT', '/api/progress', goodRun(5, { stopDay: 1 }));
+    assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 404);
+    await me('PUT', '/api/progress', goodRun(9));
+    assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 200);
+    await me('DELETE', '/api/portfolio/me');
+    assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 404);
+  });
+});
+
+test('حذف الحساب يوقف روابط التحدي وملف الأعمال', async () => {
+  await withServer(async ({ user }) => {
+    const me = await user('نورة العتيبي', 'noura@example.com');
+    await me('PUT', '/api/progress', goodRun(9));
+    const { code } = (await me('POST', '/api/challenges')).data.challenge;
+    const { slug } = (await me('PUT', '/api/portfolio/me', { published: true, selections: {} })).data.portfolio;
+    await me('DELETE', '/api/me');
+    const guest = await user();
+    assert.equal((await guest('GET', `/api/challenges/${code}`)).status, 404);
+    assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 404);
+  });
+});

@@ -17,6 +17,27 @@ let user = null;
 const saver = debouncedSaver();
 let verifyState = { loading: true };
 let challengeState = { loading: true };
+let pfState = { loading: true };        // المحرر
+let pfPublic = { loading: true };       // الصفحة العامة
+
+async function loadPortfolio() {
+  const slug = parseRoute().itemId;
+  if (slug) {
+    pfPublic = { loading: true }; render();
+    try { pfPublic = { portfolio: await account.portfolio(slug) }; } catch (err) { pfPublic = { error: err.message }; }
+    render();
+    return;
+  }
+  if (!user) { pfState = { error: 'سجّل الدخول لبناء ملف أعمالك.' }; render(); return; }
+  pfState = { loading: true }; render();
+  try {
+    if (session) await account.saveProgress(session.saveData()).catch(() => {});
+    const data = await account.portfolioMe();
+    const pf = data.portfolio;
+    pfState = { data, draft: { headline: pf?.headline ?? '', displayName: pf?.displayName ?? 'first', published: pf ? pf.published : true, selections: pf?.selections ?? { deliverables: [], decisions: [], quotes: [] } } };
+  } catch (err) { pfState = { error: err.message }; }
+  render();
+}
 
 async function loadChallenge() {
   challengeState = { loading: true };
@@ -135,7 +156,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -145,6 +166,11 @@ function render() {
   if (route.page === 'verify') {
     app.innerHTML = V.verifyPage(verifyState);
     document.title = verifyState.record?.name ? `سجل ${verifyState.record.name} — محاكي` : 'التحقق من سجل — محاكي';
+    return;
+  }
+  if (route.page === 'portfolio' && route.itemId) {
+    app.innerHTML = V.portfolioPage(pfPublic);
+    document.title = pfPublic.portfolio ? `${pfPublic.portfolio.name} — ملف أعمال موثّق · محاكي` : 'ملف أعمال — محاكي';
     return;
   }
   if (route.page === 'challenge') {
@@ -185,6 +211,7 @@ function render() {
     case 'company': body = V.company(session); break;
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session, ui); break;
+    case 'portfolio': body = V.portfolioEditor(pfState); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -261,6 +288,14 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  async 'copy-url'(e) {
+    const url = e.target.closest('[data-url]').dataset.url;
+    try { await navigator.clipboard.writeText(url); toast('نُسخ الرابط.', 'good'); } catch { prompt('انسخ الرابط:', url); }
+  },
+  async 'pf-delete'() {
+    if (!confirm('حذف ملف الأعمال وإيقاف رابطه نهائيًا؟')) return;
+    try { await account.portfolioDelete(); toast('حُذف الملف وتوقف الرابط.', 'good'); loadPortfolio(); } catch (err) { toast(err.message, 'bad'); }
+  },
   async 'create-challenge'() {
     try {
       // لا بد أن يكون آخر تقدم على الخادم قبل حساب نقاط صاحب التحدي
@@ -413,6 +448,18 @@ modalRoot.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalRoot.innerHTML) closeModal(); });
 
 app.addEventListener('change', (e) => {
+  if (e.target.dataset.actChange === 'pf-pick') {
+    const { key } = e.target.dataset;
+    const list = pfState.draft.selections[key];
+    const i = list.indexOf(e.target.value);
+    if (e.target.checked && i < 0) list.push(e.target.value);
+    if (!e.target.checked && i >= 0) list.splice(i, 1);
+    // نحفظ ما كُتب في الإعدادات قبل إعادة الرسم
+    const form = app.querySelector('form[data-form="portfolio"]');
+    if (form) pfState.draft.headline = form.headline.value;
+    const y = window.scrollY; render(); window.scrollTo(0, y);
+    return;
+  }
   if (e.target.dataset.actChange === 'live-event') {
     // نحفظ ما أُدخل قبل إعادة الرسم، ثم نعيد ملء الحقول المشتركة
     const form = e.target.closest('form');
@@ -524,6 +571,17 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'portfolio') {
+    const f = new FormData(form);
+    const d = pfState.draft;
+    d.headline = String(f.get('headline') || '');
+    d.displayName = f.get('displayName');
+    d.published = f.get('published') === 'on';
+    account.portfolioSave(d)
+      .then((data) => { pfState.data = data; pfState.draft.selections = data.portfolio.selections; toast(d.published ? 'حُفظ ملفك ونُشر.' : 'حُفظ ملفك (غير منشور).', 'good'); render(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'peer-review') {
     const f = new FormData(form);
     const sections = {};
@@ -674,6 +732,7 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'peer') { loadPeer(); return; }
   if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
+  if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
   if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
@@ -689,6 +748,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
     if (parseRoute().page === 'challenge') loadChallenge();
+    if (parseRoute().page === 'portfolio' && parseRoute().itemId) loadPortfolio();
     if (parseRoute().page === 'confirm-email') { await loadConfirm(); }
     if (parseRoute().page === 'facilitator') loadFacilitator();
     if (parseRoute().page === 'live') loadLive();
@@ -706,6 +766,7 @@ window.addEventListener('hashchange', () => {
     }
     render();
     if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
+    if (parseRoute().page === 'portfolio' && !parseRoute().itemId) loadPortfolio();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="boot"><div><b>تعذر فتح نظام الشركة</b><p class="muted">${esc(err.message)}</p><p class="muted small">شغّل الواجهة عبر خادم محلي: <code>npm start</code></p></div></div>`;

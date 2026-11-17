@@ -50,7 +50,7 @@ export function createMohakiServer({
   }),
 }) {
   return createServer(async (req, res) => {
-    if (req.url.startsWith('/c/') && await showcaseApi(req, res)) return;
+    if (/^\/[cp]\//.test(req.url) && await showcaseApi(req, res)) return;
     if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res))) return;
     if (req.url.startsWith('/api/')) { res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end('{"error":"غير موجود"}'); }
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
