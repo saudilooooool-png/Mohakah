@@ -19,6 +19,31 @@ let verifyState = { loading: true };
 let challengeState = { loading: true };
 let pfState = { loading: true };        // المحرر
 let pfPublic = { loading: true };       // الصفحة العامة
+let videoState = { loading: true };
+let stopPreview = null;
+
+async function loadVideo() {
+  stopPreview?.(); stopPreview = null;
+  if (!user) { videoState = { error: 'سجّل الدخول أولًا.' }; render(); return; }
+  videoState = { loading: true }; render();
+  try {
+    const me = await account.portfolioMe();
+    if (!me.portfolio?.published) throw new Error('الفيديو يُبنى من ملف أعمالك المنشور، ورابطه يظهر في آخر الفيديو للتحقق.');
+    const p = await account.portfolio(me.portfolio.slug);
+    const Video = await import('./lib/video.js');
+    const data = { ...p, url: V.portfolioUrl(p.slug) };
+    videoState = { data, slug: p.slug, Video, seconds: Video.scenes(data).total, canShareFile: false };
+  } catch (err) { videoState = { error: err.message }; }
+  render();
+  startPreview();
+}
+
+function startPreview() {
+  const canvas = app.querySelector('#video-canvas');
+  if (!canvas || !videoState.data || videoState.recording) return;
+  stopPreview?.();
+  stopPreview = videoState.Video.preview(canvas, videoState.data);
+}
 
 async function loadPortfolio() {
   const slug = parseRoute().itemId;
@@ -156,7 +181,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video'];
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
 
@@ -212,6 +237,7 @@ function render() {
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session, ui); break;
     case 'portfolio': body = V.portfolioEditor(pfState); break;
+    case 'video': body = V.videoPage(videoState); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -221,6 +247,7 @@ function render() {
   }
   const keepScroll = route.page === 'inbox' ? window.scrollY : 0;
   app.innerHTML = V.shell(session, route, body);
+  if (route.page === 'video' && videoState.data && !videoState.recording) startPreview();
   const nav = V.NAV.find((n) => n.id === route.page);
   document.title = `${nav?.label ?? 'مكتبي'} · NOVA TECH — محاكي`;
   window.scrollTo(0, keepScroll);
@@ -288,6 +315,32 @@ const actions = {
   },
   'delete-account'() { openModal(V.deleteConfirm()); },
   'open-forgot'() { openModal(V.forgotModal()); },
+  async 'video-record'() {
+    stopPreview?.(); stopPreview = null;
+    if (videoState.file) URL.revokeObjectURL(videoState.file.url);
+    Object.assign(videoState, { recording: true, progress: 0, file: null });
+    render();
+    const canvas = app.querySelector('#video-canvas');
+    let last = 0;
+    try {
+      const out = await videoState.Video.record(canvas, videoState.data, {
+        maxSeconds: window.__mohakiVideoSeconds, // للاختبار الآلي فقط
+        onProgress: (p) => {
+          videoState.progress = p;
+          if (p - last > 0.02) { last = p; const el = app.querySelector('.bar-wrap'); if (el) el.innerHTML = `<div class="small">جارٍ التسجيل… ${Math.round(p * 100)}%</div>${V.progressBar(p * 100)}`; }
+        },
+      });
+      const file = new File([out.blob], `mohaki-${videoState.slug}.${out.ext}`, { type: out.blob.type });
+      videoState.file = { ...out, url: URL.createObjectURL(out.blob), file };
+      videoState.canShareFile = !!navigator.canShare?.({ files: [file] });
+    } catch (err) { toast(err.message, 'bad'); }
+    videoState.recording = false;
+    render();
+    startPreview();
+  },
+  async 'video-share'() {
+    try { await navigator.share({ files: [videoState.file.file], title: 'شهري في NOVA TECH', text: `30 يومًا مدير منتجات في شركة افتراضية. أعمالي موثّقة: ${videoState.data.url}` }); } catch { /* أُلغي */ }
+  },
   async 'copy-url'(e) {
     const url = e.target.closest('[data-url]').dataset.url;
     try { await navigator.clipboard.writeText(url); toast('نُسخ الرابط.', 'good'); } catch { prompt('انسخ الرابط:', url); }
@@ -733,6 +786,8 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
+  if (parseRoute().page === 'video') { loadVideo(); return; }
+  stopPreview?.(); stopPreview = null;
   if (parseRoute().page === 'inbox' && user) loadLiveResults().then(render);
   if (parseRoute().page === 'verify') { loadVerify(); return; }
   if (parseRoute().page === 'confirm-email') { loadConfirm(); return; }
@@ -767,6 +822,7 @@ window.addEventListener('hashchange', () => {
     render();
     if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); }
     if (parseRoute().page === 'portfolio' && !parseRoute().itemId) loadPortfolio();
+    if (parseRoute().page === 'video') loadVideo();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="boot"><div><b>تعذر فتح نظام الشركة</b><p class="muted">${esc(err.message)}</p><p class="muted small">شغّل الواجهة عبر خادم محلي: <code>npm start</code></p></div></div>`;

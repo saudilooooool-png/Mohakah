@@ -287,6 +287,8 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .pf-pick input:disabled + span { opacity: .55; }
 .pf-group + .pf-group { margin-top: 14px; }
 @media (max-width: 640px) { .pf-stats { grid-template-columns: repeat(2, 1fr); } }
+.video-stage { display: flex; justify-content: center; background: #0a1733; }
+.video-stage canvas { width: min(100%, 340px); height: auto; aspect-ratio: 9 / 16; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }

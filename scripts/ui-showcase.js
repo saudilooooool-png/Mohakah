@@ -123,6 +123,35 @@ await desk.waitForSelector('.pf-hero');
 await snap(desk, '6-portfolio-public-desktop');
 console.log(`✓ ملف الأعمال (${slug}): اختيار بحدود، نشر بالاسم الكامل، معاينة الرابط، صفحة عامة`);
 
+// ——— 3) الفيديو ———
+await op.goto(`${BASE}#/video`);
+await op.waitForSelector('#video-canvas');
+await op.waitForTimeout(800);
+await snap(op, '7-video-page');
+// لقطات ثابتة لكل مشهد: كل إطار دالة نقية من الزمن
+const frames = await op.evaluate(async () => {
+  const V = await import('./lib/video.js');
+  const me = await (await fetch('/api/portfolio/me')).json();
+  const p = (await (await fetch(`/api/portfolio/${me.portfolio.slug}`)).json()).portfolio;
+  const d = { ...p, url: `${location.origin}/p/${p.slug}` };
+  const plan = V.scenes(d);
+  const c = document.createElement('canvas'); c.width = V.W; c.height = V.H;
+  await document.fonts.ready;
+  return plan.list.map((s) => { V.drawFrame(c.getContext('2d'), d, s.start + s.dur * 0.8, plan); return { id: s.id, png: c.toDataURL('image/png') }; });
+});
+check(frames.length >= 5, `عدد المشاهد قليل: ${frames.length}`);
+if (shots) {
+  const { writeFileSync } = await import('node:fs');
+  for (const f of frames) writeFileSync(`${shots}/show-video-${f.id}.png`, Buffer.from(f.png.split(',')[1], 'base64'));
+}
+// تسجيل قصير للتحقق من أن التسجيل يعمل في المتصفح
+await op.evaluate(() => { window.__mohakiVideoSeconds = 2; });
+await op.click('[data-act="video-record"]');
+await op.waitForSelector('a[download]', { timeout: 15000 });
+const size = await op.evaluate(async () => (await fetch(document.querySelector('a[download]').href)).blob().then((b) => b.size));
+check(size > 10_000, `الفيديو المسجّل فارغ تقريبًا: ${size} بايت`);
+console.log(`✓ الفيديو: ${frames.length} مشاهد، وتسجيل في المتصفح (${(size / 1024).toFixed(0)} ك.ب لثانيتين)`);
+
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log('✓ ميزات العرض تعمل');

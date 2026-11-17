@@ -1324,7 +1324,8 @@ export function portfolioEditor(state) {
       </form>
       ${pf?.published ? `<section class="card" style="margin-top:12px"><h2>شارك ملفك</h2>
         ${shareRow(portfolioUrl(pf.slug), 'هذا ملف أعمالي الموثّق من شهر عمل كمدير منتجات في محاكي: قراراتي ومستنداتي وأثرها على الشركة، كلها موثّقة.')}
-        <p class="small muted">أضِف الرابط إلى قسم "مميز" في لينكدإن، أو إلى سيرتك الذاتية.</p></section>` : ''}
+        <p class="small muted">أضِف الرابط إلى قسم "مميز" في لينكدإن، أو إلى سيرتك الذاتية.</p>
+        <div class="actions"><a class="btn teal" href="#/video">اصنع فيديو من ملفك</a></div></section>` : ''}
       ${pf ? '<section class="card" style="margin-top:12px"><h2>إيقاف الملف</h2><p class="small muted">يحذف الملف ويتوقف الرابط نهائيًا. إن نشرت لاحقًا تحصل على رابط جديد.</p><button class="btn ghost" data-act="pf-delete">حذف الملف وإيقاف الرابط</button></section>' : ''}
     </div>
   </div>`;
@@ -1374,4 +1375,37 @@ function portfolioCard() {
   return `<section class="card" style="margin-top:16px"><h2>ملف أعمالك الموثّق</h2>
     <p class="small" style="margin-top:0">صفحة عامة تختار أنت ما يُعرض فيها: مستنداتك، وقراراتك ومبرراتك، وجملك في الاجتماعات، وأثرك على الشركة. كل ما فيها موثّق بإعادة التشغيل.</p>
     <a class="btn primary" href="#/portfolio">بناء ملف الأعمال</a></section>`;
+}
+
+// ——— الفيديو ———
+
+export const progressBar = (v) => bar(v);
+
+export function videoPage(state) {
+  if (state.loading) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  if (state.error) return `<section class="card"><div class="empty"><b>انشر ملف أعمالك أولًا</b>${esc(state.error)}</div><div class="actions"><a class="btn primary" href="#/portfolio">ملف الأعمال</a></div></section>`;
+  return `
+  <div class="page-h"><div><h1>فيديو شهرك</h1><p>فيديو عمودي جاهز لسناب وتيك توك وإنستغرام ولينكدإن، يُبنى من ملف أعمالك المنشور. يُصنع داخل متصفحك، ولا يُرفع إلى أي مكان إلا إذا نشرته أنت.</p></div></div>
+  <div class="grid g-main">
+    <section class="card video-stage"><canvas id="video-canvas" width="1080" height="1920" aria-label="معاينة الفيديو"></canvas></section>
+    <section class="card">
+      <h2>المشاهد</h2>
+      <ol class="small" style="padding-inline-start:18px;line-height:2">
+        <li>30 يومًا في دور مدير منتجات، باسمك وسطرك التعريفي</li>
+        <li>أصعب موقف: من القرارات التي اخترتها في ملفك</li>
+        <li>جملة قلتها في اجتماع (أو مبرر قرارك)</li>
+        <li>منحنى الإيراد بقراراتك مقابل عالم دون قرارات</li>
+        <li>عدد القرارات والحوارات والمستندات، وما أطلقته</li>
+        <li>نقاطك، ورابط ملفك للتحقق</li>
+      </ol>
+      <p class="small muted">لتغيير المحتوى، عدّل اختياراتك في <a href="#/portfolio">ملف الأعمال</a>.</p>
+      ${state.recording ? `<div class="bar-wrap"><div class="small">جارٍ التسجيل… ${Math.round(state.progress * 100)}%</div>${bar(state.progress * 100)}</div><p class="small muted">يُسجَّل الفيديو في وقته الحقيقي (${state.seconds} ثانية). أبقِ هذه الصفحة مفتوحة.</p>`
+        : state.file ? `<div class="outcome good"><b>الفيديو جاهز</b> (${state.file.ext.toUpperCase()}، ${(state.file.blob.size / 1e6).toFixed(1)} م.ب)</div>
+          <div class="share-row"><a class="btn primary" href="${state.file.url}" download="mohaki-${esc(state.slug)}.${state.file.ext}">تنزيل الفيديو</a>
+          ${state.canShareFile ? '<button class="btn" data-act="video-share">مشاركة</button>' : ''}<button class="btn ghost" data-act="video-record">تسجيل من جديد</button></div>
+          ${state.file.ext === 'webm' ? '<p class="small muted">متصفحك سجّل بصيغة WebM. بعض التطبيقات تفضّل MP4: سجّل من Safari أو Chrome حديث، أو حوّله بأي أداة تحويل.</p>' : ''}
+          <p class="small muted">اقتراح للنشر: «30 يومًا مدير منتجات في شركة افتراضية. هذه قراراتي وأثرها، وكلها موثّقة» مع رابط ملفك.</p>`
+        : `<div class="actions"><button class="btn primary" data-act="video-record">صناعة الفيديو (${state.seconds} ثانية)</button></div>`}
+    </section>
+  </div>`;
 }
