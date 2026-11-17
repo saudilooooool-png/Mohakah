@@ -8,9 +8,9 @@ import { dirname, join } from 'node:path';
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), 'checks');
 let failed = 0;
-for (const n of [1, 2, 3, 4, 5]) {
+for (const n of [1, 2, 3, 4, 5, 'assess']) {
   try {
-    const out = execFileSync(process.execPath, [join(dir, `phase${n}.mjs`)], { env: process.env, encoding: 'utf8', timeout: 180000 });
+    const out = execFileSync(process.execPath, [join(dir, n === 'assess' ? 'assess.mjs' : `phase${n}.mjs`)], { env: process.env, encoding: 'utf8', timeout: 180000 });
     const last = out.trim().split('\n').at(-1);
     console.log(`${last === 'ok' ? '✓' : '✗'} المرحلة ${n}: ${last}`);
     if (last !== 'ok') failed++;

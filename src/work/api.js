@@ -72,7 +72,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       internal: !!g.internal, commission: g.commission ?? null,
     };
   }
-  const appPublic = (a, g) => ({ id: a.id, status: a.status, note: a.note, submission: a.submission, feedback: a.feedback, rating: a.rating, earned: earned(a, g), payout: g.paid?.amount ? a.payout ?? 'none' : null, at: a.at, updatedAt: a.updatedAt });
+  const appPublic = (a, g) => ({ id: a.id, status: a.status, note: a.note, submission: a.submission, feedback: a.feedback, rating: a.rating, earned: earned(a, g), payout: g.paid?.amount || a.commission?.amount ? a.payout ?? 'none' : null, commission: a.commission ?? null, at: a.at, updatedAt: a.updatedAt });
 
   function list(u) {
     const rd = readiness(u.id);
@@ -104,12 +104,33 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       reviewerEmail: str(b.reviewerEmail, 120).toLowerCase() || null,
       // مشروع داخلي لمحاكي: كل تواصل أو منشور يُرسَل مسودة، ولا يخرج إلا بعد اعتماد المشرف
       internal: b.internal === true || b.internal === 'on',
-      commission: str(b.commission, 120) || null,
+      // عمولة متغيرة لكل فرصة: نسبة من قيمة الصفقة، أو مبلغ ثابت لكل نتيجة، مع حد أقصى اختياري
+      commission: cleanCommission(b),
       status: 'open', createdBy: fac.id, createdAt: clock(),
     };
     W.gigs[g.id] = g;
     save();
     return g;
+  }
+
+  function cleanCommission(b) {
+    const type = b.commissionType === 'percent' || b.commissionType === 'fixed' ? b.commissionType : null;
+    const value = Number(b.commissionValue);
+    if (!type || !(value > 0)) return null;
+    return {
+      type, value: type === 'percent' ? Math.min(50, value) : Math.round(value),
+      cap: Number(b.commissionCap) > 0 ? Math.round(Number(b.commissionCap)) : null,
+      basis: str(b.commissionBasis, 120) || (type === 'percent' ? 'من قيمة أول دفعة للجهة المشتركة' : 'لكل جهة تشترك'),
+    };
+  }
+  /** العمولة المستحقة عند الاعتماد: المراجع يدخل قيمة الصفقة (للنسبة) أو عدد النتائج (للمبلغ الثابت). */
+  function commissionDue(c, body) {
+    if (!c) return null;
+    const dealValue = Math.max(0, Number(body.dealValue) || 0);
+    const units = Math.max(0, Math.round(Number(body.units) || 0));
+    let amount = c.type === 'percent' ? Math.round(dealValue * c.value / 100) : units * c.value;
+    if (c.cap) amount = Math.min(amount, c.cap);
+    return { amount, dealValue: c.type === 'percent' ? dealValue : null, units: c.type === 'fixed' ? units : null };
   }
 
   function apply(u, gigId, body) {
@@ -153,9 +174,12 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       a.rating = rating;
     }
     if (['approve', 'revise', 'reject'].includes(action)) a.feedback = str(body.feedback, 1500);
-    if (action === 'paid') { if (!g.paid) throw new HttpError(400, 'الفرصة غير مدفوعة'); a.payout = 'paid'; }
+    if (action === 'paid') { if (!g.paid && !a.commission?.amount) throw new HttpError(400, 'لا مبلغ مستحق'); a.payout = 'paid'; }
     else a.status = { accept: 'assigned', reject: 'rejected', approve: 'approved', revise: 'revise' }[action];
-    if (action === 'approve' && g.paid) a.payout = 'due';
+    if (action === 'approve') {
+      a.commission = commissionDue(g.commission, body);
+      if (g.paid || a.commission?.amount) a.payout = 'due';
+    }
     a.reviewedBy = u.id; a.updatedAt = clock();
     save();
     return { ok: true, status: a.status };
@@ -166,7 +190,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
       .filter((a) => W.gigs[a.gigId] && canReview(u, W.gigs[a.gigId]) && a.status !== 'withdrawn')
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((a) => { const g = W.gigs[a.gigId]; const t = store.users[a.userId]; const rd = readiness(a.userId);
-        return { ...appPublic(a, g), gig: { id: g.id, title: g.title, org: g.org, kindLabel: KINDS[g.kind], paid: g.paid, internal: !!g.internal }, trainee: { name: t?.name ?? '—', days: rd.days, points: rd.points } }; });
+        return { ...appPublic(a, g), gig: { id: g.id, title: g.title, org: g.org, kindLabel: KINDS[g.kind], paid: g.paid, internal: !!g.internal, commission: g.commission ?? null }, trainee: { name: t?.name ?? '—', days: rd.days, points: rd.points } }; });
   }
 
   const routes = {

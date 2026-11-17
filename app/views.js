@@ -41,19 +41,19 @@ export function shell(session, route, content) {
         <div><div class="co-name">NOVA TECH</div><div class="co-status">Online</div></div>
       </div>
       <nav class="nav">
-        ${NAV.map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
+        ${NAV.filter((n) => !session.assess || !['work', 'report'].includes(n.id)).map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
           ${icon(n.icon)}<span class="lbl">${n.label}<small>${n.sub}</small></span>
           ${badges[n.id] ? `<span class="badge">${badges[n.id]}</span>` : ''}
         </a>`).join('')}
       </nav>
       ${route.page !== 'desk' ? '<div class="office-mini-wrap" aria-label="المكتب"><div id="office-mini" class="office mini"></div><a href="#/desk" class="office-mini-open">المكتب ↗</a></div>' : ''}
       <div class="side-foot">
-        <div class="me">${esc(session.user?.name ?? 'ضيف')}</div>
-        <div>${esc(sim.scenario.role)}</div>
-        ${session.user
-          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a> · <a href="#/leagues" class="side-link">الدوري</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
+        <div class="me">${esc(session.assess?.name ?? session.user?.name ?? 'ضيف')}</div>
+        <div>${esc(session.assess ? `جلسة تقييم · ${session.assess.company}` : sim.scenario.role)}</div>
+        ${session.assess ? '<div class="small">يُحفظ تقدمك تلقائيًا. تُسلَّم الجلسة عند إنهاء اليوم الأخير.</div>' : session.user
+          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/profile" class="side-link">صفحتي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a> · <a href="#/leagues" class="side-link">الدوري</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a> · <a href="#/assessments" class="side-link">تقييمات الشركات</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
-        <div><button type="button" data-act="tour">جولة في المنصة</button> · <button type="button" data-act="reset">ابدأ من جديد</button></div>
+        <div><button type="button" data-act="tour">جولة في المنصة</button>${session.assess ? '' : ' · <button type="button" data-act="reset">ابدأ من جديد</button>'}</div>
       </div>
     </aside>
     <div class="main">
@@ -141,7 +141,7 @@ export function desk(session) {
   return `
   <section class="card hero">
     <h2>${first ? 'أهلًا بك في يومك الأول' : sim.finished ? 'انتهت فترة عملك الأولى في NOVA TECH' : `صباح الخير — ${weekday(sim.day)}، يوم العمل ${sim.day}`}</h2>
-    <p>${first
+    <p>${first && session.assess ? 'ثلاثة أيام عمل مكثفة. ابدأ بالموجز من مديرك (5 دقائق قراءة)، ثم بريدك. كل بند مهلته اليوم: رتّب أولوياتك، واسأل زملاءك عن الأرقام قبل أن تقرر.' : first
       ? 'يومك الأول للتعرّف: رسالة ترحيب من مديرك، واجتماع تعارف مع الفريق، ودليل الموظف تقرؤه في المكتبة، ثم تسألك مشرفتك سلمى عمّا فهمت. المهام الحقيقية تبدأ غدًا.'
       : sim.finished ? 'راجع ما حققته بقراراتك في سجلك المهني.' : 'هذا ما ينتظرك اليوم. البنود التي تنتهي مهلتها اليوم ستُغلق عند نهاية يوم العمل، ولتجاهلها عواقب.'}</p>
     <div class="stats">
@@ -582,6 +582,7 @@ export function report(session, ui = {}) {
     </div>
   </section>
   ${pointsCard(session, r)}
+  ${quizCard(session)}
   ${realWorkCard(ui.realWork)}
   ${challengeCard(session, session.user, ui)}
   ${session.user ? portfolioCard() : ''}
@@ -882,7 +883,7 @@ export function authModal(mode = 'register', error = '') {
       <div class="field"><label for="a-city">المدينة</label><input id="a-city" name="city"></div>
     </div></details>
     <label class="consent"><input type="checkbox" name="processing" required>
-      <span><b>أوافق على معالجة بياناتي لأغراض التدريب والتقييم داخل محاكي</b> (مطلوب). تُحفظ قراراتك ومحادثاتك ونتائجك لحساب سجلك المهني. لا نطلب رقم الهوية أو الجوال.</span></label>
+      <span><b>أوافق على معالجة بياناتي لأغراض التدريب والتقييم داخل محاكي</b> (مطلوب). تُحفظ قراراتك ومحادثاتك ونتائجك لحساب سجلك المهني. لا نطلب رقم الهوية، ورقم الجوال اختياري في صفحتك.</span></label>
     <label class="consent"><input type="checkbox" name="employerSharing">
       <span><b>أوافق على مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة لمحاكي</b> (اختياري). لا يُشارك إلا إذا استوفيت شروط التوصية، ويمكنك سحب الموافقة في أي وقت.</span></label>
     <label class="consent"><input type="checkbox" name="peerReview">
@@ -1677,7 +1678,7 @@ export function workPage(state, gigId) {
 
 function gigCard(g) {
   return `<a class="card gig ${g.locked ? 'locked' : ''}" href="#/work/${esc(g.id)}">
-    <div class="gig-h"><span class="gig-k">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : g.commission ? `<span class="pill s-done">عمولة: ${esc(g.commission)}</span>` : '<span class="pill t-pill">تطوعية</span>'}</div>
+    <div class="gig-h"><span class="gig-k">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : g.commission ? `<span class="pill s-done">عمولة: ${esc(commissionText(g.commission))}</span>` : '<span class="pill t-pill">تطوعية</span>'}</div>
     ${g.internal ? '<span class="pill p-normal" style="margin-top:6px;display:inline-block">مشروع داخلي لمحاكي</span>' : ''}
     <h3>${esc(g.title)}</h3><p class="small muted">${esc(g.org)}</p>
     <div class="meta"><span class="pill t-pill">حتى ${g.points} نقطة</span><span class="pill t-pill">${g.left} من ${g.slots} مقاعد</span>${g.deadline ? `<span class="pill t-pill">حتى ${esc(new Date(g.deadline).toLocaleDateString('ar-SA-u-ca-gregory', { day: 'numeric', month: 'long' }))}</span>` : ''}</div>
@@ -1695,7 +1696,7 @@ function gigDetail(g) {
   else {
     action = `<div class="outcome ${m.status === 'approved' ? 'good' : m.status === 'revise' || m.status === 'rejected' ? 'bad' : 'info'}"><b>${WORK_STATUS[m.status]}</b>
       ${m.feedback ? `<p class="small"><b>ملاحظة المراجع:</b> ${esc(m.feedback)}</p>` : ''}
-      ${m.status === 'approved' ? `<p class="small">التقييم ${m.rating} من 5 · ${m.earned} نقطة إنجاز واقعي${m.payout ? ` · الدفع: ${m.payout === 'paid' ? 'تم' : 'مستحق'}` : ''}</p>` : ''}</div>
+      ${m.status === 'approved' ? `<p class="small">التقييم ${m.rating} من 5 · ${m.earned} نقطة إنجاز واقعي${m.commission?.amount ? ` · عمولتك: ${m.commission.amount} ر.س` : ''}${m.payout ? ` · الدفع: ${m.payout === 'paid' ? 'تم' : 'مستحق'}` : ''}</p>` : ''}</div>
       ${['assigned', 'revise'].includes(m.status) ? `<form data-form="work-submit" data-app="${esc(m.id)}" class="card-lite">
         <div class="field"><label for="w-text">ما أنجزته</label><textarea id="w-text" name="text" rows="5" maxlength="8000" placeholder="ملخص العمل والنتائج.">${esc(m.submission?.text ?? '')}</textarea></div>
         <div class="field"><label for="w-link">رابط العمل <span class="muted small">(مستند أو ملف مشترك)</span></label><input id="w-link" name="link" dir="ltr" value="${esc(m.submission?.link ?? '')}"></div>
@@ -1704,7 +1705,7 @@ function gigDetail(g) {
   }
   return `<section class="card detail"><a class="back-link" href="#/work">→ كل الفرص</a>
     <div class="chips"><span class="pill t-pill">${KIND_ICON[g.kind]} ${esc(g.kindLabel)}</span>${g.paid ? `<span class="pill s-done">مدفوعة · ${g.paid.amount} ر.س</span>` : '<span class="pill t-pill">تطوعية</span>'}<span class="pill t-pill">حتى ${g.points} نقطة</span></div>
-    <h1>${esc(g.title)}</h1><p class="muted">${esc(g.org)}${g.internal ? ' · مشروع داخلي' : ''}${g.commission ? ` · عمولة: ${esc(g.commission)}` : ''}</p>
+    <h1>${esc(g.title)}</h1><p class="muted">${esc(g.org)}${g.internal ? ' · مشروع داخلي' : ''}${g.commission ? ` · عمولة: ${esc(commissionText(g.commission))}` : ''}</p>
     ${g.internal ? INTERNAL_RULES : ''}
     <h3 class="section-t">المطلوب</h3><p class="body">${esc(g.description)}</p>
     ${g.deliverable ? `<h3 class="section-t">المخرَج المتوقع</h3><p>${esc(g.deliverable)}</p>` : ''}
@@ -1722,9 +1723,10 @@ function reviewList(apps) {
     ${a.submission ? `<div class="peer-doc">${esc(a.submission.text)}${a.submission.link ? `\n\n${esc(a.submission.link)}` : ''}</div>` : ''}
     ${a.status === 'pending' ? `<div class="actions"><button class="btn primary" data-act="work-decide" data-app="${esc(a.id)}" data-action="accept">قبول وتكليف</button><button class="btn ghost" data-act="work-decide" data-app="${esc(a.id)}" data-action="reject">اعتذار</button></div>` : ''}
     ${a.status === 'submitted' ? `<form data-form="work-review" data-app="${esc(a.id)}"><div class="field"><label>التقييم</label><span class="seg">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="rating" value="${n}"><span>${n}</span></label>`).join('')}</span></div>
+      ${a.gig.commission ? `<div class="field"><label>${a.gig.commission.type === 'percent' ? 'قيمة الصفقة المحققة (ر.س)' : 'عدد النتائج المحققة'} <span class="muted small">· العمولة: ${esc(commissionText(a.gig.commission))}</span></label><input name="${a.gig.commission.type === 'percent' ? 'dealValue' : 'units'}" type="number" min="0" value="0"></div>` : ''}
       <div class="field"><label>ملاحظة للمتدرب</label><textarea name="feedback" rows="2"></textarea></div>
       <div class="actions"><button class="btn primary" name="action" value="approve" type="submit">${a.gig.internal ? 'اعتماد للإرسال والنشر' : 'اعتماد'}</button><button class="btn" name="action" value="revise" type="submit">طلب تعديل</button><button class="btn ghost" name="action" value="reject" type="submit">رفض</button></div></form>` : ''}
-    ${a.status === 'approved' && a.payout === 'due' ? `<div class="actions"><button class="btn" data-act="work-decide" data-app="${esc(a.id)}" data-action="paid">تأكيد صرف الأجر</button></div>` : ''}
+    ${a.status === 'approved' && a.payout === 'due' ? `<div class="actions"><button class="btn" data-act="work-decide" data-app="${esc(a.id)}" data-action="paid">تأكيد الصرف${a.commission?.amount ? ` (عمولة ${a.commission.amount} ر.س)` : ''}</button></div>` : ''}
   </section>`).join('');
 }
 
@@ -1734,7 +1736,9 @@ function newGigForm() {
     <div class="field"><label>العنوان</label><input name="title" required placeholder="مثال: اختبار تجربة الاستخدام لموقع حجز"></div>
     <div class="field"><label>الجهة</label><input name="org" required></div>
     <label class="consent"><input type="checkbox" name="internal"><span><b>مشروع داخلي لمحاكي</b> (بيع خدماتنا، ومنشوراتنا، وحساباتنا): كل تواصل أو منشور مسودة لا يخرج إلا باعتماد المشرف.</span></label>
-    <div class="field"><label>عمولة <span class="muted small">(اختياري، مثل: 10% من أول دفعة لكل جهة تشترك)</span></label><input name="commission"></div>
+    <div class="field"><label>عمولة متغيرة <span class="muted small">(اختياري: تختلف من فرصة لأخرى)</span></label>
+      <div class="round-row"><select name="commissionType"><option value="">بلا عمولة</option><option value="percent">نسبة %</option><option value="fixed">مبلغ ثابت (ر.س)</option></select><input name="commissionValue" type="number" min="0" step="0.5" placeholder="القيمة"><input name="commissionCap" type="number" min="0" placeholder="حد أقصى (ر.س)"></div>
+      <input name="commissionBasis" placeholder="على ماذا؟ مثال: من قيمة أول دفعة للجهة المشتركة"></div>
     <div class="field"><label>النوع</label><select name="kind">${Object.entries({ sales: 'التواصل مع الجهات لبيع خدماتنا', social: 'محتوى إعلاني وإدارة حساباتنا', customers: 'التواصل مع عملاء', ux: 'اختبار تجربة مستخدم', report: 'تقرير', excel: 'ملف إكسل وتحليل بيانات', marketing: 'تسويق', legal: 'قضية أو عقد', other: 'أخرى' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
     <div class="field"><label>المطلوب</label><textarea name="description" rows="3" required></textarea></div>
     <div class="field"><label>المخرَج المتوقع</label><textarea name="deliverable" rows="2"></textarea></div>
@@ -1771,4 +1775,155 @@ function mailTags(item, sim) {
   if (item.status !== 'open') return '';
   const asap = item.priority === 'critical' || item.dueDay <= sim.day;
   return `<abbr class="tag fya" title="For Your Action: مطلوب منك إجراء">FYA</abbr>${asap ? '<abbr class="tag asap" title="As Soon As Possible: عاجل">ASAP</abbr>' : ''}`;
+}
+
+const commissionText = (c) => `${c.type === 'percent' ? `${c.value}%` : `${c.value} ر.س`} ${c.basis}${c.cap ? ` (بحد أقصى ${c.cap} ر.س)` : ''}`;
+
+// ——— صفحة المتدرب: العمر والسيرة الذاتية وأرقام التواصل ———
+
+export function profilePage(user) {
+  if (!user) return '<section class="card"><div class="empty"><b>سجّل الدخول لتعبئة صفحتك</b></div></section>';
+  const p = user.profile ?? {};
+  const age = p.birthYear ? new Date().getFullYear() - p.birthYear : null;
+  const f = (name, label, attrs = '', hint = '') => `<div class="field"><label for="pf-${name}">${label}</label><input id="pf-${name}" name="${name}" value="${esc(p[name] ?? '')}" ${attrs}>${hint ? `<span class="small muted">${hint}</span>` : ''}</div>`;
+  const ta = (name, label, rows, ph) => `<div class="field"><label for="pf-${name}">${label}</label><textarea id="pf-${name}" name="${name}" rows="${rows}" placeholder="${ph}">${esc(p[name] ?? '')}</textarea></div>`;
+  return `<div class="page-h"><div><h1>صفحتي</h1><p>بياناتك وسيرتك الذاتية وأرقام التواصل. كلها اختيارية، و<b>لا تُشارك مع جهات التوظيف إلا إذا فعّلت موافقة المشاركة</b> من "حسابي".</p></div></div>
+  <div class="grid g-main">
+    <form class="card" data-form="trainee-profile">
+      <h2>البيانات الأساسية</h2>
+      <div class="grid g-2">${f('birthYear', 'سنة الميلاد', 'type="number" min="1950" max="2012" dir="ltr"', age ? `العمر: ${age} سنة` : '')}${f('city', 'المدينة')}
+        ${f('university', 'الجامعة')}${f('major', 'التخصص')}${f('graduationYear', 'سنة التخرج', 'type="number" min="1990" max="2040" dir="ltr"')}</div>
+      <h2 style="margin-top:16px">أرقام التواصل</h2>
+      <div class="grid g-2">${f('phone', 'الجوال', 'type="tel" dir="ltr" placeholder="+9665XXXXXXXX"')}${f('phone2', 'رقم آخر / واتساب', 'type="tel" dir="ltr"')}
+        ${f('linkedin', 'لينكدإن', 'type="url" dir="ltr" placeholder="https://linkedin.com/in/…"')}</div>
+      <h2 style="margin-top:16px">السيرة الذاتية</h2>
+      ${ta('summary', 'نبذة', 3, 'من أنت، وما الذي تبحث عنه؟')}
+      ${ta('education', 'التعليم والدورات', 3, 'الشهادة، والجهة، والسنة. كل بند في سطر.')}
+      ${ta('experience', 'الخبرات والمشاريع', 4, 'تدريب، وعمل حر، ومشاريع تخرج. كل بند في سطر.')}
+      ${f('skills', 'المهارات', 'placeholder="إكسل، تحليل بيانات، عرض وتقديم…"')}
+      ${f('cvUrl', 'رابط ملف السيرة الذاتية (PDF)', 'type="url" dir="ltr" placeholder="https://…"', 'ارفع الملف على Google Drive أو غيره وضع رابطه هنا.')}
+      <div class="actions"><button class="btn primary" type="submit">حفظ</button></div>
+    </form>
+    <section class="card cv-preview"><h2>كما تراها جهة التوظيف</h2>
+      <h3 style="margin:6px 0 0">${esc(user.name)}</h3>
+      <p class="small muted" style="margin:2px 0 8px">${[age && `${age} سنة`, p.city, p.major, p.university].filter(Boolean).map(esc).join(' · ') || 'أكمل بياناتك.'}</p>
+      ${p.summary ? `<p>${esc(p.summary)}</p>` : ''}
+      ${p.education ? `<h4>التعليم</h4><p class="pre">${esc(p.education)}</p>` : ''}
+      ${p.experience ? `<h4>الخبرات</h4><p class="pre">${esc(p.experience)}</p>` : ''}
+      ${p.skills ? `<h4>المهارات</h4><p>${esc(p.skills)}</p>` : ''}
+      <h4>التواصل</h4><p class="small" dir="ltr" style="text-align:right">${[user.email, p.phone, p.phone2, p.linkedin].filter(Boolean).map(esc).join('<br>')}</p>
+      ${p.cvUrl ? `<a class="btn" href="${esc(p.cvUrl)}" target="_blank" rel="noopener">ملف السيرة الذاتية ↗</a>` : ''}
+      <p class="small muted" style="margin-top:12px">${user.consents?.employerSharing ? '✓ المشاركة مع جهات التوظيف مفعّلة.' : 'المشاركة مع جهات التوظيف غير مفعّلة: لا يرى هذه الصفحة غيرك.'}</p>
+    </section>
+  </div>`;
+}
+
+// ——— أسئلة تنمية المهارات (تظهر عشوائيًا خلال اليوم) ———
+
+export function quizModal(world, q, picked = null) {
+  const done = picked !== null;
+  return `<div class="quiz"><div class="quiz-h"><span class="pill p-normal">سؤال سريع</span><span class="pill t-pill">${esc(world.quiz.skills[q.skill])}</span></div>
+    <h2>${esc(q.q)}</h2>
+    <div class="options">${q.options.map((o, i) => `<button type="button" class="opt quiz-opt ${done ? (i === q.answer ? 'right' : i === picked ? 'wrong' : '') : ''}" ${done ? 'disabled' : ''} data-act="quiz-answer" data-i="${i}"><span>${esc(o)}</span></button>`).join('')}</div>
+    ${done ? `<div class="outcome ${picked === q.answer ? 'good' : 'info'}"><b>${picked === q.answer ? 'صحيح!' : 'ليست الأفضل.'}</b> ${esc(q.why)}</div>
+      <div class="actions"><button class="btn primary" data-act="close-modal">متابعة العمل</button></div>`
+      : '<div class="actions"><button class="btn ghost" data-act="close-modal">لاحقًا</button><span class="small muted">للتعلم فقط: لا يؤثر على نقاطك الرسمية.</span></div>'}</div>`;
+}
+
+function quizCard(session) {
+  const qs = session.world.quiz?.questions ?? [];
+  const answered = qs.filter((q) => q.id in (session.quiz ?? {}));
+  if (!answered.length) return '';
+  const right = answered.filter((q) => session.quiz[q.id] === 1).length;
+  const by = {};
+  for (const q of answered) { (by[q.skill] ??= [0, 0])[1]++; if (session.quiz[q.id] === 1) by[q.skill][0]++; }
+  return `<section class="card" style="margin-top:16px"><h2>أسئلة تنمية المهارات</h2>
+    <p class="small muted" style="margin-top:0">أسئلة سريعة تظهر خلال يومك. للتعلم، ولا تدخل في نقاطك الرسمية.</p>
+    <div class="pf-stats small-stats"><div><b class="num">${right} / ${answered.length}</b><span>إجابات صحيحة</span></div><div><b class="num">${qs.length - answered.length}</b><span>أسئلة باقية</span></div></div>
+    <div class="chips" style="margin-top:10px">${Object.entries(by).map(([k, [r, n]]) => `<span class="pill ${r === n ? 's-done' : 't-pill'}">${esc(session.world.quiz.skills[k])}: ${r}/${n}</span>`).join('')}</div>
+    <div class="actions" style="margin-top:10px"><button class="btn" data-act="quiz-now">سؤال الآن</button></div></section>`;
+}
+
+// ——— جلسة التقييم القصيرة للشركات ———
+
+const assessFrame = (inner) => `<div class="verify-wrap"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}
+  <p class="disclaimer verify-note">NOVA TECH شركة افتراضية لأغراض التقييم. لا نطلب هوية ولا رقم جوال.</p></div>`;
+
+/** بوابة المرشح: رابط غير صالح، أو تعليمات البدء، أو شكر بعد التسليم. */
+export function assessGate(a) {
+  if (a.error) return assessFrame(`<section class="card"><div class="empty"><b>رابط التقييم غير صالح</b>${esc(a.error)}</div></section>`);
+  const i = a.info;
+  if (i.finished) return assessFrame(`<section class="card"><div class="outcome good"><h3>سُلّمت جلستك. شكرًا ${esc(i.name)}!</h3>
+    <p>وصلت نتيجتك إلى <b>${esc(i.company)}</b>، وسيتواصلون معك بالخطوة التالية. يمكنك إغلاق الصفحة.</p></div></section>`);
+  return assessFrame(`<section class="card challenge-hero">
+    <div class="muted small">${esc(i.company)} تدعوك إلى</div>
+    <h1>يوم عمل تجريبي: ${esc(i.title)}</h1>
+    <p>أهلًا ${esc(i.name)}. بدل المقابلة النظرية، ستعمل <b>ثلاثة أيام عمل مكثفة</b> مديرًا للمنتجات في NOVA TECH، شركة SaaS سعودية افتراضية. المدة المتوقعة نحو <b>${i.minutes} دقيقة</b>.</p>
+    <ul class="checks-list">
+      <li><b>بريد عمل</b> فيه رسائل وشكاوى ومهام. تكتب ردودك بحرية، لا اختيارات جاهزة.</li>
+      <li><b>اجتماعات</b> يعترض فيها زملاؤك، وعليك أن تقنعهم بالأرقام.</li>
+      <li><b>مستند</b> واحد تكتبه. كل ما تحتاجه من أرقام موجود في ملفات الشركة، ويمكنك سؤال زملائك.</li>
+      <li>كل بند مهلته يومه: ما لا تنجزه قبل «إنهاء يوم العمل» يُحسب عليك. رتّب أولوياتك.</li>
+      <li>يُحفظ تقدمك تلقائيًا، وتستطيع التوقف والعودة من الرابط نفسه. تُسلَّم الجلسة عند إنهاء اليوم الثالث.</li>
+    </ul>
+    <label class="consent"><input type="checkbox" id="assess-consent"><span>أوافق على معالجة إجاباتي في هذه الجلسة ومشاركة نتيجتها مع <b>${esc(i.company)}</b> لغرض التوظيف. يحكم على الحوارات نموذج ذكاء اصطناعي بمعايير موحدة لكل المرشحين.</span></label>
+    <div class="actions"><button class="btn primary" data-act="assess-start">${i.startedAt ? 'أكمل الجلسة' : 'ابدأ الجلسة'}</button></div>
+  </section>`);
+}
+
+/** تقرير المقارنة للشركة (برابط سري، دون حساب). */
+export function assessReportPage(state) {
+  const frame = (inner) => `<div class="pf-wrap" style="max-width:980px"><div class="brand verify-brand"><img src="assets/mark.svg" alt=""><span>محاكي</span><span class="en">MOHAKI</span></div>${inner}
+    <p class="disclaimer verify-note">النتائج يحسبها خادم محاكي بإعادة تشغيل أفعال كل مرشح على العالم نفسه. هذا التقرير أداة مساعدة لقرار التوظيف، لا بديل عنه. الرابط سري: لا تشاركه خارج فريق التوظيف.</p></div>`;
+  if (state.loading) return frame('<section class="card"><div class="empty">جارٍ التحميل…</div></section>');
+  if (state.error) return frame(`<section class="card"><div class="empty"><b>تعذر فتح التقرير</b>${esc(state.error)}</div></section>`);
+  const r = state.report;
+  const ST = { invited: 'لم يبدأ', started: 'بدأ ولم يُكمل', finished: 'أكمل' };
+  const rows = r.candidates.map((c, i) => {
+    const open = state.open === String(i);
+    const detail = open && c.points !== undefined ? `<tr class="cand-detail"><td colspan="6">
+      <div class="grid g-2">
+        <div><h4>المهارات</h4>${c.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score}%</span>${bar(s.score)}</div>`).join('')}
+          <p class="small"><b>الأقوى:</b> ${c.strengths.map(esc).join('، ')} · <b>للتطوير:</b> ${c.toImprove.map(esc).join('، ')}</p>
+          <p class="small">أثره على الشركة مقابل عالم بلا قرارات: الإيراد الشهري ${c.impact.mrr >= 0 ? '+' : ''}${fmt(c.impact.mrr)} ر.س · رضا العملاء ${c.impact.health >= 0 ? '+' : ''}${c.impact.health}${c.missed ? ` · <b>${c.missed} بنود فاتت مهلتها</b>` : ''}</p></div>
+        <div><h4>المستندات</h4>${c.deliverables.map((d) => `<details><summary><b>${esc(d.title)}</b> · ${d.score}%${d.missing.length ? ` · ينقصه: ${d.missing.map(esc).join('، ')}` : ''}</summary><div class="peer-doc">${esc(d.text)}</div></details>`).join('') || '<p class="small muted">لم يسلّم مستندًا.</p>'}</div>
+      </div>
+      <h4>القرارات والحوارات</h4>
+      ${c.decisions.map((d) => `<article class="pf-item"><div class="small muted">اليوم ${d.day}${d.concerns ? ` · أجاب ${d.addressed} من ${d.concerns} اعتراضات` : ''}</div><b>${esc(d.title)}</b> ← ${esc(d.choice ?? '')}
+        ${d.said.length ? d.said.map((t) => `<p class="pf-quote">«${esc(t)}»</p>`).join('') : d.rationale ? `<p class="pf-quote">«${esc(d.rationale)}»</p>` : ''}</article>`).join('')}
+    </td></tr>` : '';
+    return `<tr class="cand ${open ? 'on' : ''}" data-act="assess-toggle" data-i="${i}" tabindex="0">
+      <td class="num">${c.points !== undefined ? i + 1 : '—'}</td><td><b>${esc(c.name)}</b></td>
+      <td><span class="pill ${c.status === 'finished' ? 's-done' : c.status === 'started' ? 'p-high' : 't-pill'}">${ST[c.status]}${c.status === 'started' && c.day ? ` (اليوم ${c.day})` : ''}</span></td>
+      <td class="num"><b>${c.points ?? '—'}</b></td><td>${esc(c.band ?? '')}</td><td class="num">${c.minutes ? `${c.minutes} د` : '—'}</td></tr>${detail}`;
+  }).join('');
+  return frame(`<section class="card pf-hero"><div class="muted small">تقرير يوم العمل التجريبي</div><h1>${esc(r.company)} · ${esc(r.title)}</h1>
+    <p class="muted">${r.days} أيام عمل مكثفة في شركة افتراضية · كل المرشحين واجهوا المواقف نفسها بالضبط.</p>
+    <div class="pf-stats small-stats"><div><b class="num">${r.summary.invited}</b><span>مدعوون</span></div><div><b class="num">${r.summary.started}</b><span>بدأوا</span></div><div><b class="num">${r.summary.finished}</b><span>أكملوا</span></div></div></section>
+  <section class="card"><h2>المرشحون</h2><p class="small muted" style="margin-top:0">اضغط على مرشح لترى مهاراته وقراراته ونص حواراته ومستنده. النقاط من 1000.</p>
+    <div class="tbl-wrap"><table class="board cand-tbl"><thead><tr><th>#</th><th>المرشح</th><th>الحالة</th><th>النقاط</th><th>المستوى</th><th>المدة</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="actions" style="margin-top:12px"><button class="btn" data-act="print">طباعة / حفظ PDF</button></div></section>`);
+}
+
+/** إدارة تقييمات الشركات (للمُيسِّر). */
+export function assessAdminPage(user, state) {
+  if (user?.role !== 'facilitator') return '<section class="card"><div class="empty"><b>هذه الصفحة للمُيسِّرين فقط</b></div></section>';
+  const list = state.list ?? [];
+  return `<div class="page-h"><div><a href="#/desk" class="small" style="text-decoration:none">→ العودة</a><h1>تقييمات الشركات</h1><p>«يوم عمل تجريبي بدل المقابلة»: أنشئ تقييمًا لشركة، وأرسل لكل مرشح رابطه، وأرسل للشركة رابط تقرير المقارنة.</p></div></div>
+  <div class="grid g-main">
+    <div>${state.loading ? '<section class="card"><div class="empty">جارٍ التحميل…</div></section>' : list.length ? list.map((a) => `<section class="card" style="margin-bottom:14px">
+      <div class="office-h"><h2>${esc(a.company)} · ${esc(a.title)}</h2><span class="small muted">${a.minutes} دقيقة</span></div>
+      <p class="small">رابط تقرير الشركة: <a href="${esc(a.reportLink)}" target="_blank" dir="ltr">${esc(a.reportLink)}</a> <button class="btn sm ghost" data-act="copy-url" data-url="${esc(a.reportLink)}">نسخ</button></p>
+      <table class="board"><thead><tr><th>المرشح</th><th>الحالة</th><th>رابطه</th></tr></thead><tbody>${a.candidates.map((c) => `<tr><td>${esc(c.name)}${c.email ? `<br><span class="small muted" dir="ltr">${esc(c.email)}</span>` : ''}</td><td>${{ invited: 'لم يبدأ', started: 'بدأ', finished: 'أكمل' }[c.status]}</td><td><button class="btn sm ghost" data-act="copy-url" data-url="${esc(c.link)}">نسخ الرابط</button></td></tr>`).join('')}</tbody></table></section>`).join('')
+      : '<section class="card"><div class="empty"><b>لا توجد تقييمات بعد</b></div></section>'}</div>
+    <section class="card"><h2>تقييم جديد</h2>
+      <form data-form="assess-new" class="grid" style="gap:10px">
+        <div class="field"><label>الشركة</label><input name="company" required></div>
+        <div class="field"><label>الوظيفة</label><input name="title" value="مدير منتجات (مبتدئ)"></div>
+        <div class="field"><label>المدة المتوقعة (دقيقة)</label><input name="minutes" type="number" min="30" max="240" value="120"></div>
+        <div class="field"><label>المرشحون <span class="muted small">(كل مرشح في سطر: الاسم، ثم بريده اختياريًا)</span></label><textarea name="candidates" rows="5" required placeholder="أحمد سالم, ahmad@example.com&#10;منى فهد"></textarea>
+          <span class="small muted">من له بريد تصله الدعوة تلقائيًا إن كان البريد مفعّلًا. وإلا انسخ الروابط وأرسلها.</span></div>
+        <div class="actions"><button class="btn primary" type="submit">إنشاء التقييم</button></div>
+      </form></section>
+  </div>`;
 }

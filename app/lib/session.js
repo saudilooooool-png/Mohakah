@@ -4,21 +4,24 @@
 import { Simulation } from '../../src/engine/simulation.js';
 import { applyAction } from '../../src/replay.js';
 
-const KEY = 'mohaki.session.v1';
+let KEY = 'mohaki.session.v1';
+/** جلسة التقييم تُحفظ بمفتاح خاص حتى لا تختلط بتقدم المتدرب العادي. */
+export function setStorageKey(k) { KEY = k; }
 
 export async function loadWorld() {
   const get = (p) => fetch(p).then((r) => {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario, ssco, profiles, library] = await Promise.all([
+  const [company, scenario, ssco, profiles, library, quiz] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
     get('../data/occupations/ssco.json'),
     get('../data/occupations/ssco-profiles.json'),
     get('../data/library/nova-tech.json'),
+    get('../data/questions/pm.json'),
   ]);
-  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library };
+  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library, quiz };
 }
 
 function readSave() {
@@ -44,6 +47,9 @@ export class Session {
     this.league = save.league ?? null;
     this.read = save.read ?? {};
     this.opened = save.opened ?? {};
+    // أسئلة تنمية المهارات: { [معرّف السؤال]: 1 صحيح | 0 خطأ }. للتعلم، لا تدخل في النقاط الرسمية.
+    this.quiz = save.quiz ?? {};
+    this.quizDay = {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -66,7 +72,7 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, quiz: this.quiz, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null, league = null } = {}) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge, league });
@@ -96,6 +102,12 @@ export class Session {
   /** إبلاغ عن اكتشاف من المكتبة (فعل يُعاد تشغيله على الخادم كأي قرار). */
   insight(id) {
     return this._do({ t: 'insight', id });
+  }
+
+  answerQuiz(id, correct) {
+    this.quiz = { ...this.quiz, [id]: correct ? 1 : 0 };
+    this.quizDay[this.sim.day] = (this.quizDay[this.sim.day] ?? 0) + 1;
+    this._persist();
   }
 
   /** الرسائل المفتوحة في البريد (مقروء/غير مقروء): للواجهة فقط. */

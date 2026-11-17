@@ -13,6 +13,7 @@ import { createShowcaseApi } from './showcase/api.js';
 import { createLeadsApi } from './leads/api.js';
 import { createTeamsApi } from './teams/api.js';
 import { createWorkApi } from './work/api.js';
+import { createAssessApi } from './assess/api.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -46,18 +47,24 @@ export function createMohakiServer({
   leadsApi = createLeadsApi({ store, mailer: lazy(mailer) }),
   teamsApi = createTeamsApi({ store, world, accountsApi }),
   workApi = createWorkApi({ store, world, accountsApi }),
+  // جلسة التقييم القصيرة تستخدم السيناريو المختصر مع الشركة نفسها
+  assessApi = createAssessApi({ store, world: { ...world, scenario: JSON.parse(readFileSync(join(root, 'data/scenarios/pm-assessment.json'), 'utf8')) }, accountsApi, mailer: lazy(mailer) }),
   agentApi = createAgentApi({
     root,
     meter: createMeter({ dir: join(dataDir, 'usage') }),
     identify: (req) => {
       const u = accountsApi.userFrom?.(req);
+      // مرشح في جلسة تقييم (بلا حساب): يُعامل كمستخدم مسجل حتى يحكم عليه النموذج نفسه لكل المرشحين
+      const at = String(req.headers?.['x-assess-token'] ?? '');
+      if (!u && at && assessApi.hasToken(at)) return { userKey: `assess:${at}`, isGuest: false };
       return u ? { userKey: u.id, isGuest: false } : { userKey: `guest:${req.socket?.remoteAddress ?? ''}`, isGuest: true };
     },
   }),
 }) {
   return createServer(async (req, res) => {
     if (/^\/[cp]\//.test(req.url) && await showcaseApi(req, res)) return;
-    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res) || await leadsApi(req, res) || await teamsApi(req, res) || await workApi(req, res))) return;
+    if (/^\/[ar]\//.test(req.url) && await assessApi(req, res)) return;
+    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res) || await leadsApi(req, res) || await teamsApi(req, res) || await workApi(req, res) || await assessApi(req, res))) return;
     if (req.url.startsWith('/api/')) { res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end('{"error":"غير موجود"}'); }
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (path === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }

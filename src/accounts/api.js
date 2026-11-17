@@ -59,6 +59,17 @@ export function cleanProfile(raw = {}) {
     major: str(raw.major, 100),
     graduationYear: Number.isInteger(year) && year >= 1990 && year <= 2040 ? year : null,
     city: str(raw.city, 60),
+    // صفحة المتدرب (كلها اختيارية): العمر من سنة الميلاد، والسيرة الذاتية، وأرقام التواصل.
+    // لا تُشارك مع جهات التوظيف إلا بموافقة المشاركة الصريحة.
+    birthYear: Number.isInteger(Number(raw.birthYear)) && Number(raw.birthYear) >= 1950 && Number(raw.birthYear) <= 2012 ? Number(raw.birthYear) : null,
+    phone: /^\+?[0-9 ]{8,16}$/.test(str(raw.phone, 20)) ? str(raw.phone, 20) : '',
+    phone2: /^\+?[0-9 ]{8,16}$/.test(str(raw.phone2, 20)) ? str(raw.phone2, 20) : '',
+    linkedin: /^https:\/\/([a-z]+\.)?linkedin\.com\//i.test(str(raw.linkedin, 200)) ? str(raw.linkedin, 200) : '',
+    cvUrl: /^https:\/\//i.test(str(raw.cvUrl, 300)) ? str(raw.cvUrl, 300) : '',
+    summary: str(raw.summary, 600),
+    education: str(raw.education, 1200),
+    experience: str(raw.experience, 2000),
+    skills: str(raw.skills, 400),
   };
 }
 
@@ -343,7 +354,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       const lg = store.teams?.leagues?.[str(body.league, 64)];
       const league = lg && lg.seed === seed && lg.teams.some((tm) => tm.members.includes(u.id)) ? lg.id : undefined;
       const before = store.progress(u.id);
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), quiz: clip(body.quiz, 200), ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
       maybeDigest(u, before, store.progress(u.id)).catch(() => {});
       return { ok: true };
     },

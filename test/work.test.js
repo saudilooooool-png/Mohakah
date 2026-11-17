@@ -118,14 +118,30 @@ test('مشروع داخلي لمحاكي: نوع بيع خدماتنا، بلا 
   await withServer(async ({ user }) => {
     const fac = await user('هيا', 'fac@example.com');
     const t = await user('سارة العتيبي', 't@example.com');
-    const { gig: g } = (await fac('POST', '/api/work', { title: 'التواصل مع 10 جامعات لعرض محاكي', org: 'محاكي', kind: 'sales', internal: true, commission: '10% من أول دفعة', description: 'جهّز رسالة تعريفية وقائمة الجهات.', minDays: 0, amount: 0 })).data;
+    const { gig: g } = (await fac('POST', '/api/work', { title: 'التواصل مع 10 جامعات لعرض محاكي', org: 'محاكي', kind: 'sales', internal: true, commissionType: 'percent', commissionValue: 10, commissionCap: 2000, description: 'جهّز رسالة تعريفية وقائمة الجهات.', minDays: 0, amount: 0 })).data;
     const list = (await t('GET', '/api/work')).data.gigs[0];
-    assert.deepEqual([list.internal, list.commission, list.paid, list.kindLabel], [true, '10% من أول دفعة', null, 'التواصل مع الجهات لبيع خدماتنا']);
+    assert.deepEqual([list.internal, list.commission.type, list.commission.value, list.paid, list.kindLabel], [true, 'percent', 10, null, 'التواصل مع الجهات لبيع خدماتنا']);
     const app = (await t('POST', `/api/work/${g.id}/apply`, {})).data.application;
     await fac('POST', `/api/work/apps/${app.id}/decide`, { action: 'accept' });
     await t('POST', `/api/work/apps/${app.id}/submit`, { text: 'مسودة الرسالة: السلام عليكم، نقدم في محاكي محاكاة عمل لطلابكم... وقائمة 10 جامعات.' });
     const q = (await fac('GET', '/api/work/review')).data.applications[0];
     assert.equal(q.status, 'submitted', 'لا يخرج شيء قبل اعتماد المشرف');
     assert.equal(q.gig.internal, true);
+    // العمولة متغيرة: نسبة من قيمة الصفقة التي يدخلها المشرف عند الاعتماد، بحد أقصى
+    await fac('POST', `/api/work/apps/${app.id}/decide`, { action: 'approve', rating: 5, dealValue: 12000 });
+    let mine = (await t('GET', '/api/work')).data.gigs[0].mine;
+    assert.deepEqual([mine.commission.amount, mine.payout], [1200, 'due']);
+    await fac('POST', `/api/work/apps/${app.id}/decide`, { action: 'paid' });
+    mine = (await t('GET', '/api/work')).data.gigs[0].mine;
+    assert.equal(mine.payout, 'paid');
+  });
+});
+
+test('صفحة المتدرب: العمر والسيرة وأرقام التواصل اختيارية وتُنظَّف، ولا تصل لجهات التوظيف دون موافقة', async () => {
+  await withServer(async ({ user }) => {
+    const t = await user('سارة العتيبي', 't@example.com');
+    const me = (await t('PATCH', '/api/me', { profile: { birthYear: 2002, phone: '+966501234567', phone2: 'abc', linkedin: 'http://evil.example', cvUrl: 'https://drive.example/cv.pdf', summary: 'خريجة نظم معلومات', skills: 'إكسل' } })).data;
+    assert.deepEqual([me.profile.birthYear, me.profile.phone, me.profile.phone2, me.profile.linkedin, me.profile.cvUrl], [2002, '+966501234567', '', '', 'https://drive.example/cv.pdf']);
+    assert.equal(me.consents.employerSharing, false);
   });
 });

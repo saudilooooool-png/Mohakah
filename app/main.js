@@ -1,6 +1,6 @@
 // المتحكم: يربط الشاشات بالجلسة، ويدير التنقل والأحداث والمسودات والنوافذ.
 import * as Office from './lib/office.js';
-import { Session, loadWorld } from './lib/session.js';
+import { Session, loadWorld, setStorageKey } from './lib/session.js';
 import { esc, words } from './lib/ui.js';
 import * as V from './views.js';
 import { agentStatus, resetAgentStatus, openMeeting, runTurn } from './lib/meeting-client.js';
@@ -219,9 +219,62 @@ async function loadFacilitator() {
 /** يربط الجلسة بالحساب: كل حفظ محلي يُرفع إلى الخادم (مؤجلًا). */
 function attach(s) {
   if (!s) return s;
+  if (assess) {
+    // جلسة تقييم لشركة: بلا حساب، والتقدم يُحفظ على رابط المرشح
+    s.user = null; s.assess = assess.info;
+    s.onSave = (data) => {
+      fetch(`/api/assess/c/${assess.token}/progress`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data), keepalive: JSON.stringify(data).length < 60000 })
+        .then((r) => r.json()).then((d) => { if (d.finished && !assess.info.finished) { assess.info.finished = true; render(); } }).catch(() => {});
+    };
+    return s;
+  }
   s.user = user;
   s.onSave = user ? (data) => saver.save(data) : null;
   return s;
+}
+
+// ——— جلسة التقييم للشركات ———
+let assess = null;            // { token, info } حين يدخل مرشح برابط تقييم
+let assessReport = { loading: true };
+let assessAdmin = { loading: true };
+const ASSESS_KEY = 'mohaki.assess.token';
+
+async function enterAssess(token) {
+  const res = await fetch(`/api/assess/c/${encodeURIComponent(token)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { assess = { token, error: data.error || 'رابط التقييم غير صالح' }; render(); return; }
+  try { sessionStorage.setItem(ASSESS_KEY, token); } catch { /* */ }
+  assess = { token, info: data.assessment };
+  user = null;
+  // وكلاء الذكاء الاصطناعي يتعرفون على المرشح من رمز رابطه
+  const raw = window.fetch.bind(window);
+  if (!window.__assessFetch) { window.__assessFetch = true; window.fetch = (u, o = {}) => (typeof u === 'string' && u.startsWith('/api/') ? raw(u, { ...o, headers: { ...(o.headers ?? {}), 'x-assess-token': token } }) : raw(u, o)); }
+  setStorageKey(`mohaki.assess.${token}`);
+  world = { ...world, scenario: await (await fetch('../data/scenarios/pm-assessment.json')).json() };
+  refreshAgents();
+  const p = assess.info.progress;
+  const local = Session.localSave();
+  if (assess.info.finished) session = null;
+  else if (local && local.seed === assess.info.seed && (local.log?.length ?? 0) > (p?.log?.length ?? 0)) session = attach(Session.resume(world));
+  else if (p) session = attach(Session.fromSave(world, p));
+  if (parseRoute().page === 'assess') location.hash = session ? '#/desk' : '#/assess/' + token;
+  render();
+}
+
+async function loadAssessReport() {
+  assessReport = { loading: true }; render();
+  try {
+    const res = await fetch(`/api/assess/report/${encodeURIComponent(parseRoute().itemId)}`);
+    const d = await res.json();
+    assessReport = res.ok ? { report: d.report, open: assessReport.open } : { error: d.error };
+  } catch (err) { assessReport = { error: err.message }; }
+  render();
+}
+
+async function loadAssessAdmin() {
+  assessAdmin = { loading: true }; render();
+  try { const r = await fetch('/api/assess', { credentials: 'same-origin' }); const d = await r.json(); assessAdmin = r.ok ? { list: d.assessments } : { error: d.error }; } catch (err) { assessAdmin = { error: err.message }; }
+  render();
 }
 const DRAFT_KEY = 'mohaki.drafts.v1';
 let drafts = {};
@@ -245,7 +298,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league', 'profile', 'assess', 'assess-report', 'assessments'];
   // "أعمال واقعية" في القائمة الرئيسية (NAV)
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
@@ -262,6 +315,13 @@ function render() {
     app.innerHTML = V.portfolioPage(pfPublic);
     document.title = pfPublic.portfolio ? `${pfPublic.portfolio.name} — ملف أعمال موثّق · محاكي` : 'ملف أعمال — محاكي';
     return;
+  }
+  if (route.page === 'assess-report') { app.innerHTML = V.assessReportPage(assessReport); document.title = 'تقرير التقييم — محاكي'; return; }
+  if (route.page === 'assessments' && !assess) { app.innerHTML = `<div class="content" style="margin:0 auto">${V.assessAdminPage(user, assessAdmin)}</div>`; return; }
+  if (assess) {
+    document.title = 'جلسة تقييم — محاكي';
+    if (assess.error || assess.info.finished || !session) { app.innerHTML = V.assessGate(assess); return; }
+    if (session.sim.finished) { app.innerHTML = V.assessGate({ ...assess, info: { ...assess.info, finished: true } }); return; }
   }
   if (route.page === 'challenge') {
     app.innerHTML = V.challengePage(challengeState, { session, user });
@@ -321,6 +381,7 @@ function render() {
     case 'leagues': body = user ? V.leaguesPage(user, leaguesState) : '<section class="card"><div class="empty"><b>سجّل الدخول للدوري</b></div></section>'; break;
     case 'league': body = V.leaguePage(leagueState.league); break;
     case 'work': body = V.workPage(workState, route.itemId); break;
+    case 'profile': body = V.profilePage(user); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -364,6 +425,23 @@ async function maybeTour() {
   if (!t.tourSeen()) setTimeout(t.startTour, 500);
 }
 
+/**
+ * سؤال مهارة عشوائي خلال اليوم: بعد إنجاز بند، مرتين في يوم العمل كحد أقصى.
+ * يميل إلى أضعف مهارات المتدرب، ولا يكرر سؤالًا أُجيب.
+ */
+function showQuiz(force = false) {
+  if (!session || session.assess || session.sim.finished || modalRoot.innerHTML) return;
+  const left = (world.quiz?.questions ?? []).filter((q) => !(q.id in session.quiz));
+  if (!left.length) { if (force) toast('أجبت كل الأسئلة. أحسنت!', 'good'); return; }
+  if (!force && ((session.quizDay[session.sim.day] ?? 0) >= 2 || Math.random() > 0.45 || navigator.webdriver)) return;
+  const weak = new Set(session.sim.report().skills.filter((s) => s.score !== null).sort((a, b) => a.score - b.score).slice(0, 3).map((s) => s.id));
+  const pool = left.filter((q) => weak.has(q.skill));
+  const from = pool.length && Math.random() < 0.7 ? pool : left;
+  ui.quizQ = from[Math.floor(Math.random() * from.length)];
+  openModal(V.quizModal(world, ui.quizQ));
+}
+const quizSoon = () => setTimeout(() => showQuiz(), 2500);
+
 function nextOpenItemHref() {
   const next = session.sim.inbox()[0];
   return next ? `#/inbox/${encodeURIComponent(next.id)}` : '#/inbox?f=open';
@@ -393,7 +471,7 @@ const actions = {
   'confirm-reset'() { closeModal(); session = null; actions.start(); },
   'end-day'() {
     // الضيف يجرب يومه الأول، ثم يُطلب منه إنشاء حساب ليكمل (تقدمه محفوظ وينتقل للحساب)
-    if (!user && session.sim.day >= 2) { openModal(V.guestWall()); return; }
+    if (!user && !session.assess && session.sim.day >= 2) { openModal(V.guestWall()); return; }
     openModal(V.endDayConfirm(session));
   },
   'open-auth'(e) { openModal(V.authModal(e.target.closest('[data-mode]').dataset.mode)); },
@@ -450,6 +528,28 @@ const actions = {
     toast(x.result || 'وصلت ملاحظتك.', 'good');
     render();
   },
+  'quiz-answer'(e) {
+    const i = Number(e.target.closest('[data-i]').dataset.i);
+    const q = ui.quizQ;
+    session.answerQuiz(q.id, i === q.answer);
+    openModal(V.quizModal(world, q, i));
+  },
+  'quiz-now'() { showQuiz(true); },
+  async 'assess-start'() {
+    const ok = app.querySelector('#assess-consent')?.checked;
+    if (!ok) { toast('نحتاج موافقتك لبدء الجلسة.', 'bad'); return; }
+    const res = await fetch(`/api/assess/c/${assess.token}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consent: true }) });
+    const d = await res.json();
+    if (!res.ok) { toast(d.error, 'bad'); return; }
+    assess.info = d.assessment;
+    Session.clear();
+    session = attach(Session.start(world, assess.info.seed));
+    session._persist();
+    location.hash = '#/desk';
+    render();
+    maybeTour();
+  },
+  'assess-toggle'(e) { const i = e.target.closest('[data-i]').dataset.i; assessReport.open = assessReport.open === i ? null : i; render(); },
   async tour() { (await import('./lib/tour.js')).startTour(); },
   'work-tab'(e) { workState.tab = e.target.closest('[data-tab]').dataset.tab; location.hash = '#/work'; render(); },
   async 'work-withdraw'(e) {
@@ -723,6 +823,7 @@ async function meetingStep(itemId, message, { closing = false } = {}) {
     delete drafts[itemId]; saveDrafts();
     const isChat = item.dialogue.mode === 'chat';
     ui.officeScene = isChat ? { kind: 'reply', from: item.dialogue.chair } : { kind: 'meeting', people: item.dialogue.participants };
+    quizSoon();
     const good = r.addressed.length >= Math.min(2, item.dialogue.concerns.length);
     toast(`${isChat ? 'انتهت المحادثة' : 'انتهى الاجتماع'}: ${opt.label}`, good ? 'good' : 'bad');
     render();
@@ -781,6 +882,20 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'assess-new') {
+    const f = new FormData(form);
+    const candidates = String(f.get('candidates') || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = l.match(/^(.*?)[,،\s]+(\S+@\S+)$/); return m ? { name: m[1].trim(), email: m[2] } : { name: l }; });
+    fetch('/api/assess', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company: f.get('company'), title: f.get('title'), minutes: Number(f.get('minutes')), candidates }) })
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); toast('أُنشئ التقييم. انسخ الروابط وأرسلها.', 'good'); loadAssessAdmin(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'trainee-profile') {
+    account.update({ profile: Object.fromEntries(new FormData(form).entries()) })
+      .then((u) => { user = u; if (session) session.user = u; toast('حُفظت صفحتك.', 'good'); render(); })
+      .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'work-apply') {
     account.workApply(form.dataset.id, String(new FormData(form).get('note') || ''))
       .then(() => { toast('وصل طلبك. سيراجعه المسؤول عن الفرصة.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
@@ -942,6 +1057,7 @@ function onSubmit(e) {
       delete drafts[itemId]; saveDrafts();
       const it = session.sim.items.find((i) => i.id === itemId);
       ui.officeScene = it.type === 'meeting' ? { kind: 'meeting', people: [it.from, 'mentor', 'ux', 'eng_lead'] } : { kind: 'reply', from: it.from };
+      quizSoon();
       toast(result.result || 'تم اعتماد القرار. ستظهر آثاره في نتائج الشركة.', result.tone === 'bad' ? 'bad' : 'good');
       location.hash = `#/inbox/${encodeURIComponent(itemId)}`;
       render();
@@ -951,6 +1067,7 @@ function onSubmit(e) {
       const ev = session.deliver(itemId, text);
       delete drafts[itemId]; saveDrafts();
       ui.officeScene = { kind: 'deliver' };
+      quizSoon();
       toast(`تم تسليم العمل — الدرجة ${Math.round(ev.score * 100)}%`, ev.score >= 0.6 ? 'good' : 'bad');
       location.hash = `#/inbox/${encodeURIComponent(itemId)}`;
       render();
@@ -999,6 +1116,9 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'video') { loadVideo(); return; }
   if (parseRoute().page === 'pair') { loadPair(); return; }
   if (parseRoute().page === 'work') { loadWork(); return; }
+  if (parseRoute().page === 'assess-report') { loadAssessReport(); return; }
+  if (parseRoute().page === 'assessments') { loadAssessAdmin(); return; }
+  if (parseRoute().page === 'assess' && parseRoute().itemId && assess?.token !== parseRoute().itemId) { enterAssess(parseRoute().itemId); return; }
   if (['leagues', 'league'].includes(parseRoute().page)) { loadLeagues(); return; }
   if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   stopPreview?.(); stopPreview = null;
@@ -1013,6 +1133,11 @@ window.addEventListener('hashchange', () => {
 (async function boot() {
   try {
     world = await loadWorld();
+    // مرشح في جلسة تقييم: من الرابط، أو من جلسة هذا التبويب بعد إعادة التحميل
+    if (parseRoute().page === 'assess-report') { await loadAssessReport(); return; }
+    let at = parseRoute().page === 'assess' ? parseRoute().itemId : null;
+    try { at ??= parseRoute().page !== 'assessments' && !location.hash.startsWith('#/verify') ? sessionStorage.getItem(ASSESS_KEY) : null; } catch { /* */ }
+    if (at) { await enterAssess(at); return; }
     refreshAgents();
     if (parseRoute().page === 'verify') { await loadVerify(); return; }
     user = await account.me();
@@ -1039,6 +1164,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'video') loadVideo();
     if (parseRoute().page === 'pair') loadPair();
     if (parseRoute().page === 'work') loadWork();
+    if (parseRoute().page === 'assessments') loadAssessAdmin();
     if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();
     if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   } catch (err) {
