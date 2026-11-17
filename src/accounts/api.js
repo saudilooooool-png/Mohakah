@@ -115,8 +115,41 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
     }, link);
   }
 
+  /**
+   * الملخص اليومي على البريد الحقيقي (باختيار المتدرب): بعد إنهاء يوم عمل في المحاكاة،
+   * رسالة واحدة كحد أقصى في اليوم الحقيقي، بأرقام الشركة وما حدث وما ينتظره.
+   */
+  async function maybeDigest(u, before, after) {
+    if (!u.prefs?.dailyDigest || !u.emailVerifiedAt) return;
+    const ends = (p) => (p?.log ?? []).filter((a) => a.t === 'endDay').length;
+    if (ends(after) <= ends(before)) return;
+    const today = clock().slice(0, 10);
+    if (u.lastDigestOn === today) return;
+    let sim;
+    try { ({ sim } = replay(world, { ...after, reviews: store.community?.reviews?.[u.id] ?? {} })); } catch { return; }
+    const h = sim.history; const now = h.at(-1); const prev = h.at(-2) ?? now;
+    const d = (a, b) => { const x = Math.round(a - b); return x ? ` (${x > 0 ? '+' : ''}${x.toLocaleString('en')})` : ''; };
+    const lastDay = sim.day - 1;
+    const happened = sim.feed.filter((f) => f.day === lastDay).map((f) => `• ${f.text}`);
+    const open = sim.finished ? 0 : sim.inbox().length;
+    u.lastDigestOn = today;
+    store.saveUsers();
+    await sendMail(u.email, `NOVA TECH · ملخص يوم العمل ${lastDay}`, {
+      title: `ملخص يوم العمل ${lastDay}`,
+      greeting: `صباح الخير ${u.name}،`,
+      lines: [
+        `الإيراد الشهري: ${Math.round(now.mrr).toLocaleString('en')} ريال${d(now.mrr, prev.mrr)} · العملاء: ${now.customers}${d(now.customers, prev.customers)} · رضا العملاء: ${now.avgHealth}/100${d(now.avgHealth, prev.avgHealth)} · تذاكر الدعم: ${Math.round(now.supportBacklog)}${d(now.supportBacklog, prev.supportBacklog)}`,
+        ...(happened.length ? ['ما حدث:', ...happened.slice(0, 6)] : []),
+        sim.finished ? 'انتهت فترة عملك. افتح سجلك المهني.' : `ينتظرك ${open} ${open === 1 ? 'بند' : 'بنود'} في بريد العمل.`,
+      ],
+      action: { label: sim.finished ? 'افتح سجلك المهني' : 'أكمل يوم العمل', url: appUrl(sim.finished ? 'report' : 'inbox') },
+      note: 'تصلك هذه الرسالة لأنك فعّلت الملخص اليومي. أوقفه من صفحة حسابي في أي وقت.',
+    });
+  }
+
   const publicUser = (u) => u && {
     id: u.id, name: u.name, email: u.email, emailVerified: !!u.emailVerifiedAt, profile: u.profile, consents: u.consents, createdAt: u.createdAt,
+    prefs: { dailyDigest: !!u.prefs?.dailyDigest },
     role: isFacilitator(u) ? 'facilitator' : 'trainee',
     records: Object.values(store.records).filter((r) => r.userId === u.id && !r.revoked).map((r) => r.code),
   };
@@ -248,6 +281,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         u.name = name;
       }
       if (body.profile) u.profile = cleanProfile({ ...u.profile, ...body.profile });
+      if (body.prefs && typeof body.prefs.dailyDigest === 'boolean') u.prefs = { ...u.prefs, dailyDigest: body.prefs.dailyDigest };
       if (body.consents) {
         if (body.consents.processing === false) throw new HttpError(400, 'لسحب الموافقة على المعالجة، احذف الحساب');
         setConsents(u, { ...u.consents, ...body.consents });
@@ -284,11 +318,14 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       if (!Number.isInteger(seed) || seed < 1) throw new HttpError(400, 'بذرة غير صالحة');
       if (!Array.isArray(body.log) || body.log.length > MAX_LOG) throw new HttpError(400, 'سجل أفعال غير صالح');
       const threads = body.threads && typeof body.threads === 'object' ? body.threads : {};
-      const read = body.read && typeof body.read === 'object' ? Object.fromEntries(Object.entries(body.read).slice(0, 100).map(([k, v]) => [String(k).slice(0, 40), Number(v) || 0])) : {};
+      const clip = (o, n = 400) => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).slice(0, n).map(([k, v]) => [String(k).slice(0, 80), Number(v) || 0])) : {});
+      const read = clip(body.read, 100);
       // الانضمام لتحدٍّ: يُقبل فقط إن كان التحدي قائمًا وبالبذرة نفسها
       const ch = store.showcase?.challenges?.[str(body.challenge, 12)];
       const challenge = ch && !ch.revoked && ch.seed === seed && ch.ownerId !== u.id ? ch.code : undefined;
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, ...(challenge ? { challenge } : {}) });
+      const before = store.progress(u.id);
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), ...(challenge ? { challenge } : {}) });
+      maybeDigest(u, before, store.progress(u.id)).catch(() => {});
       return { ok: true };
     },
 

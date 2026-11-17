@@ -6,6 +6,7 @@ import {
   esc, fmt, sar, delta, words, PRIORITY, TYPE, STATUS, dueLabel, avatar, icon, typeIcon,
   lineChart, ring, bar, weekday, weekOf,
 } from './lib/ui.js';
+import { generatedMail, mailBody } from './lib/mail.js';
 
 const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
@@ -13,7 +14,7 @@ const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
 export const NAV = [
   { id: 'desk', label: 'مكتبي', sub: 'ملخص يوم العمل', icon: 'desk' },
-  { id: 'inbox', label: 'مهامي', sub: 'التكليفات والمواعيد', icon: 'inbox' },
+  { id: 'inbox', label: 'البريد', sub: 'المهام والرسائل والتقارير', icon: 'mail' },
   { id: 'team', label: 'فريقي', sub: 'الزملاء والمديرون', icon: 'team' },
   { id: 'meetings', label: 'الاجتماعات', sub: 'المواعيد والمناقشات', icon: 'meeting' },
   { id: 'files', label: 'ملفات الشركة', sub: 'بيانات وتقارير ومستندات', icon: 'files' },
@@ -150,10 +151,13 @@ export function desk(session) {
     ${open.length ? `<div class="actions" style="position:relative;z-index:1"><a class="btn teal" href="#/inbox/${encodeURIComponent(open[0].id)}">ابدأ بالأهم: ${esc(open[0].title)}</a></div>` : ''}
   </section>
 
+  ${!first && !open.length && !sim.finished ? whatNow(session) : ''}
+
   ${first ? `<section class="card guide" style="margin-top:16px">
     <h2>كيف تعمل محاكي</h2>
     <ol>
-      <li><b>صندوق العمل</b> فيه رسائل وشكاوى ومستندات واجتماعات. كل شيء تكتبه بحرية: محادثات، ومستندات، واجتماعات حوارية.</li>
+      <li><b>بريد العمل</b> تصلك فيه المهام والرسائل والتقارير اليومية. افتح الرسالة، واقرأ، ثم رد أو سلّم ما طُلب.</li>
+      <li><b>المكتبة</b> فيها دليل الموظف والسياسات والدراسات. اقرأ حين تنهي مهامك: بعضها فيه ملاحظات مهمة لا يقولها أحد.</li>
       <li><b>لكل بند مهلة.</b> ما تتركه حتى تنتهي مهلته يُغلق، وله عواقب على الشركة وثقة زملائك.</li>
       <li><b>"إنهاء يوم العمل"</b> يجعل الشركة تعمل بقية اليوم: تظهر نتائج قراراتك، ويبدأ يوم جديد. أسبوع العمل من الأحد إلى الخميس، ومدة التجربة 30 يوم عمل.</li>
       <li><b>اسأل زملاءك</b> من صفحة "فريقي" عن البيانات قبل أن تقرر.</li>
@@ -202,11 +206,20 @@ function roadmapBlock(dash, raw) {
     ${raw.shipped.length ? `<p class="small" style="margin:6px 0 0"><span class="muted">تم إطلاقه:</span> ${raw.shipped.map((x) => `${esc(x.title)} <span class="muted">(يوم ${x.shippedDay})</span>`).join('، ')}</p>` : ''}`;
 }
 
-function itemRow(session, item, activeId) {
+function mailRow(session, m, activeId, filterQ = '') {
+  const from = session.person(m.from);
+  const label = { report: 'تقرير', memo: 'تعميم', doc: 'المكتبة' }[m.kind];
+  return `<a class="item ${m.id === activeId ? 'on' : ''} ${session.opened?.[m.id] ? '' : 'unread'}" href="#/inbox/${encodeURIComponent(m.id)}${filterQ}">
+    <span class="ico">${icon(m.kind === 'report' ? 'chart' : m.kind === 'doc' ? 'book' : 'mail')}</span>
+    <span><div class="tt">${esc(m.title)}</div><div class="meta"><span>${esc(from.name)}</span><span class="pill t-pill">${label}</span></div></span>
+    <span class="due">يوم ${m.day}</span></a>`;
+}
+
+function itemRow(session, item, activeId, filterQ = '') {
   const sim = session.sim;
   const from = session.person(item.from);
   const due = dueLabel(item, sim.day);
-  return `<a class="item ${item.id === activeId ? 'on' : ''} ${item.status !== 'open' ? 'done' : ''}" href="#/inbox/${encodeURIComponent(item.id)}">
+  return `<a class="item ${item.id === activeId ? 'on' : ''} ${item.status !== 'open' ? 'done' : ''} ${item.status !== 'open' || session.opened?.[item.id] ? '' : 'unread'}" href="#/inbox/${encodeURIComponent(item.id)}${filterQ}">
     <span class="ico">${typeIcon(item.type)}</span>
     <span>
       <div class="tt">${esc(item.title)}</div>
@@ -228,24 +241,41 @@ function feedList(entries) {
 export function inbox(session, { itemId, filter = 'open' }, drafts, ui = {}) {
   const sim = session.sim;
   const all = [...sim.items].reverse();
+  const mails = generatedMail(session);
+  // البريد كله: البنود والبريد المولَّد مرتبة بالأحدث
+  const everything = [...all.map((i) => ({ t: 'item', day: i.createdDay, x: i })), ...mails.map((m) => ({ t: 'mail', day: m.day, x: m }))]
+    .sort((a, b) => b.day - a.day);
   const lists = {
-    open: sim.inbox(),
-    closed: all.filter((i) => i.status !== 'open'),
-    all: [...sim.inbox(), ...all.filter((i) => i.status !== 'open')],
+    open: sim.inbox().map((x) => ({ t: 'item', x })),
+    all: everything,
+    closed: all.filter((i) => i.status !== 'open').map((x) => ({ t: 'item', x })),
   };
   const list = lists[filter] ?? lists.open;
-  const selected = itemId ? sim.items.find((i) => i.id === itemId) : list[0];
-  const tab = (id, label) => `<a href="#/inbox${selected ? `/${encodeURIComponent(selected.id)}` : ''}?f=${id}" class="${filter === id ? 'on' : ''}">${label} <span class="num">${lists[id].length}</span></a>`;
+  const mailSel = itemId?.startsWith('mail:') ? mails.find((m) => m.id === itemId) : null;
+  const selected = mailSel ? null : itemId ? sim.items.find((i) => i.id === itemId) : list[0]?.t === 'item' ? list[0].x : null;
+  const activeId = mailSel?.id ?? selected?.id;
+  const q = `?f=${filter}`;
+  const unread = (l) => l.filter((e) => !session.opened?.[e.x.id]).length;
+  const tab = (id, label) => `<a href="#/inbox${activeId ? `/${encodeURIComponent(activeId)}` : ''}?f=${id}" class="${filter === id ? 'on' : ''}">${label} <span class="num">${id === 'all' ? unread(lists[id]) || lists[id].length : lists[id].length}</span></a>`;
+  const detail = mailSel ? mailDetail(session, mailSel) : selected ? itemDetail(session, selected, drafts, ui) : '<div class="empty"><b>اختر رسالة</b>لعرضها والتصرف فيها.</div>';
   return `
-  <div class="page-h"><div><h1>مهامي</h1><p>رسائل، اجتماعات، شكاوى، ومستندات مطلوب تسليمها.</p></div></div>
-  <div class="inbox-layout ${itemId && selected ? 'has-sel' : ''}">
-    <section class="card inbox-list" aria-label="قائمة البنود">
-      <div class="tabs">${tab('open', 'مفتوحة')}${tab('closed', 'مغلقة')}${tab('all', 'الكل')}</div>
-      ${list.length ? `<div class="items">${list.map((i) => itemRow(session, i, selected?.id)).join('')}</div>`
-        : `<div class="empty"><b>${filter === 'open' ? 'لا توجد بنود مفتوحة' : 'لا شيء هنا بعد'}</b>${filter === 'open' ? 'أنجزت ما عليك اليوم.' : ''}</div>`}
+  <div class="page-h"><div><h1>بريد العمل</h1><p>تصلك هنا المهام والرسائل والتقارير. افتح الرسالة واقرأها، ثم رد أو سلّم ما طُلب.</p></div></div>
+  <div class="inbox-layout ${itemId && (selected || mailSel) ? 'has-sel' : ''}">
+    <section class="card inbox-list" aria-label="الرسائل">
+      <div class="tabs">${tab('open', 'يتطلب إجراء')}${tab('all', 'البريد كله')}${tab('closed', 'منجزة')}</div>
+      ${list.length ? `<div class="items">${list.map((e) => (e.t === 'mail' ? mailRow(session, e.x, activeId, q) : itemRow(session, e.x, activeId, q))).join('')}</div>`
+        : `<div class="empty"><b>${filter === 'open' ? 'لا شيء يتطلب إجراء' : 'لا شيء هنا بعد'}</b>${filter === 'open' ? 'أنجزت ما عليك اليوم. انظر "ماذا الآن؟" في مكتبي.' : ''}</div>`}
     </section>
-    <section class="card detail">${selected ? `<a class="back-link" href="#/inbox?f=${filter}">→ العودة إلى القائمة</a>` : ''}${selected ? itemDetail(session, selected, drafts, ui) : '<div class="empty"><b>اختر بندًا</b>لعرض تفاصيله والتصرف فيه.</div>'}</section>
+    <section class="card detail">${activeId ? `<a class="back-link" href="#/inbox${q}">→ العودة إلى القائمة</a>` : ''}${detail}</section>
   </div>`;
+}
+
+function mailDetail(session, m) {
+  const from = session.person(m.from);
+  return `<div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
+    <div class="chips"><span class="pill t-pill">${{ report: 'تقرير يومي', memo: 'تعميم', doc: 'المكتبة' }[m.kind]}</span><span class="pill t-pill">يوم ${m.day}</span><span class="pill t-pill">للاطلاع</span></div>
+    <h1>${esc(m.title)}</h1>
+    <div class="mail-body">${mailBody(session, m, esc)}</div>`;
 }
 
 export function itemDetail(session, item, drafts = {}, ui = {}) {
@@ -880,6 +910,7 @@ export function accountPage(session, user) {
       <h2>الموافقات</h2>
       <label class="consent"><input type="checkbox" checked disabled><span><b>معالجة البيانات لأغراض التدريب</b>: مطلوبة لاستخدام المنصة. لسحبها احذف حسابك.</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-sharing" ${user.consents?.employerSharing ? 'checked' : ''}><span><b>مشاركة سجلي وبيانات التواصل مع جهات توظيف شريكة</b>: يمكنك تفعيلها أو سحبها في أي وقت، ويُسجَّل تاريخ كل تغيير.</span></label>
+      <label class="consent"><input type="checkbox" data-act="toggle-digest" ${user.prefs?.dailyDigest ? 'checked' : ''}><span><b>الملخص اليومي على بريدي</b>: بعد كل يوم عمل في المحاكاة تصلك رسالة بأرقام الشركة وما حدث وما ينتظرك (رسالة واحدة في اليوم كحد أقصى).</span></label>
       <label class="consent"><input type="checkbox" data-act="toggle-peer" ${user.consents?.peerReview ? 'checked' : ''}><span><b>عرض مستنداتي على متدربين آخرين لمراجعتها دون اسمي</b>: إن سحبتها، لا تُكلَّف مستنداتك لمراجعات جديدة.</span></label>
       <h2 style="margin-top:18px">سجلاتي الموثّقة</h2>
       ${user.records?.length ? `<ul class="feed">${user.records.map((c) => `<li><span class="d"></span><span class="dot"></span><a href="#/verify/${esc(c)}" class="num">${esc(c)}</a></li>`).join('')}</ul>` : '<p class="small muted">لم تُصدر سجلًا بعد. يُصدر بعد إكمال التجربة.</p>'}
@@ -1455,4 +1486,26 @@ export function library(session, docId) {
   }
   return `<div class="page-h"><div><h1>مكتبة الشركة</h1><p>أدلة وسياسات ودراسات ومحاضر. تُفتح مستندات جديدة مع الأيام. اقرأ حين تنهي مهامك.</p></div></div>
   <div class="inbox-layout">${list}<section class="card detail">${detail}</section></div>`;
+}
+
+// ——— ماذا الآن؟ (بعد إنهاء المهام) ———
+
+function whatNow(session) {
+  const sim = session.sim;
+  const docs = libraryDocs(session).filter((d) => !session.read?.[d.id]);
+  const mails = generatedMail(session).filter((m) => !session.opened?.[m.id]);
+  const insightsOpen = sim.insights().filter((x) => !x.reported).length;
+  const tips = [
+    mails.length && `<li><a href="#/inbox?f=all">اقرأ بريدك</a>: ${mails.length} رسائل لم تفتحها (تقارير وتعاميم).</li>`,
+    docs.length && `<li><a href="#/library/${esc(docs[0].id)}">اقرأ في المكتبة</a>: ${docs.length} مستندات لم تقرأها بعد، أولها «${esc(docs[0].title)}».</li>`,
+    insightsOpen && '<li>في المكتبة ملاحظات قد تهم أحد زملائك. من يقرأ بانتباه ويبلّغ في الوقت المناسب يُحسب له ذلك.</li>',
+    '<li><a href="#/team">تحدث مع زميل</a>: اسأل فهد عن الأرقام، أو سلمى عن نصيحة، أو أمل عن العملاء.</li>',
+    '<li><a href="#/company">راجع نتائج الشركة</a>: هل تتحرك المؤشرات في الاتجاه الذي تريده؟</li>',
+  ].filter(Boolean);
+  return `<section class="card what-now" style="margin-top:16px">
+    <h2>أنجزت مهام اليوم. ماذا الآن؟</h2>
+    <p class="small muted" style="margin-top:0">الموظف المتميز لا ينتظر المهمة التالية. هذه أفكار لبقية يومك:</p>
+    <ul>${tips.join('')}</ul>
+    <div class="actions"><button class="btn primary" data-act="end-day">إنهاء يوم العمل</button></div>
+  </section>`;
 }

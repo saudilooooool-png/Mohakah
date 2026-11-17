@@ -42,6 +42,7 @@ export class Session {
     // رمز التحدي الذي انضم إليه المتدرب (نفس البذرة)، إن وُجد
     this.challenge = save.challenge ?? null;
     this.read = save.read ?? {};
+    this.opened = save.opened ?? {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -64,7 +65,7 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null } = {}) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge });
@@ -89,6 +90,13 @@ export class Session {
   /** إبلاغ عن اكتشاف من المكتبة (فعل يُعاد تشغيله على الخادم كأي قرار). */
   insight(id) {
     return this._do({ t: 'insight', id });
+  }
+
+  /** الرسائل المفتوحة في البريد (مقروء/غير مقروء): للواجهة فقط. */
+  markOpened(id) {
+    if (this.opened[id]) return;
+    this.opened = { ...this.opened, [id]: this.sim.day };
+    this._persist();
   }
 
   /** المستندات المقروءة: معلومة للواجهة فقط، لا تؤثر على المحرك. */

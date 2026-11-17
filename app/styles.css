@@ -302,6 +302,14 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 .tour-card { position: fixed; background: #fff; border-radius: 16px; padding: 16px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.3); transition: top .25s, left .25s; }
 .tour-card h3 { margin: 4px 0 6px; font-size: 18px; }
 .tour-card p { margin: 0 0 12px; line-height: 1.8; }
+.items .item.unread .tt { font-weight: 800; }
+.items .item.unread .tt::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-inline-end: 6px; vertical-align: middle; }
+.report-tbl td, .report-tbl th { padding: 8px; }
+.feed-list { padding-inline-start: 18px; margin: 6px 0; }
+.feed-list li { margin: 4px 0; }
+.feed-list li.good::marker { color: #1fa065; }
+.feed-list li.bad::marker { color: #d64545; }
+.memo li { margin: 6px 0; }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }

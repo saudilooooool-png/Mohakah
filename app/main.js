@@ -227,7 +227,9 @@ function render() {
   }
   let body;
   switch (route.page) {
-    case 'inbox': body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
+    case 'inbox':
+      if (route.itemId) session.markOpened(route.itemId);
+      body = V.inbox(session, route, drafts, { ...ui, meetings, drafts }); break;
     case 'team': body = route.itemId
       ? V.colleagueChat(session, session.person(route.itemId), { ...ui, drafts })
       : V.team(session); break;
@@ -427,6 +429,14 @@ const actions = {
     const reason = hide ? prompt('سبب الإخفاء (يظهر في سجل الإشراف):', 'غير مهنية') : '';
     if (hide && reason === null) return;
     try { await account.facModerate({ reviewId: el.dataset.id, hidden: hide, reason }); loadFacilitator(); } catch (err) { toast(err.message, 'bad'); }
+  },
+  async 'toggle-digest'(e) {
+    try {
+      user = await account.update({ prefs: { dailyDigest: e.target.checked } });
+      if (session) session.user = user;
+      toast(e.target.checked ? 'سيصلك ملخص يومي على بريدك بعد كل يوم عمل.' : 'أُوقف الملخص اليومي.', 'good');
+    } catch (err) { toast(err.message, 'bad'); }
+    render();
   },
   async 'toggle-peer'(e) {
     try {

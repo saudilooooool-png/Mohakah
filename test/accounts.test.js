@@ -276,3 +276,26 @@ test('جهات التوظيف لا ترى من لم يؤكد بريده حتى �
     assert.equal((await list()).length, 1);
   }, { MOHAKI_EMPLOYER_TOKEN: 't' });
 });
+
+test('الملخص اليومي على البريد: باختيار المتدرب، بعد إنهاء يوم عمل، ورسالة واحدة في اليوم', async () => {
+  const { goodRun: run } = await import('../scripts/lib/runs.js');
+  await withServer(async (call) => {
+    await call('POST', '/api/auth/register', reg());
+    await call.verifyEmail();
+    const sent = () => call.outbox.filter((m) => m.subject?.includes('ملخص يوم العمل')).length;
+    await call('PUT', '/api/progress', run(9, { stopDay: 2 }));
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(sent(), 0, 'لا ملخص دون تفعيل');
+    const me = (await call('PATCH', '/api/me', { prefs: { dailyDigest: true } })).data;
+    assert.equal(me.prefs.dailyDigest, true);
+    await call('PUT', '/api/progress', run(9, { stopDay: 3 }));
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sent(), 1);
+    const m = call.outbox.find((x) => x.subject?.includes('ملخص يوم العمل'));
+    assert.ok(m.subject.includes('3'), m.subject);
+    assert.ok((m.text ?? m.html ?? '').includes('الإيراد الشهري'));
+    await call('PUT', '/api/progress', run(9, { stopDay: 4 }));
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sent(), 1, 'رسالة واحدة في اليوم الحقيقي');
+  });
+});
