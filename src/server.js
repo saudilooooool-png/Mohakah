@@ -10,6 +10,7 @@ import { outboxMailer, smtpMailer } from './accounts/mailer.js';
 import { createMeter } from './agents/meter.js';
 import { createCommunityApi } from './community/api.js';
 import { createShowcaseApi } from './showcase/api.js';
+import { createLeadsApi } from './leads/api.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
@@ -40,6 +41,7 @@ export function createMohakiServer({
   accountsApi = createAccountsApi({ store, world, mailer: lazy(mailer) }),
   communityApi = createCommunityApi({ store, world, accountsApi }),
   showcaseApi = createShowcaseApi({ store, world, accountsApi }),
+  leadsApi = createLeadsApi({ store, mailer: lazy(mailer) }),
   agentApi = createAgentApi({
     root,
     meter: createMeter({ dir: join(dataDir, 'usage') }),
@@ -51,10 +53,19 @@ export function createMohakiServer({
 }) {
   return createServer(async (req, res) => {
     if (/^\/[cp]\//.test(req.url) && await showcaseApi(req, res)) return;
-    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res))) return;
+    if (req.url.startsWith('/api/') && (await agentApi(req, res) || await accountsApi(req, res) || await communityApi(req, res) || await showcaseApi(req, res) || await leadsApi(req, res))) return;
     if (req.url.startsWith('/api/')) { res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end('{"error":"غير موجود"}'); }
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    if (path === '/') { res.writeHead(302, { Location: '/app/' }); return res.end(); }
+    if (path === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
+    // موقع التسويق: الصفحة الرئيسية وصفحات العروض بروابط قصيرة
+    const SITE = { '/': 'site/index.html', '/tamheer': 'site/tamheer.html', '/managers': 'site/managers.html', '/privacy': 'site/privacy.html' };
+    if (SITE[path]) {
+      try {
+        const body = await readFile(join(root, SITE[path]));
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+        return res.end(body);
+      } catch { res.writeHead(302, { Location: '/app/' }); return res.end(); }
+    }
     const file = normalize(join(root, path));
     if (!file.startsWith(root) || /[\\/](\.git|\.env|\.data|node_modules)/.test(file)) { res.writeHead(403); return res.end(); }
     try {

@@ -12,6 +12,7 @@ const card = (kicker, title, sub) => `<!doctype html><html dir="rtl" lang="ar"><
 <body><div class="b">${mark}<span>محاكي · MOHAKI</span></div><div class="k">${kicker}</div><h1>${title}</h1><p>${sub}</p><div class="bar"></div></body></html>`;
 const cards = {
   'og-challenge.png': card('تحدٍّ مفتوح', 'نفس الشركة. نفس الأحداث.<br>تقدر تتفوق؟', 'شهر كامل كمدير منتجات في NOVA TECH: قرارات لها عواقب، واجتماعات مع زملاء يعترضون.'),
+  'og-site.png': card('للشركات والجهات', 'قيّم المرشح بيوم عمل،<br>لا بمقابلة', 'جلسة في شركة سعودية افتراضية: قرارات لها عواقب، واجتماعات مع زملاء يعترضون، وتقرير موثّق لكل مرشح.'),
   'og-portfolio.png': card('ملف أعمال موثّق', 'قرارات ومستندات حقيقية<br>من شهر عمل كامل', 'كل ما في الملف يُولَّد من إعادة تشغيل القرارات على الخادم، فلا يمكن تجميله.'),
 };
 const b = await chromium.launch();
@@ -19,7 +20,7 @@ const p = await b.newPage({ viewport: { width: 1200, height: 630 } });
 for (const [file, html] of Object.entries(cards)) {
   await p.setContent(html, { waitUntil: 'networkidle' }).catch(() => p.setContent(html));
   await p.waitForTimeout(400);
-  await p.screenshot({ path: new URL(`../app/assets/${file}`, import.meta.url).pathname });
-  console.log(`✓ app/assets/${file}`);
+  await p.screenshot({ path: new URL(`../${file === 'og-site.png' ? 'site' : 'app'}/assets/${file}`, import.meta.url).pathname });
+  console.log(`✓ ${file}`);
 }
 await b.close();
