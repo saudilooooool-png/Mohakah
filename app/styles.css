@@ -289,6 +289,19 @@ textarea:focus { border-color: var(--teal); outline: none; box-shadow: 0 0 0 3px
 @media (max-width: 640px) { .pf-stats { grid-template-columns: repeat(2, 1fr); } }
 .video-stage { display: flex; justify-content: center; background: #0a1733; }
 .video-stage canvas { width: min(100%, 340px); height: auto; aspect-ratio: 9 / 16; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.attachments { display: grid; gap: 8px; margin: 10px 0 14px; }
+.attach { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1.5px dashed var(--line); border-radius: 12px; text-decoration: none; color: inherit; background: #fafbfd; }
+.attach:hover { border-color: var(--teal); }
+.attach.read { border-style: solid; }
+.attach-ico { font-size: 22px; }
+.doc-body h3 { margin: 18px 0 4px; font-size: 16px; }
+.doc-body p { margin: 0; line-height: 1.9; }
+.insight { margin-top: 18px; }
+.tour { position: fixed; inset: 0; z-index: 100; }
+.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(8,18,40,.62); transition: all .25s ease; pointer-events: none; outline: 2px solid var(--teal); }
+.tour-card { position: fixed; background: #fff; border-radius: 16px; padding: 16px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.3); transition: top .25s, left .25s; }
+.tour-card h3 { margin: 4px 0 6px; font-size: 18px; }
+.tour-card p { margin: 0 0 12px; line-height: 1.8; }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }

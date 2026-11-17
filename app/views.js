@@ -17,6 +17,7 @@ export const NAV = [
   { id: 'team', label: 'فريقي', sub: 'الزملاء والمديرون', icon: 'team' },
   { id: 'meetings', label: 'الاجتماعات', sub: 'المواعيد والمناقشات', icon: 'meeting' },
   { id: 'files', label: 'ملفات الشركة', sub: 'بيانات وتقارير ومستندات', icon: 'files' },
+  { id: 'library', label: 'المكتبة', sub: 'أدلة وسياسات ودراسات', icon: 'book' },
   { id: 'company', label: 'نتائج الشركة', sub: 'الأداء والنمو والمؤشرات', icon: 'chart' },
   { id: 'feed', label: 'سجل الشركة', sub: 'ما الذي حدث ولماذا', icon: 'feed' },
   { id: 'report', label: 'تطورك المهني', sub: 'متابعة مستمرة', icon: 'growth' },
@@ -49,7 +50,7 @@ export function shell(session, route, content) {
         ${session.user
           ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
-        <div><button type="button" data-act="reset">ابدأ من جديد</button></div>
+        <div><button type="button" data-act="tour">جولة في المنصة</button> · <button type="button" data-act="reset">ابدأ من جديد</button></div>
       </div>
     </aside>
     <div class="main">
@@ -138,7 +139,7 @@ export function desk(session) {
   <section class="card hero">
     <h2>${first ? 'أهلًا بك في يومك الأول' : sim.finished ? 'انتهت فترة عملك الأولى في NOVA TECH' : `صباح الخير — ${weekday(sim.day)}، يوم العمل ${sim.day}`}</h2>
     <p>${first
-      ? 'لا توجد محاضرة تشرح لك ماذا تفعل. أمامك رسائل واجتماعات وشكوى عميل ومهام لها مواعيد تسليم. رتّب أولوياتك وابدأ.'
+      ? 'يومك الأول للتعرّف: رسالة ترحيب من مديرك، واجتماع تعارف مع الفريق، ودليل الموظف تقرؤه في المكتبة، ثم تسألك مشرفتك سلمى عمّا فهمت. المهام الحقيقية تبدأ غدًا.'
       : sim.finished ? 'راجع ما حققته بقراراتك في سجلك المهني.' : 'هذا ما ينتظرك اليوم. البنود التي تنتهي مهلتها اليوم ستُغلق عند نهاية يوم العمل، ولتجاهلها عواقب.'}</p>
     <div class="stats">
       <div><b class="num">${open.length}</b><span>بنود مفتوحة</span></div>
@@ -260,7 +261,8 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
       ${item.status === 'open' ? `<span class="pill ${item.dueDay <= sim.day ? 'p-critical' : 't-pill'}">${due}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
     </div>
     <h1>${esc(item.title)}</h1>
-    <p class="body">${esc(item.body)}</p>`;
+    <p class="body">${esc(item.body)}</p>
+    ${attachmentsBlock(session, item)}`;
 
   if (item.status === 'open' && item.deliverable) {
     const draft = drafts[item.id] ?? '';
@@ -290,6 +292,14 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
       ${minutes(session, r.transcript.map((l) => ({ speaker: l.speaker, text: l.text })), { full: true })}`;
   }
   if (item.status === 'open' && item.dialogue) return `${head}${meetingRoom(session, item, ui)}`;
+
+  // رسالة قراءة: مرفق للاطلاع وتأكيد واحد
+  if (item.status === 'open' && item.attachments?.length && item.options.length === 1) {
+    const unread = item.attachments.filter((a) => !session.read?.[a]);
+    return `${head}<div class="actions">
+      <button class="btn primary" data-act="ack-read" data-item="${esc(item.id)}" ${unread.length ? 'disabled' : ''}>${esc(item.options[0].label)}</button>
+      ${unread.length ? '<span class="small muted">افتح المرفق واقرأه أولًا.</span>' : ''}</div>`;
+  }
 
   if (item.status === 'open') {
     const d = drafts[item.id] ?? {};
@@ -1408,4 +1418,41 @@ export function videoPage(state) {
         : `<div class="actions"><button class="btn primary" data-act="video-record">صناعة الفيديو (${state.seconds} ثانية)</button></div>`}
     </section>
   </div>`;
+}
+
+// ——— المكتبة والمرفقات ———
+
+export function libraryDocs(session) {
+  return (session.world.library?.docs ?? []).filter((d) => session.sim.day >= (d.fromDay ?? 1));
+}
+
+function attachmentsBlock(session, item) {
+  const docs = (item.attachments ?? []).map((id) => session.world.library?.docs.find((d) => d.id === id)).filter(Boolean);
+  if (!docs.length) return '';
+  return `<div class="attachments">${docs.map((d) => `<a class="attach ${session.read?.[d.id] ? 'read' : ''}" href="#/library/${esc(d.id)}">
+    <span class="attach-ico">📄</span><span><b>${esc(d.title)}</b><span class="small muted"> · ${esc(d.kind)} · ${d.minutes} دقائق قراءة${session.read?.[d.id] ? ' · ✓ قرأته' : ''}</span></span></a>`).join('')}</div>`;
+}
+
+export function library(session, docId) {
+  const docs = libraryDocs(session);
+  const doc = docs.find((d) => d.id === docId);
+  const locked = (session.world.library?.docs ?? []).filter((d) => session.sim.day < (d.fromDay ?? 1));
+  const list = `<section class="card inbox-list"><h2>المستندات</h2><div class="items">${docs.map((d) => `<a class="item ${d.id === docId ? 'on' : ''}" href="#/library/${esc(d.id)}">
+      <span class="ico">${icon('book')}</span>
+      <span><div class="tt">${esc(d.title)}</div><div class="meta"><span class="pill t-pill">${esc(d.kind)}</span><span>${d.minutes} د</span>${session.read?.[d.id] ? '<span class="pill s-done">مقروء</span>' : '<span class="pill p-normal">جديد</span>'}</div></span><span></span></a>`).join('')}</div>
+    ${locked.length ? `<p class="small muted" style="padding:10px 14px">يُفتح ${locked.length} مستندات أخرى مع تقدمك في الأيام القادمة.</p>` : ''}</section>`;
+  let detail = '<div class="empty"><b>اختر مستندًا</b>من يقرأ أكثر، يكتشف ما لا يقوله أحد.</div>';
+  if (doc) {
+    const from = session.person(doc.from);
+    const ins = session.sim.insights().find((x) => x.doc === doc.id);
+    detail = `<div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
+      <div class="chips"><span class="pill t-pill">${esc(doc.kind)}</span><span class="pill t-pill">${doc.minutes} دقائق قراءة</span></div>
+      <h1>${esc(doc.title)}</h1><p class="muted">${esc(doc.summary)}</p>
+      <article class="doc-body">${doc.sections.map((x) => `<h3>${esc(x.h)}</h3><p>${esc(x.body)}</p>`).join('')}</article>
+      ${ins ? (ins.reported ? `<div class="outcome good"><b>أبلغت عن هذه الملاحظة.</b> ${esc(ins.result ?? '')}</div>`
+        : `<div class="outcome info insight"><b>هل لاحظت شيئًا مهمًا في هذا المستند؟</b><p class="small">من يقرأ بانتباه ويبلّغ صاحب الشأن في الوقت المناسب، يصنع فرقًا.</p>
+          <button class="btn teal" data-act="report-insight" data-id="${esc(ins.id)}">${esc(ins.label)}</button></div>`) : ''}`;
+  }
+  return `<div class="page-h"><div><h1>مكتبة الشركة</h1><p>أدلة وسياسات ودراسات ومحاضر. تُفتح مستندات جديدة مع الأيام. اقرأ حين تنهي مهامك.</p></div></div>
+  <div class="inbox-layout">${list}<section class="card detail">${detail}</section></div>`;
 }

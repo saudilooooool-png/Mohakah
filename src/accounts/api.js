@@ -284,10 +284,11 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       if (!Number.isInteger(seed) || seed < 1) throw new HttpError(400, 'بذرة غير صالحة');
       if (!Array.isArray(body.log) || body.log.length > MAX_LOG) throw new HttpError(400, 'سجل أفعال غير صالح');
       const threads = body.threads && typeof body.threads === 'object' ? body.threads : {};
+      const read = body.read && typeof body.read === 'object' ? Object.fromEntries(Object.entries(body.read).slice(0, 100).map(([k, v]) => [String(k).slice(0, 40), Number(v) || 0])) : {};
       // الانضمام لتحدٍّ: يُقبل فقط إن كان التحدي قائمًا وبالبذرة نفسها
       const ch = store.showcase?.challenges?.[str(body.challenge, 12)];
       const challenge = ch && !ch.revoked && ch.seed === seed && ch.ownerId !== u.id ? ch.code : undefined;
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), ...(challenge ? { challenge } : {}) });
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, ...(challenge ? { challenge } : {}) });
       return { ok: true };
     },
 

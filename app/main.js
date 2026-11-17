@@ -233,6 +233,10 @@ function render() {
       : V.team(session); break;
     case 'meetings': body = V.meetings(session); break;
     case 'files': body = V.files(session); break;
+    case 'library':
+      // فتح المستند يعني قراءته (معلومة للواجهة فقط)
+      if (route.itemId && V.libraryDocs(session).some((d) => d.id === route.itemId) && !session.read?.[route.itemId]) session.markRead(route.itemId);
+      body = V.library(session, route.itemId); break;
     case 'company': body = V.company(session); break;
     case 'feed': body = V.feed(session); break;
     case 'report': body = V.report(session, ui); break;
@@ -271,6 +275,13 @@ function openModal(html) {
 }
 function closeModal() { modalRoot.innerHTML = ''; }
 
+/** الجولة التعريفية تبدأ تلقائيًا أول مرة. (تُتجاهل في الفحوص الآلية حتى لا تحجب النقرات، ولها فحص خاص.) */
+async function maybeTour() {
+  if (navigator.webdriver) return;
+  const t = await import('./lib/tour.js');
+  if (!t.tourSeen()) setTimeout(t.startTour, 500);
+}
+
 function nextOpenItemHref() {
   const next = session.sim.inbox()[0];
   return next ? `#/inbox/${encodeURIComponent(next.id)}` : '#/inbox?f=open';
@@ -289,6 +300,7 @@ const actions = {
     if (user) saver.save(session.saveData());
     location.hash = '#/desk';
     render();
+    maybeTour();
   },
   resume() {
     session = attach(Session.resume(world));
@@ -341,6 +353,20 @@ const actions = {
   async 'video-share'() {
     try { await navigator.share({ files: [videoState.file.file], title: 'شهري في NOVA TECH', text: `30 يومًا مدير منتجات في شركة افتراضية. أعمالي موثّقة: ${videoState.data.url}` }); } catch { /* أُلغي */ }
   },
+  'ack-read'(e) {
+    const itemId = e.target.closest('[data-item]').dataset.item;
+    const item = session.sim.items.find((i) => i.id === itemId);
+    const opt = session.respond(itemId, item.options[0].id, '');
+    toast(opt.result || 'تم.', 'good');
+    location.hash = nextOpenItemHref();
+    render();
+  },
+  'report-insight'(e) {
+    const x = session.insight(e.target.closest('[data-id]').dataset.id);
+    toast(x.result || 'وصلت ملاحظتك.', 'good');
+    render();
+  },
+  async tour() { (await import('./lib/tour.js')).startTour(); },
   async 'copy-url'(e) {
     const url = e.target.closest('[data-url]').dataset.url;
     try { await navigator.clipboard.writeText(url); toast('نُسخ الرابط.', 'good'); } catch { prompt('انسخ الرابط:', url); }
@@ -384,6 +410,7 @@ const actions = {
     if (user) saver.save(session.saveData());
     toast(`بدأ التحدي. نفس عالم ${c.owner.name} بالضبط. بالتوفيق!`, 'good');
     location.hash = '#/desk';
+    maybeTour();
   },
   'peer-tab'(e) { peerState.tab = e.target.closest('[data-tab]').dataset.tab; peerState.error = ''; render(); },
   async 'peer-helpful'(e) {

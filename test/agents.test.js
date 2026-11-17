@@ -205,11 +205,11 @@ test('الخادم: نقاط النهاية تعمل، والمواصفات تُ
   assert.equal(JSON.parse(fakeRes.body).mode, 'offline');
 });
 
-// ——— اجتماع تخطيط السبرنت (اليوم 3) ———
+// ——— اجتماع تخطيط السبرنت (اليوم 4، بعد أسبوع تهيئة متدرج) ———
 
 function simAtSprint(seed = 3) {
   const sim = new Simulation({ company, scenario, seed });
-  while (sim.day < 3) sim.endDay();
+  while (sim.day < 4) sim.endDay();
   const item = sim.inbox().find((i) => i.eventId === 'd3_sprint_priority');
   return { sim, item };
 }
@@ -438,16 +438,18 @@ const itemAt = (eventId, day, seed = 3) => {
 };
 
 test('كل الرسائل والشكاوى المجدولة صارت محادثات حرة بجولتين', () => {
-  const msgs = [...scenario.events, ...scenario.randomEvents].filter((e) => ['message', 'complaint'].includes(e.type));
-  assert.ok(msgs.length >= 16);
+  // رسائل القراءة (مرفق للاطلاع فقط) ليست محادثات: تُقرأ ثم يُؤكَّد الاطلاع
+  const reading = (e) => e.attachments?.length && !e.dialogue;
+  const msgs = [...scenario.events, ...scenario.randomEvents].filter((e) => ['message', 'complaint'].includes(e.type) && !reading(e));
+  assert.ok(msgs.length >= 17);
   for (const e of msgs) {
     assert.equal(e.dialogue?.mode, 'chat', e.id);
-    assert.equal(e.dialogue.maxRounds, 2, e.id);
+    assert.equal(e.dialogue.maxRounds, e.id === 'd1_mentor_check' ? 3 : 2, e.id);
   }
 });
 
 test('شكوى الأفق: المحادثة مع العميل نفسه (جهة خارجية) لا مع من نقل الشكوى', () => {
-  const { item } = itemAt('d1_ufuq_complaint', 1);
+  const { item } = itemAt('d1_ufuq_complaint', 3);
   assert.deepEqual(item.dialogue.participants, ['ufuq_contact']);
   assert.ok(company.people.find((p) => p.id === 'ufuq_contact').external);
   const good = meetingResult(playOffline(item, [
@@ -540,4 +542,32 @@ test('تقرير الاستخدام للمشرف محمي برمز', async () =>
   assert.equal(res.code, 401);
   await api({ url: '/api/admin/usage', method: 'GET', headers: { authorization: 'Bearer adm' } }, res);
   assert.equal(JSON.parse(res.body).profile, 'economy');
+});
+
+test('سلمى (المشرفة): تسأل عن الدليل سؤالًا بعد سؤال، ومن فهم الشركة والمؤشرات يُحكم له بالجاهزية', () => {
+  const { item } = itemAt('d1_mentor_check', 1);
+  assert.deepEqual(item.attachments, ['handbook']);
+  const replies = playOffline(item, ['منتجنا Nova Sales لإدارة فرص البيع للمنشآت الصغيرة والمتوسطة، ولدينا نحو 180 عميلًا.']);
+  const r = meetingResult(playOffline(item, [
+    'منتجنا Nova Sales لإدارة فرص البيع للمنشآت الصغيرة والمتوسطة، ولدينا نحو 180 عميلًا.',
+    'نراجع الإيراد الشهري المتكرر ونسبة الاستخدام ورضا العملاء وتذاكر الدعم.',
+    'أكبر تحدٍّ أن استخدام التقارير نزل من 58% إلى 41%.',
+  ]));
+  assert.equal(r.optionId, 'ready');
+  assert.deepEqual(r.addressed.sort(), ['business', 'challenge', 'kpis']);
+  assert.ok(replies);
+  const vague = meetingResult(playOffline(item, ['الشركة ممتازة والفريق رائع.']));
+  assert.equal(vague.optionId, 'not_yet');
+});
+
+test('الاكتشاف من المكتبة: لا يُتاح قبل يومه، ويُكافأ مرة واحدة، ويُعاد تشغيله من السجل', () => {
+  const sim = new Simulation({ company, scenario, seed: 4 });
+  assert.throws(() => sim.reportInsight('excel_exports'));
+  while (sim.day < 4) sim.endDay();
+  const before = sim.state.player.trust.cpo;
+  sim.reportInsight('excel_exports');
+  assert.equal(sim.state.player.trust.cpo, before + 5);
+  assert.throws(() => sim.reportInsight('excel_exports'));
+  assert.equal(sim.insights().find((x) => x.id === 'excel_exports').reported, true);
+  assert.equal(sim.report().evidence.insights.length, 1);
 });

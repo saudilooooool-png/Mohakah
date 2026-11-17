@@ -11,13 +11,14 @@ export async function loadWorld() {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario, ssco, profiles] = await Promise.all([
+  const [company, scenario, ssco, profiles, library] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
     get('../data/occupations/ssco.json'),
     get('../data/occupations/ssco-profiles.json'),
+    get('../data/library/nova-tech.json'),
   ]);
-  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles } };
+  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library };
 }
 
 function readSave() {
@@ -40,6 +41,7 @@ export class Session {
     this.reviews = save.reviews ?? {};
     // رمز التحدي الذي انضم إليه المتدرب (نفس البذرة)، إن وُجد
     this.challenge = save.challenge ?? null;
+    this.read = save.read ?? {};
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -62,7 +64,7 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, ...(this.challenge ? { challenge: this.challenge } : {}) }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null } = {}) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge });
@@ -82,6 +84,17 @@ export class Session {
 
   endDay() {
     return this._do({ t: 'endDay' });
+  }
+
+  /** إبلاغ عن اكتشاف من المكتبة (فعل يُعاد تشغيله على الخادم كأي قرار). */
+  insight(id) {
+    return this._do({ t: 'insight', id });
+  }
+
+  /** المستندات المقروءة: معلومة للواجهة فقط، لا تؤثر على المحرك. */
+  markRead(docId) {
+    this.read = { ...(this.read ?? {}), [docId]: this.sim.day };
+    this._persist();
   }
 
   thread(personId) { return this.threads[personId] ?? []; }

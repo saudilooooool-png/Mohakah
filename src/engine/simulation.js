@@ -41,6 +41,7 @@ export class Simulation {
     this.scheduledEffects = []; // {day, effects, note}
     this.feed = [];           // سجل الشركة: ما الذي حدث ولماذا
     this.actions = [];        // سجل أفعال المتدرب (الأدلة)
+    this.reported = new Set(); // الاكتشافات التي أبلغ عنها من المكتبة
     this.history = [];        // لقطة يومية من مؤشرات الشركة
     this._seq = 0;
 
@@ -84,6 +85,24 @@ export class Simulation {
     applyEffects(this.state, option.effects, { sim: this });
     for (const c of valid) applyEffects(this.state, c.onAddressed, { sim: this });
     return option;
+  }
+
+  /** الاكتشافات المتاحة الآن: مستند في المكتبة فيه ملاحظة يكافأ من يقرؤها ويبلّغ صاحب الشأن. */
+  insights() {
+    return (this.scenario.insights ?? []).filter((x) => this.day >= (x.fromDay ?? 1)).map((x) => ({ ...x, reported: this.reported.has(x.id) }));
+  }
+
+  /** إبلاغ عن اكتشاف من المكتبة: يُسجَّل فعلًا في السجل ويُعاد تشغيله كأي قرار. */
+  reportInsight(id) {
+    const x = (this.scenario.insights ?? []).find((i) => i.id === id);
+    if (!x) throw new Error(`لا يوجد اكتشاف ${id}`);
+    if (this.day < (x.fromDay ?? 1)) throw new Error(`الاكتشاف ${id} غير متاح بعد`);
+    if (this.reported.has(id)) throw new Error(`سبق الإبلاغ عن ${id}`);
+    this.reported.add(id);
+    this.actions.push({ day: this.day, kind: 'insight', insightId: id, skills: ['analysis', 'communication'], onTime: true, higherPriorityOpen: 0 });
+    if (x.result) this.log(x.result, 'good');
+    applyEffects(this.state, x.effects, { sim: this });
+    return x;
   }
 
   /** تسليم مخرَج مكتوب (تحليل، عرض، وثيقة متطلبات...). */
@@ -231,6 +250,7 @@ export class Simulation {
       options: def.options ?? [],
       deliverable: def.deliverable ?? null,
       dialogue: def.dialogue ?? null,
+      attachments: def.attachments ?? [],
       onExpire: def.onExpire ?? null,
       skills: def.skills ?? [],
       status: 'open',

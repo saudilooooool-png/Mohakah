@@ -230,7 +230,7 @@ test('مراجعة الأقران: تحقق المحتوى، ومراجعتان 
   await withCommunity(async ({ user, store }) => {
     const author = await user('كاتب', 'author@example.com');
     await author('PATCH', '/api/me', { consents: { peerReview: true } });
-    const { seed, log } = goodRun(9, { stopDay: 1 });
+    const { seed, log } = goodRun(9, { stopDay: 2 });
     await author('PUT', '/api/progress', { seed, log });
     const docs = log.filter((a) => a.t === 'deliver').length;
     const [r1, r2, r3] = [await user('مراجع أول', 'r1@example.com'), await user('مراجع ثان', 'r2@example.com'), await user('مراجع ثالث', 'r3@example.com')];
@@ -288,7 +288,7 @@ test('حذف الحساب يزيل مراجعات الأقران وتكليفا�
     const author = await user('كاتب', 'author@example.com');
     const r1 = await user('مراجع', 'r1@example.com');
     await author('PATCH', '/api/me', { consents: { peerReview: true } });
-    const { seed, log } = goodRun(9, { stopDay: 1 });
+    const { seed, log } = goodRun(9, { stopDay: 2 });
     await author('PUT', '/api/progress', { seed, log });
     const a = (await r1('GET', '/api/peer/queue')).data.assignments[0];
     await r1('POST', '/api/peer/review', peerBody(a));

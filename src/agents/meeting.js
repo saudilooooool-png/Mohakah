@@ -176,7 +176,9 @@ export function offlineTurn(spec, meeting, message) {
     if (found[c.id] && !meeting.addressed[c.id]) replies.push({ speaker: c.owner, text: c.replyAddressed });
   }
   const stillOpen = spec.concerns.filter((c) => !found[c.id] && !meeting.addressed[c.id]);
-  if (stillOpen.length) replies.push({ speaker: stillOpen[0].owner, text: stillOpen[0].replyOpen });
+  // الحوار المتسلسل (مثل أسئلة المشرفة): رد الإجابة الصحيحة يطرح السؤال التالي بنفسه، فلا نكرر السؤال
+  const asked = spec.sequential && replies.length;
+  if (stillOpen.length && !asked) replies.push({ speaker: stillOpen[0].owner, text: stillOpen[0].replyOpen });
   if (!replies.length) replies.push({ speaker: spec.chair, text: 'واضح. هل هناك ما تضيفه قبل أن نختم؟' });
   // الموقف المعلن يبقى حتى يعلن المتدرب موقفًا آخر
   const stance = detectStance(spec, message) ?? meeting.stance ?? 'unclear';

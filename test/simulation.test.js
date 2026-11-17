@@ -11,12 +11,15 @@ function runAll(sim, play = () => {}) {
   return sim;
 }
 
-test('اليوم الأول يبدأ بصندوق عمل مرتب حسب الأولوية', () => {
+test('الأسبوع الأول متدرج: اليوم الأول تعريفي بلا أزمات، والضغط يبدأ لاحقًا', () => {
   const sim = newSim();
-  const inbox = sim.inbox();
-  assert.ok(inbox.length >= 6, 'يجب أن تكون هناك ستة بنود على الأقل في اليوم الأول');
-  assert.equal(inbox[0].priority, 'critical');
-  assert.equal(inbox[0].eventId, 'd1_ufuq_complaint');
+  const day1 = sim.inbox();
+  assert.ok(day1.length >= 3 && day1.length <= 5, 'يوم تعريفي ببنود قليلة');
+  assert.ok(day1.every((i) => i.priority !== 'critical' && i.priority !== 'high'), 'لا بنود حرجة أو عالية في اليوم الأول');
+  assert.ok(day1.some((i) => i.attachments.includes('handbook')), 'دليل الموظف مرفق');
+  assert.ok(day1.some((i) => i.eventId === 'd1_mentor_check' && i.dialogue), 'محادثة المشرفة للتأكد من الفهم');
+  while (sim.day < 3) sim.endDay();
+  assert.ok(sim.inbox().some((i) => i.eventId === 'd1_ufuq_complaint'), 'أول مشكلة عميل في اليوم الثالث');
 });
 
 test('نفس البذرة ونفس القرارات = نفس العالم تمامًا (قابلية إعادة الإنتاج)', () => {
@@ -28,10 +31,11 @@ test('نفس البذرة ونفس القرارات = نفس العالم تما
 
 test('تجاهل شكوى العميل الاستراتيجي يضر صحة الحساب والثقة', () => {
   const ignored = newSim();
-  ignored.endDay(); ignored.endDay();
+  while (ignored.day < 5) ignored.endDay();
   const handled = newSim();
+  while (handled.day < 3) handled.endDay();
   handled.respond('d1_ufuq_complaint', 'call_and_plan', { rationale: 'اتصال مباشر' });
-  handled.endDay(); handled.endDay();
+  while (handled.day < 5) handled.endDay();
   const h = (s) => s.state.company.accounts.find((a) => a.id === 'ufuq').health;
   assert.ok(h(handled) > h(ignored) + 20);
   assert.ok(ignored.state.player.trust.cs_lead < handled.state.player.trust.cs_lead);
@@ -39,7 +43,7 @@ test('تجاهل شكوى العميل الاستراتيجي يضر صحة ال
 
 test('القرار يغيّر خارطة الطريق، والإطلاق يغيّر مؤشرات المنتج', () => {
   const sim = newSim();
-  sim.endDay(); sim.endDay();
+  while (sim.day < 4) sim.endDay();
   sim.respond('d3_sprint_priority', 'reports_fix', { rationale: 'بيانات الاستخدام' });
   assert.equal(sim.state.company.roadmap.active.id, 'reports_fix');
   const before = sim.state.company.features.reports.usage;
@@ -50,9 +54,10 @@ test('القرار يغيّر خارطة الطريق، والإطلاق يغي�
 
 test('الوعد غير المنفّذ للعميل يعود ليؤثر بعد أيام', () => {
   const sim = newSim();
+  while (sim.day < 3) sim.endDay();
   sim.respond('d1_ufuq_complaint', 'promise_date', { rationale: 'وعد' });
   // لا يُضاف الإصلاح لخارطة الطريق، فيمر الموعد دون تنفيذ
-  while (sim.day < 12) sim.endDay();
+  while (sim.day < 15) sim.endDay();
   assert.ok(sim.feed.some((f) => f.text.includes('مرّ موعد الإصلاح')));
 });
 

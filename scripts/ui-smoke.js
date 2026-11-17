@@ -29,12 +29,12 @@ async function run(viewport, tag) {
   await page.waitForSelector('.hero');
   await snap('1-desk');
 
-  // محادثة حرة: شكوى العميل (مع العميل نفسه)
+  // اليوم الأول تعريفي: محادثة المشرفة عن دليل الموظف
   await page.goto(`${BASE}#/inbox`);
-  await page.locator('.inbox-list .item').first().click();
+  await page.locator('.inbox-list .item', { hasText: 'خلّني أتأكد' }).click();
   await page.getByRole('button', { name: 'ابدأ المحادثة' }).click();
   await page.waitForSelector('.minutes .bubble');
-  await page.fill('#say', 'أفهم أن تعطل التقارير في نهاية الشهر يؤثر على اجتماع إدارتكم. أخبرني: أي التقارير تتعطل ومتى؟ وسأتواصل معك بتحديث يوم الأحد بعد مراجعة الفريق، ونبحث حلًا مؤقتًا.');
+  await page.fill('#say', 'منتجنا Nova Sales لإدارة فرص البيع للمنشآت الصغيرة والمتوسطة، ولدينا نحو 180 عميلًا. ونراجع الإيراد الشهري المتكرر والاستخدام ورضا العملاء وتذاكر الدعم.');
   await snap('2-chat');
   await page.getByRole('button', { name: 'إرسال', exact: true }).click();
   await page.waitForSelector('.bubble.me');
@@ -43,15 +43,14 @@ async function run(viewport, tag) {
   const chatOutcome = await page.locator('.outcome h3').textContent();
   if (!chatOutcome.includes('نتيجة المحادثة')) errors.push(`[${tag}] نتيجة محادثة غير متوقعة: ${chatOutcome}`);
 
-  // مستند: تحليل التقارير
+  // دليل الموظف: يُفتح من المرفق في المكتبة، ثم يُؤكَّد
   await page.goto(`${BASE}#/inbox`);
-  const docItem = page.locator('.inbox-list .item', { hasText: 'تحليل انخفاض' });
-  await docItem.click();
-  await page.fill('#doc', 'المشكلة: انخفاض استخدام التقارير من 58% إلى 41%. البيانات بالمقارنة تظهر أن السبب الأرجح بطء التقارير. التوصية: نقترح إصلاح الأداء أولًا. مؤشر النجاح: قياس نسبة الاستخدام أسبوعيًا والهدف 55%.');
-  await snap('3-editor');
-  await page.getByRole('button', { name: 'تسليم العمل' }).click();
-  await page.waitForSelector('.outcome .check');
-  await snap('4-delivered');
+  await page.locator('.inbox-list .item', { hasText: 'دليل الموظف' }).click();
+  await page.locator('.attach').first().click();
+  await page.waitForSelector('.doc-body');
+  await snap('3-library');
+  await page.goBack();
+  await page.locator('[data-act="ack-read"]').click();
 
   // إنهاء اليوم
   await page.getByRole('button', { name: /إنهاء يوم العمل/ }).click();
@@ -67,6 +66,14 @@ async function run(viewport, tag) {
   await page.waitForSelector('.topbar');
   const dayText = await page.locator('.day b').textContent();
   if (!dayText.includes('2')) errors.push(`[${tag}] لم يُستعد اليوم بعد إعادة التحميل: ${dayText}`);
+
+  // اليوم الثاني: أول مستند حقيقي
+  await page.goto(`${BASE}#/inbox`);
+  await page.locator('.inbox-list .item', { hasText: 'تحليل انخفاض' }).click();
+  await page.fill('#doc', 'المشكلة: انخفاض استخدام التقارير من 58% إلى 41%. البيانات بالمقارنة تظهر أن السبب الأرجح بطء التقارير. التوصية: نقترح إصلاح الأداء أولًا. مؤشر النجاح: قياس نسبة الاستخدام أسبوعيًا والهدف 55%.');
+  await snap('4-editor');
+  await page.getByRole('button', { name: 'تسليم العمل' }).click();
+  await page.waitForSelector('.outcome .check');
 
   // مراسلة زميل من صفحة فريقي
   await page.goto(`${BASE}#/team`);
@@ -113,7 +120,7 @@ async function run(viewport, tag) {
     if (shotPrefix) await snap(`${shotPrefix}-minutes`);
   }
 
-  while (!(await dayIs(3))) await endDay();
+  while (!(await dayIs(4))) await endDay();
   await playMeeting('تخطيط السبرنت',
     'نبدأ بإصلاح أداء التقارير بندًا واحدًا: 22 نقطة جهد تكفيها سعة الفريق في أسبوعين، ونؤجل الباقي. الاستخدام نزل من 58% إلى 41% والأفق مهددة بالإلغاء. وحملات واتساب نعود إليها في السبرنت القادم بعد أن يرسل ماجد بيانات الصفقات.',
     'إصلاح أداء التقارير', '7-sprint');

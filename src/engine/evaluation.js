@@ -7,7 +7,8 @@ const pct = (x) => Math.round(Math.max(0, Math.min(1, x)) * 100);
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 
 export function buildReport(sim, runBaseline) {
-  const acts = sim.actions;
+  // الاكتشافات مبادرة إضافية: تؤثر على الشركة والثقة، ولا تدخل في حساب الوقت والأولويات
+  const acts = sim.actions.filter((a) => a.kind !== 'insight');
   const handled = acts.filter((a) => a.kind !== 'expired');
   const important = acts.filter((a) => a.priority === 'critical' || a.priority === 'high');
 
@@ -94,6 +95,7 @@ export function buildReport(sim, runBaseline) {
       decisions: decisions.map((d) => ({ day: d.day, event: d.eventId, option: d.optionId, rationale: d.rationale })),
       deliverables: delivs.map((d) => ({ day: d.day, event: d.eventId, score: d.kind === 'deliverable' ? d.evaluation.score : 0, missing: d.kind === 'deliverable' ? d.evaluation.feedback : ['لم يُسلَّم'] })),
       shipped: sim.state.company.roadmap.shipped.map((x) => ({ title: x.title, day: x.shippedDay })),
+      insights: sim.actions.filter((a) => a.kind === 'insight').map((a) => ({ day: a.day, id: a.insightId })),
     },
     companyOutcome: { you: mine, baselineNoActions: base },
     recommendation: recommend(overall, sorted),
