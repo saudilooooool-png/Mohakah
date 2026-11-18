@@ -45,7 +45,10 @@ export function buildReport(sim, runBaseline) {
   ]);
 
   // جودة المخرجات: درجات المستندات المسلّمة، والمستندات غير المسلّمة تُحسب صفرًا
-  const delivs = acts.filter((a) => a.kind === 'deliverable' || (a.kind === 'expired' && sim.items.find((i) => i.id === a.itemId)?.deliverable));
+  // التقرير الأسبوعي انضباط تواصل لا مستند عمل: لا يدخل في جودة المخرجات، وله دليل مستقل
+  const isWeekly = (a) => String(a.eventId ?? '').startsWith('weekly_');
+  const weeklyActs = acts.filter(isWeekly);
+  const delivs = acts.filter((a) => !isWeekly(a) && (a.kind === 'deliverable' || (a.kind === 'expired' && sim.items.find((i) => i.id === a.itemId)?.deliverable)));
   const outputQuality = avg(delivs.map((d) => (d.kind === 'deliverable' ? d.evaluation.score : 0)));
 
   // إدارة الأشخاص: البنود الموسومة بمهارة people (التفويض، الإرهاق، الخلافات، الملاحظات الفردية).
@@ -94,6 +97,7 @@ export function buildReport(sim, runBaseline) {
       itemsMissed: acts.length - handled.length,
       decisions: decisions.map((d) => ({ day: d.day, event: d.eventId, option: d.optionId, rationale: d.rationale })),
       deliverables: delivs.map((d) => ({ day: d.day, event: d.eventId, score: d.kind === 'deliverable' ? d.evaluation.score : 0, missing: d.kind === 'deliverable' ? d.evaluation.feedback : ['لم يُسلَّم'] })),
+      weekly: { due: weeklyActs.length, submitted: weeklyActs.filter((a) => a.kind === 'deliverable').length, good: weeklyActs.filter((a) => a.kind === 'deliverable' && a.evaluation.score >= 0.6).length },
       shipped: sim.state.company.roadmap.shipped.map((x) => ({ title: x.title, day: x.shippedDay })),
       insights: sim.actions.filter((a) => a.kind === 'insight').map((a) => ({ day: a.day, id: a.insightId })),
       // شبكة العلاقات: دليل منفصل عن النقاط. من بنى علاقة قبل أن يحتاجها؟

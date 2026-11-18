@@ -16,6 +16,17 @@ const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const code = (n = 7) => Array.from(randomBytes(n), (b) => ALPHABET[b % ALPHABET.length]).join('');
 const KINDS = { academy: 'أكاديمية أو معسكر تدريب', university: 'جامعة أو كلية', company: 'شركة' };
 
+/** مهام الجهة المقيَّمة للمتدرب: مسار منفصل عن نقاط المحاكاة، يظهر في السجل الموثّق. */
+export function orgTasksSummary(store, uid) {
+  const O = store.orgs ?? {};
+  const m = O.members?.[uid];
+  const org = m && O.orgs?.[m.orgId];
+  if (!org) return { count: 0, items: [] };
+  const items = (org.tasks ?? []).filter((t) => t.cohortId === m.cohortId && t.subs?.[uid]?.grade)
+    .map((t) => ({ title: t.title, score: t.subs[uid].grade.score, at: t.subs[uid].grade.at }));
+  return { org: org.name, count: items.length, avg: items.length ? Math.round(items.reduce((s, x) => s + x.score, 0) / items.length) : null, items };
+}
+
 export function createOrgsApi({ store, world, accountsApi, clock = now }) {
   store.orgs ??= {};
   const O = store.orgs;
@@ -41,11 +52,34 @@ export function createOrgsApi({ store, world, accountsApi, clock = now }) {
       const pts = computePoints(sim.report(), { finished: sim.finished });
       const a = appraise(packOf(world.roles, sim.scenario.id), sim, pts);
       value = { started: true, role: sim.scenario.role, day: Math.min(sim.day, sim.lastDay), lengthDays: sim.lastDay, finished: sim.finished, points: pts.points, band: pts.band.label,
-        decision: a?.decision.label ?? null, decisionId: a?.decision.id ?? null, objectives: a ? `${a.achieved}/${a.total}` : null, violations: a?.violations.length ?? 0, lastActive: p.savedAt };
+        decision: a?.decision.label ?? null, decisionId: a?.decision.id ?? null, objectives: a ? `${a.achieved}/${a.total}` : null, violations: a?.violations.length ?? 0, weekly: a?.weekly?.due ? `${a.weekly.good}/${a.weekly.due}` : null, lastActive: p.savedAt };
     } catch (e) { if (process.env.MOHAKI_DEBUG) console.error(e); }
     cache.set(uid, { key, value });
     return value;
   }
+
+  // ——— مهام الجهة: مهمة تقنية من الأكاديمية داخل يوم العمل، يقيّمها مدرّبها بمعاييرها ———
+  const tasksOf = (org, cohortId) => (org.tasks ??= []).filter((t) => t.cohortId === cohortId);
+  const gradePublic = (g) => (g ? { score: g.score, scores: g.scores, feedback: g.feedback, at: g.at } : null);
+  function taskForManager(t) {
+    const subs = Object.entries(t.subs ?? {}).filter(([uid]) => store.users[uid] && O.members[uid]?.cohortId === t.cohortId)
+      .map(([uid, s]) => ({ userId: uid, name: store.users[uid].name, text: s.text, url: s.url, at: s.at, grade: gradePublic(s.grade) }));
+    const graded = subs.filter((s) => s.grade);
+    return { id: t.id, title: t.title, brief: t.brief, url: t.url, due: t.due, unlockDay: t.unlockDay, criteria: t.criteria, createdAt: t.createdAt, subs,
+      summary: { submitted: subs.length, graded: graded.length, avg: graded.length ? Math.round(graded.reduce((x, s) => x + s.grade.score, 0) / graded.length) : null } };
+  }
+  function taskForTrainee(t, uid, day) {
+    const s = t.subs?.[uid];
+    return { id: t.id, title: t.title, brief: t.brief, url: t.url, due: t.due, unlockDay: t.unlockDay, criteria: t.criteria, locked: day < t.unlockDay,
+      submission: s ? { text: s.text, url: s.url, at: s.at } : null, grade: gradePublic(s?.grade) };
+  }
+  const myTasks = (uid) => {
+    const m = O.members[uid]; const org = m && O.orgs[m.orgId];
+    if (!org) return [];
+    const st = standing(uid);
+    const day = st.started ? (st.finished ? Infinity : st.day) : 0;
+    return tasksOf(org, m.cohortId).map((t) => taskForTrainee(t, uid, day)).filter((t) => !t.locked || t.submission);
+  };
 
   function dashboard(org) {
     const cohorts = org.cohorts.map((co) => {
@@ -53,11 +87,12 @@ export function createOrgsApi({ store, world, accountsApi, clock = now }) {
         const u = store.users[uid];
         if (!u) return null;
         const rec = Object.values(store.records).filter((r) => r.userId === uid && !r.revoked).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt))[0];
-        return { name: u.name, email: u.email, joinedAt: m.joinedAt, record: rec?.code ?? null, ...standing(uid) };
+        const ts = orgTasksSummary(store, uid);
+        return { name: u.name, email: u.email, joinedAt: m.joinedAt, record: rec?.code ?? null, tasks: ts.count ? `${ts.avg}% (${ts.count})` : null, ...standing(uid) };
       }).filter(Boolean).sort((a, b) => (b.finished ? 1 : 0) - (a.finished ? 1 : 0) || (b.day ?? 0) - (a.day ?? 0) || (b.points ?? -1) - (a.points ?? -1));
       const started = members.filter((m) => m.started);
       const done = members.filter((m) => m.finished);
-      return { id: co.id, name: co.name, code: co.code, createdAt: co.createdAt, members,
+      return { id: co.id, name: co.name, code: co.code, createdAt: co.createdAt, members, tasks: tasksOf(org, co.id).map(taskForManager),
         summary: { joined: members.length, started: started.length, finished: done.length, confirmed: members.filter((m) => m.decisionId === 'confirmed').length,
           avgPoints: started.length ? Math.round(started.reduce((s, m) => s + m.points, 0) / started.length) : null } };
     });
@@ -67,9 +102,9 @@ export function createOrgsApi({ store, world, accountsApi, clock = now }) {
   const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   function csv(org, cohortId) {
     const d = dashboard(org);
-    const rows = [['الدفعة', 'الاسم', 'البريد', 'الدور', 'اليوم', 'أكمل', 'النقاط', 'المستوى', 'قرار التثبيت', 'الأهداف', 'التجاوزات', 'رمز السجل', 'آخر نشاط']];
+    const rows = [['الدفعة', 'الاسم', 'البريد', 'الدور', 'اليوم', 'أكمل', 'النقاط', 'المستوى', 'قرار التثبيت', 'الأهداف', 'التقارير الأسبوعية', 'مهام الجهة', 'التجاوزات', 'رمز السجل', 'آخر نشاط']];
     for (const co of d.cohorts.filter((c) => !cohortId || c.id === cohortId)) for (const m of co.members) {
-      rows.push([co.name, m.name, m.email, m.role ?? '', m.started ? `${m.day}/${m.lengthDays}` : 'لم يبدأ', m.finished ? 'نعم' : 'لا', m.points ?? '', m.band ?? '', m.decision ?? '', m.objectives ?? '', m.violations ?? '', m.record ?? '', m.lastActive ?? '']);
+      rows.push([co.name, m.name, m.email, m.role ?? '', m.started ? `${m.day}/${m.lengthDays}` : 'لم يبدأ', m.finished ? 'نعم' : 'لا', m.points ?? '', m.band ?? '', m.decision ?? '', m.objectives ?? '', m.weekly ?? '', m.tasks ?? '', m.violations ?? '', m.record ?? '', m.lastActive ?? '']);
     }
     return `﻿${rows.map((r) => r.map(csvCell).join(',')).join('\n')}`;
   }
@@ -104,6 +139,47 @@ export function createOrgsApi({ store, world, accountsApi, clock = now }) {
       org.cohorts.push({ id: randomUUID(), name, code: c, createdAt: clock() }); save();
       return { org: dashboard(org) };
     },
+    // مدير الجهة ينشئ مهمة لدفعة بمعايير تقييمه، ثم يقيّم التسليمات
+    'POST /api/orgs/:id/tasks': (req, body, id) => {
+      const org = getOrg(id, requireUser(req));
+      if (!org.cohorts.some((c) => c.id === body.cohortId)) throw new HttpError(400, 'اختر الدفعة');
+      const title = str(body.title, 140); const brief = str(body.brief, 4000);
+      if (title.length < 3 || brief.length < 20) throw new HttpError(400, 'اكتب عنوان المهمة ووصفها (20 حرفًا على الأقل)');
+      const criteria = [...new Set(String(body.criteria ?? '').split('\n').map((x) => x.trim().slice(0, 120)).filter(Boolean))].slice(0, 8);
+      if (criteria.length < 2) throw new HttpError(400, 'اكتب معيارين على الأقل للتقييم، كل معيار في سطر');
+      const url = str(body.url, 300);
+      if (url && !/^https:\/\//.test(url)) throw new HttpError(400, 'الرابط يجب أن يبدأ بـ https://');
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(body.due ?? '') ? body.due : null;
+      (org.tasks ??= []).push({ id: randomUUID(), cohortId: body.cohortId, title, brief, url: url || null, due, unlockDay: Math.min(30, Math.max(1, Math.round(Number(body.unlockDay)) || 1)), criteria, subs: {}, createdBy: requireUser(req).id, createdAt: clock() });
+      save();
+      return { org: dashboard(org) };
+    },
+    'POST /api/orgs/:id/tasks/:tid/grade': (req, body, id, tid) => {
+      const u = requireUser(req); const org = getOrg(id, u);
+      const t = (org.tasks ?? []).find((x) => x.id === tid);
+      const s = t?.subs?.[body.userId];
+      if (!s) throw new HttpError(404, 'لا يوجد تسليم');
+      const scores = t.criteria.map((_, i) => Math.round(Number(body.scores?.[i])));
+      if (scores.some((x) => !(x >= 1 && x <= 5))) throw new HttpError(400, 'قيّم كل معيار من 1 إلى 5');
+      s.grade = { scores, score: Math.round(scores.reduce((a, b) => a + b, 0) / (scores.length * 5) * 100), feedback: str(body.feedback, 1500), by: u.id, at: clock() };
+      save();
+      return { org: dashboard(org) };
+    },
+    // المتدرب: مهام دفعته وتسليمها
+    'GET /api/orgs/tasks': (req) => { const u = requireUser(req); return { org: O.orgs[O.members[u.id]?.orgId]?.name ?? null, tasks: myTasks(u.id) }; },
+    'POST /api/orgs/tasks/:tid/submit': (req, body, tid) => {
+      const u = requireUser(req);
+      const m = O.members[u.id]; const org = m && O.orgs[m.orgId];
+      const t = org && tasksOf(org, m.cohortId).find((x) => x.id === tid);
+      if (!t || !myTasks(u.id).some((x) => x.id === tid && !x.locked)) throw new HttpError(404, 'المهمة غير متاحة');
+      if (t.subs[u.id]?.grade) throw new HttpError(409, 'قُيّمت هذه المهمة، ولا يمكن تعديل التسليم');
+      const text = str(body.text, 6000); const url = str(body.url, 300);
+      if (text.length < 30) throw new HttpError(400, 'اكتب ملخص عملك (30 حرفًا على الأقل)');
+      if (url && !/^https:\/\//.test(url)) throw new HttpError(400, 'الرابط يجب أن يبدأ بـ https://');
+      t.subs[u.id] = { text, url: url || null, at: clock() };
+      save();
+      return { tasks: myTasks(u.id) };
+    },
     'GET /api/orgs/:id/export': (req, body, id) => ({ __csv: csv(getOrg(id, requireUser(req)), new URL(req.url, 'http://x').searchParams.get('cohort')) }),
     // المتدرب: الانضمام برمز الدعوة بموافقة صريحة، والمغادرة
     'POST /api/orgs/join': (req, body) => {
@@ -119,7 +195,7 @@ export function createOrgsApi({ store, world, accountsApi, clock = now }) {
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://x');
-    const keys = Object.keys(routes).sort((a, b) => (a.includes(':') ? 1 : 0) - (b.includes(':') ? 1 : 0)); // المسارات الثابتة قبل ذات المعاملات
+    const keys = Object.keys(routes).sort((a, b) => a.split(':').length - b.split(':').length || (a.indexOf(':') < 0 ? -1 : b.indexOf(':') < 0 ? 1 : b.indexOf(':') - a.indexOf(':'))); // المسارات الثابتة قبل ذات المعاملات
     const match = keys.map((k) => {
       const [m, path] = k.split(' ');
       if (m !== req.method) return null;

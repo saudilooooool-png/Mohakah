@@ -300,7 +300,7 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
     <div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
     <div class="chips">
       <span class="pill p-${item.priority}">أولوية ${PRIORITY[item.priority]}</span>
-      <span class="pill t-pill">${item.research ? 'مهمة بحث' : item.deliverable ? 'مستند مطلوب' : TYPE[item.type] ?? ''}</span>
+      <span class="pill t-pill">${item.research ? 'مهمة بحث' : item.weekly ? 'تقرير أسبوعي' : item.deliverable ? 'مستند مطلوب' : TYPE[item.type] ?? ''}</span>
       ${item.status === 'open' ? `<span class="pill t-pill" title="ما يستهلكه هذا البند من ساعات اليوم">⏱ ${fmtH(sim.costOf(item))} س</span>` : ''}
       <span class="pill t-pill">وصل يوم ${item.createdDay}</span>
       ${item.status === 'open' ? `<span class="pill ${item.dueDay <= sim.day ? 'p-critical' : 't-pill'}">${due}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
@@ -317,8 +317,8 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
     return `${head}
     <form class="editor" data-form="deliver" data-item="${esc(item.id)}">
       <div class="field">
-        <label for="doc">المستند</label>
-        <textarea id="doc" name="text" data-draft="${esc(item.id)}" placeholder="اكتب مستندك هنا. خالد يقرأ الأدلة والأرقام والتوصية القابلة للقياس.">${esc(draft)}</textarea>
+        <label for="doc">${item.weekly ? 'التقرير الأسبوعي' : 'المستند'}</label>
+        <textarea id="doc" name="text" data-draft="${esc(item.id)}" ${item.weekly ? 'style="min-height:190px"' : ''} placeholder="${item.weekly ? 'ما أنجزته هذا الأسبوع:&#10;…&#10;&#10;خطة الأسبوع القادم:&#10;…&#10;&#10;العوائق وما أحتاجه:&#10;…' : 'اكتب مستندك هنا. خالد يقرأ الأدلة والأرقام والتوصية القابلة للقياس.'}">${esc(draft)}</textarea>
         <div class="hint"><span>الطول المتوقع: ${min} كلمة على الأقل</span><span class="num" data-wc>${words(draft)} كلمة</span></div>
       </div>
       <div class="actions">
@@ -993,6 +993,7 @@ export function verifyPage(state) {
     </div>
     ${r.realWork?.count ? `<p class="small"><b>أعمال واقعية معتمدة</b> (منفصلة عن نقاط المحاكاة): ${r.realWork.items.map((x) => `${esc(x.title)} لدى ${esc(x.org)} (تقييم <span class="num">${x.rating}</span> من 5)`).join('، ')} · <span class="num">${r.realWork.points}</span> نقطة إنجاز واقعي.</p>` : ''}
     ${r.appraisal ? `<p class="small"><b>فترة التجربة (${esc(r.appraisal.role.title)}):</b> ${esc(r.appraisal.decision.label)} · حقق <span class="num">${r.appraisal.achieved}</span> من <span class="num">${r.appraisal.total}</span> أهداف${r.appraisal.violations ? ` · ${r.appraisal.violations} تجاوزات للإجراءات` : ' · دون تجاوزات للصلاحيات والإجراءات'}.</p>` : ''}
+    ${r.orgTasks?.count ? `<p class="small"><b>مهام ${esc(r.orgTasks.org)}</b> (قيّمها مدرّب الجهة بمعاييرها، منفصلة عن نقاط المحاكاة): <span class="num">${r.orgTasks.count}</span> مهام بمتوسط <span class="num">${r.orgTasks.avg}%</span>.</p>` : ''}
     ${r.marketResearch?.confirmed ? `<p class="small"><b>أبحاث سوق معتمدة</b> (منفصلة عن نقاط المحاكاة): <span class="num">${r.marketResearch.confirmed}</span> أبحاث طابقت الجواب المعتمد من مصادر مستقلة · <span class="num">${r.marketResearch.points}</span> نقطة بحث.</p>` : ''}
     ${r.collaboration && (r.collaboration.rolesPlayed || r.collaboration.reviewsGiven) ? `<p class="small"><b>التعاون ودعم الزملاء</b> (منفصل عن النقاط): لعب <span class="num">${r.collaboration.rolesPlayed}</span> دورًا في جلسات زملائه${r.collaboration.avgRoleRating ? ` بتقييم <span class="num">${r.collaboration.avgRoleRating}</span> من 5` : ''} · راجع <span class="num">${r.collaboration.reviewsGiven}</span> مستندًا، وجد أصحابها <span class="num">${r.collaboration.reviewsHelpful}</span> منها مفيدة.</p>` : ''}
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
@@ -2147,6 +2148,7 @@ export function jobPage(session) {
         ${a.objectives.map((o) => `<div class="plan-item ${o.ok ? 'done' : ''}"><span class="tick">${o.ok ? '✓' : ''}</span><span>${esc(o.label)} <span class="small muted">· الآن: ${esc(o.actual)}</span></span></div>`).join('')}
         <h3 class="section-t" style="margin-top:14px">الجدارات</h3>
         <table class="comp"><tbody>${a.competencies.map((c) => `<tr><td>${esc(c.label)}</td><td class="stars" title="${c.rating ?? ''} من 5">${stars(c.rating)}</td><td class="small muted">${esc(c.ratingLabel)}</td></tr>`).join('')}</tbody></table>
+        ${a.weekly?.due ? `<h3 class="section-t" style="margin-top:14px">التقارير الأسبوعية</h3><p class="small weekly-line" style="margin:0">رفعت <b class="num">${a.weekly.submitted}</b> من <b class="num">${a.weekly.due}</b> تقارير مستحقة، منها <b class="num">${a.weekly.good}</b> مكتملة الفقرات (المنجز، والقادم، والعوائق).</p>` : ''}
         <h3 class="section-t" style="margin-top:14px">الالتزام بالصلاحيات والإجراءات</h3>
         ${a.violations.length ? `<ul class="small viol">${a.violations.map((v) => `<li><span class="pill ${v.kind === 'authority' ? 'p-critical' : 'p-high'}">${v.kind === 'authority' ? 'تجاوز صلاحية' : 'مخالفة إجراء'}</span> يوم ${v.day}: ${esc(v.rule)}</li>`).join('')}</ul>` : '<p class="small" style="margin:0">لا تجاوزات مسجلة.</p>'}
         ${a.days >= 5 ? `<h3 class="section-t" style="margin-top:14px">خطة التطوير</h3><ul class="small">${a.development.map((d) => `<li><b>${esc(d.competency)}:</b> ${esc(d.action)}</li>`).join('')}</ul>` : ''}
@@ -2175,6 +2177,40 @@ export function orgPage(user, state, orgId) {
          <label class="small" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required> <span>أوافق على أن تشاهد الجهة صاحبة الرمز: اسمي وبريدي، وتقدمي، ونقاطي، وقرار فترة التجربة، ورمز سجلي. وأستطيع إيقاف ذلك بمغادرة الدفعة.</span></label>
          <div class="actions"><button class="btn primary" type="submit">انضمام</button></div>
        </form>`}</section>`;
+  const sel = (name = 'score') => `<select name="${name}" required><option value="">—</option>${[5, 4, 3, 2, 1].map((n) => `<option>${n}</option>`).join('')}</select>`;
+  const myTasks = (state.tasks ?? []).length ? `<section class="card" id="org-tasks" style="margin-top:14px"><h2>مهام ${esc(m?.org ?? 'جهتي')}</h2>
+    <p class="small muted" style="margin-top:0">يقيّمها مدرّب الجهة بمعاييره. نتيجتها مسار منفصل عن نقاط المحاكاة، وتظهر في سجلك الموثّق.</p>
+    ${state.tasks.map((t) => `<div class="org-task" style="border-top:1px solid var(--line,#e5e7eb);padding-top:12px;margin-top:12px">
+      <b>${esc(t.title)}</b> ${t.grade ? `<span class="pill s-done">قُيّمت: ${t.grade.score}%</span>` : t.submission ? '<span class="pill t-pill">تنتظر التقييم</span>' : '<span class="pill p-high">لم تُسلَّم</span>'}${t.due ? ` <span class="small muted">آخر موعد: ${esc(t.due)}</span>` : ''}
+      <p class="small" style="white-space:pre-line">${esc(t.brief)}</p>
+      ${t.url ? `<p class="small"><a href="${esc(t.url)}" target="_blank" rel="noopener">مواد المهمة ↗</a></p>` : ''}
+      ${t.grade ? `<table class="comp"><tbody>${t.criteria.map((c, i) => `<tr><td>${esc(c)}</td><td class="num"><b>${t.grade.scores[i]}</b> / 5</td></tr>`).join('')}</tbody></table>${t.grade.feedback ? `<div class="outcome info"><b>ملاحظات المدرّب:</b> ${esc(t.grade.feedback)}</div>` : ''}`
+        : `<p class="small"><b>معايير التقييم:</b> ${t.criteria.map(esc).join('، ')}</p>
+        <form data-form="org-submit" data-task="${esc(t.id)}" class="grid" style="gap:8px">
+          <div class="field"><label>ملخص عملك</label><textarea name="text" rows="4" required minlength="30">${esc(t.submission?.text ?? '')}</textarea></div>
+          <div class="field"><label>رابط العمل <span class="muted small">(اختياري، https)</span></label><input name="url" dir="ltr" value="${esc(t.submission?.url ?? '')}" placeholder="https://"></div>
+          <div class="actions"><button class="btn primary" type="submit">${t.submission ? 'تحديث التسليم' : 'تسليم'}</button></div>
+        </form>`}
+    </div>`).join('')}</section>` : '';
+  const cohortTasks = (org, co) => `<h3 class="section-t" style="margin-top:16px">مهام الجهة لهذه الدفعة</h3>
+    ${co.tasks.map((t) => `<details class="sop org-mtask"><summary><b>${esc(t.title)}</b> <span class="small muted">· يوم ${t.unlockDay} · سلّم ${t.summary.submitted} · قُيّم ${t.summary.graded}${t.summary.avg != null ? ` · المتوسط ${t.summary.avg}%` : ''}</span></summary>
+      <p class="small" style="white-space:pre-line">${esc(t.brief)}</p>
+      ${t.subs.length ? t.subs.map((s) => `<div class="finding"><b>${esc(s.name)}</b> ${s.grade ? `<span class="pill s-done">${s.grade.score}%</span>` : ''}<p style="white-space:pre-line">${esc(s.text)}</p>${s.url ? `<p class="small"><a href="${esc(s.url)}" target="_blank" rel="noopener" dir="ltr">${esc(s.url)}</a></p>` : ''}
+        <form data-form="org-grade" data-org="${esc(org.id)}" data-task="${esc(t.id)}" data-user="${esc(s.userId)}" class="grid" style="gap:6px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap">${t.criteria.map((c, i) => `<label class="small">${esc(c)} ${sel().replace(`<option>${s.grade?.scores[i]}</option>`, `<option selected>${s.grade?.scores[i]}</option>`)}</label>`).join('')}</div>
+          <input name="feedback" placeholder="ملاحظات للمتدرب (اختياري)" value="${esc(s.grade?.feedback ?? '')}">
+          <div class="actions"><button class="btn sm primary" type="submit">${s.grade ? 'تعديل التقييم' : 'حفظ التقييم'}</button><span class="small muted">من 1 إلى 5 لكل معيار</span></div>
+        </form></div>`).join('') : '<p class="small muted">لا تسليمات بعد.</p>'}
+    </details>`).join('')}
+    <details class="sop"><summary><b>+ مهمة جديدة</b> <span class="small muted">مهمة تقنية من منهجك داخل يوم العمل</span></summary>
+      <form data-form="org-task" data-org="${esc(org.id)}" data-cohort="${esc(co.id)}" class="grid" style="gap:8px;margin-top:8px">
+        <div class="field"><label>العنوان</label><input name="title" required minlength="3" placeholder="مثل: لوحة مؤشرات لبيانات العملاء"></div>
+        <div class="field"><label>الوصف والمطلوب</label><textarea name="brief" rows="4" required minlength="20" placeholder="اربطها بالشركة الافتراضية: ما السؤال؟ وما المخرَج؟ وبأي أداة؟"></textarea></div>
+        <div class="field"><label>معايير التقييم <span class="muted small">(كل معيار في سطر، من 2 إلى 8)</span></label><textarea name="criteria" rows="3" required placeholder="صحة البيانات&#10;وضوح العرض&#10;التوصية"></textarea></div>
+        <div class="grid g-2" style="gap:8px"><div class="field"><label>تُفتح في يوم العمل</label><input name="unlockDay" type="number" min="1" max="30" value="1"></div><div class="field"><label>آخر موعد <span class="muted small">(اختياري)</span></label><input name="due" type="date"></div></div>
+        <div class="field"><label>رابط مواد المهمة <span class="muted small">(اختياري، https)</span></label><input name="url" dir="ltr" placeholder="https://"></div>
+        <div class="actions"><button class="btn primary" type="submit">إضافة المهمة</button></div>
+      </form></details>`;
   const create = me.facilitator ? `<section class="card" style="margin-top:14px"><h2>جهة جديدة</h2>
       <form data-form="org-new" class="grid" style="gap:10px">
         <div class="field"><label>اسم الجهة</label><input name="name" required minlength="2"></div>
@@ -2198,12 +2234,13 @@ export function orgPage(user, state, orgId) {
       <div class="kpis" style="display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 12px">
         ${[['انضموا', co.summary.joined], ['بدؤوا', co.summary.started], ['أكملوا الشهر', co.summary.finished], ['اجتازوا فترة التجربة', co.summary.confirmed], ['متوسط النقاط', co.summary.avgPoints ?? '—']].map(([l, v]) => `<div><div class="small muted">${l}</div><b class="num" style="font-size:20px">${v}</b></div>`).join('')}
       </div>
-      ${co.members.length ? `<div style="overflow-x:auto"><table class="board"><thead><tr><th>المتدرب</th><th>الدور</th><th>اليوم</th><th>النقاط</th><th>الأهداف</th><th>قرار فترة التجربة</th><th>تجاوزات</th><th>السجل</th></tr></thead><tbody>
+      ${co.members.length ? `<div style="overflow-x:auto"><table class="board"><thead><tr><th>المتدرب</th><th>الدور</th><th>اليوم</th><th>النقاط</th><th>الأهداف</th><th>التقارير</th><th>مهام الجهة</th><th>قرار فترة التجربة</th><th>تجاوزات</th><th>السجل</th></tr></thead><tbody>
         ${co.members.map((x) => `<tr><td>${esc(x.name)}<br><span class="small muted" dir="ltr">${esc(x.email)}</span></td>${x.started
-          ? `<td class="small">${esc(x.role)}</td><td class="num">${x.day}/${x.lengthDays}</td><td class="num"><b>${x.points}</b><br><span class="small muted">${esc(x.band)}</span></td><td class="num">${esc(x.objectives ?? '—')}</td><td>${decisionPill(x)}</td><td class="num">${x.violations}</td><td>${x.record ? `<a href="#/verify/${esc(x.record)}" target="_blank" dir="ltr">${esc(x.record)}</a>` : '—'}</td>`
-          : '<td colspan="7" class="muted small">لم يبدأ بعد</td>'}</tr>`).join('')}
-        </tbody></table></div>` : '<div class="empty small">لم ينضم أحد بعد. أرسل رمز الدعوة لمتدربيك: يسجّلون في محاكي ثم يدخلون الرمز من «حسابي ← دفعتي».</div>'}
+          ? `<td class="small">${esc(x.role)}</td><td class="num">${x.day}/${x.lengthDays}</td><td class="num"><b>${x.points}</b><br><span class="small muted">${esc(x.band)}</span></td><td class="num">${esc(x.objectives ?? '—')}</td><td class="num">${esc(x.weekly ?? '—')}</td><td class="num">${esc(x.tasks ?? '—')}</td><td>${decisionPill(x)}</td><td class="num">${x.violations}</td><td>${x.record ? `<a href="#/verify/${esc(x.record)}" target="_blank" dir="ltr">${esc(x.record)}</a>` : '—'}</td>`
+          : '<td colspan="9" class="muted small">لم يبدأ بعد</td>'}</tr>`).join('')}
+        </tbody></table></div>` : '<div class="empty small">لم ينضم أحد بعد. أرسل رمز الدعوة لمتدربيك: يسجّلون في محاكي ثم يدخلون الرمز من «دفعتي والجهة».</div>'}
+      ${cohortTasks(org, co)}
     </section>`).join('') : '<section class="card"><div class="empty"><b>لا توجد دفعات بعد</b><span class="small muted">أنشئ دفعة فتحصل على رمز دعوة.</span></div></section>'}` : '';
   return `<div class="page-h"><div>${back}<h1>${managed.length ? 'حساب الجهة' : 'دفعتي'}</h1><p>${managed.length ? 'دفعاتك في محاكي: من انضم، وأين وصل، وما قرار فترة التجربة لكل متدرب. الأرقام يحسبها الخادم من أفعال المتدرب.' : 'انضم إلى دفعة جهتك برمز الدعوة.'}</p></div></div>
-  ${managed.length ? `<div class="grid g-main"><div>${dash}</div><div>${join}${create}</div></div>` : `<div class="grid g-2"><div>${join}</div><div>${create}</div></div>`}`;
+  ${managed.length ? `<div class="grid g-main"><div>${dash}</div><div>${join}${myTasks}${create}</div></div>` : `<div class="grid g-2"><div>${join}${myTasks}</div><div>${create}</div></div>`}`;
 }

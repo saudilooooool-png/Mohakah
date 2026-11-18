@@ -15,6 +15,30 @@ export const COST = { message: 0.5, meeting: 1, deliverable: 1.5, research: 0.5,
 export const CONNECT_GAP = 5; // أيام عمل بين جلستي تعارف مع الشخص نفسه
 export const SLOW_PER_DAY = 2; // طلبات التحليل التي يقبلها الفريق منك في اليوم
 
+/**
+ * التقرير الأسبوعي: كل خميس يرفع الموظف لمديره ما أنجز، وما القادم، وما يعيقه.
+ * يُولَّد من إعداد السيناريو (weeklyReport.days) حتى يبقى نصه واحدًا لكل الأدوار.
+ */
+export function weeklyReports(scenario) {
+  const spec = scenario.weeklyReport;
+  if (!spec?.days?.length) return [];
+  const who = spec.to ?? scenario.manager;
+  return spec.days.map((day, i) => ({
+    id: `weekly_${i + 1}`, day, type: 'task', category: 'task', from: who, priority: 'medium', dueInDays: 1, hours: 0.5, weekly: i + 1,
+    skills: ['communication', 'output'],
+    title: `تقريرك الأسبوعي (الأسبوع ${i + 1})`,
+    body: 'FYA: قبل EOD اليوم أرسل تقريرك الأسبوعي في ثلاث فقرات قصيرة: ما أنجزته هذا الأسبوع (بأرقام حيث أمكن)، وما ستعمل عليه الأسبوع القادم، وما يعيقك أو تحتاج فيه قرارًا أو دعمًا. نصف صفحة تكفي.',
+    deliverable: { minWords: 40, passScore: 0.6, weekly: true, sections: [
+      { id: 'done', label: 'ما أُنجز هذا الأسبوع', keywords: ['أنجزت', 'أنجزنا', 'أتممت', 'أنهيت', 'سلّمت', 'سلمت', 'أغلقت', 'أطلقنا', 'تم '] },
+      { id: 'next', label: 'خطة الأسبوع القادم', keywords: ['القادم', 'القادمة', 'المقبل', 'سأعمل', 'سأبدأ', 'أخطط', 'الخطوات'] },
+      { id: 'blockers', label: 'العوائق وما تحتاجه', keywords: ['عائق', 'عوائق', 'يعيق', 'تحدي', 'تحديات', 'مخاطر', 'أحتاج', 'blocker', 'لا عوائق', 'دعم'] },
+    ],
+    onGood: { result: 'وصل تقريرك الأسبوعي واضحًا: ما أُنجز، وما القادم، وما يحتاج قرارًا.', effects: [{ op: 'trust', who, value: 2 }] },
+    onWeak: { result: 'تقريرك الأسبوعي ناقص: المدير يحتاج أن يعرف ما أُنجز، وما القادم، وما يعيقك.', effects: [{ op: 'trust', who, value: -1 }] } },
+    onExpire: { result: 'لم ترفع تقريرك الأسبوعي. مديرك لا يعرف أين وصل عملك.', effects: [{ op: 'trust', who, value: -2 }] },
+  }));
+}
+
 export class Simulation {
   /**
    * @param {object} opts
@@ -29,7 +53,8 @@ export class Simulation {
     this.scenario = scenario;
     this.rngEvents = createRng(seed * 7919 + 1);
     this.rngWorld = createRng(seed * 104729 + 2);
-    this.eventDefs = new Map(scenario.events.map((e) => [e.id, e]));
+    this.events = [...scenario.events, ...weeklyReports(scenario)];
+    this.eventDefs = new Map(this.events.map((e) => [e.id, e]));
     this.firedRandom = new Set();
 
     const co = clone(company.state);
@@ -149,7 +174,7 @@ export class Simulation {
   submitDeliverable(itemId, text) {
     const item = this._openItem(itemId);
     if (!item.deliverable) throw new Error(`${itemId} لا يتطلب تسليم مستند`);
-    this._spend(COST.deliverable);
+    this._spend(this.costOf(item));
     const evaluation = scoreDeliverable(item.deliverable, text);
     this._recordAction(item, { kind: 'deliverable', evaluation, text });
     item.status = 'done';
@@ -264,7 +289,7 @@ export class Simulation {
   get hoursLeft() { return Math.max(0, HOURS_PER_DAY - this.hoursUsed); }
   /** الساعة المطلقة منذ بداية الشهر (لحساب مواعيد الطلبات التي تأخذ وقتًا). */
   get clock() { return (this.day - 1) * HOURS_PER_DAY + this.hoursUsed; }
-  costOf(item) { return item.research ? COST.research : item.deliverable ? COST.deliverable : item.type === 'meeting' ? COST.meeting : COST.message; }
+  costOf(item) { return item.hours != null ? item.hours : item.research ? COST.research : item.deliverable ? COST.deliverable : item.type === 'meeting' ? COST.meeting : COST.message; }
   canAfford(hours) { return this.hoursUsed + hours <= HOURS_PER_DAY + 1e-9; }
   _spend(hours) {
     if (!this.canAfford(hours)) throw new Error(`انتهت ساعات عمل اليوم (${HOURS_PER_DAY} ساعات). أنهِ يوم العمل وأكمل غدًا.`);
@@ -370,7 +395,7 @@ export class Simulation {
     this.hoursUsed = 0;
     this.slowToday = 0;
     this._resolvePending();
-    for (const e of this.scenario.events.filter((x) => x.day === this.day)) this._fire(e);
+    for (const e of this.events.filter((x) => x.day === this.day)) this._fire(e);
     for (const s of this.scheduledEvents.filter((x) => x.day === this.day)) this._fire(this.eventDefs.get(s.eventId));
     this._maybeRandomEvent();
   }
@@ -415,6 +440,8 @@ export class Simulation {
       dueDay: this.day + (def.dueInDays ?? 1) - 1,
       options: def.options ?? [],
       deliverable: def.deliverable ?? null,
+      hours: def.hours ?? null,
+      weekly: def.weekly ?? null,
       dialogue: def.dialogue ?? null,
       attachments: def.attachments ?? [],
       delegable: def.delegable ?? null,

@@ -13,6 +13,7 @@
   "junior"
  ],
  "lengthDays": 30,
+ "weeklyReport": {"days": [5, 10, 15, 20, 25]},
  "randomEventChance": 0.3,
  "initialTrust": {
   "cpo": 60,

@@ -128,6 +128,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     for (const a of sim.actions) {
       const item = itemOf(a.itemId);
       if (!item) continue;
+      if (a.kind === 'deliverable' && item.weekly) continue; // التقرير الأسبوعي ليس عملًا يُعرض
       if (a.kind === 'deliverable') {
         deliverables.push({ id: a.itemId, day: a.day, title: item.title, score: Math.round(a.evaluation.score * 100), words: words(a.text), covered: a.evaluation.sections.filter((x) => x.covered).map((x) => x.label), text: a.text });
       } else if (a.kind === 'decision') {

@@ -19,6 +19,8 @@ export function generatedMail(session) {
   const out = [];
   for (let d = 2; d <= day; d++) out.push({ id: `mail:report:${d}`, kind: 'report', day: d, from: 'analyst', title: `التقرير الصباحي — يوم العمل ${d}` });
   if (packOf(session.world.roles, sim.scenario.id)) out.push({ id: 'mail:job', kind: 'job', day: 1, from: sim.scenario.manager, title: 'FYA: وصفك الوظيفي وأهداف فترة التجربة' });
+  // مهام الجهة (الأكاديمية أو الجامعة): تصل كرسالة من المدير في يوم فتحها
+  for (const t of session.orgTasks ?? []) if (t.unlockDay <= day) out.push({ id: `mail:orgtask:${t.id}`, kind: 'orgtask', day: t.unlockDay, from: sim.scenario.manager, title: `FYA: مهمة من ${session.orgName ?? 'جهتك'}: ${t.title}`, task: t });
   for (const m of sim.scenario.memos ?? []) if (m.day <= day) out.push({ id: `mail:memo:${m.day}`, kind: 'memo', day: m.day, from: m.from, title: m.title, memo: m });
   for (const doc of session.world.library?.docs ?? []) {
     if ((doc.fromDay ?? 1) > 1 && doc.fromDay <= day) out.push({ id: `mail:doc:${doc.id}`, kind: 'doc', day: doc.fromDay, from: doc.from, title: `مستند جديد في المكتبة: ${doc.title}`, doc });
@@ -61,6 +63,14 @@ export function mailBody(session, mail, esc) {
       <ul class="memo">${pack.objectives.map((o) => `<li>${esc(o.label)}</li>`).join('')}</ul>
       <p class="small muted">راجع مصفوفة الصلاحيات قبل أي وعد أو خصم: ما تقرره وحدك، وما يحتاج موافقة.</p>
       <div class="actions"><a class="btn primary" href="#/job">افتح ملفي الوظيفي</a></div>`;
+  }
+  if (mail.kind === 'orgtask') {
+    const t = mail.task;
+    return `<p>هذه مهمة من ${esc(session.orgName ?? 'جهتك')} ضمن يوم عملك. يقيّمها مدرّب الجهة بمعاييره، وتظهر نتيجتها في سجلك منفصلة عن نقاط المحاكاة.</p>
+      <p><b>${esc(t.title)}</b></p><p style="white-space:pre-line">${esc(t.brief)}</p>
+      <p class="small"><b>معايير التقييم:</b> ${t.criteria.map(esc).join('، ')}.${t.due ? ` <b>آخر موعد:</b> ${esc(t.due)}.` : ''}</p>
+      <p class="small muted">${t.grade ? `قُيّمت: ${t.grade.score}%.` : t.submission ? 'سلّمتها، وتنتظر التقييم.' : 'لم تُسلَّم بعد.'}</p>
+      <div class="actions"><a class="btn primary" href="#/org">${t.submission ? 'افتح المهمة' : 'افتح المهمة وسلّم عملك'}</a></div>`;
   }
   if (mail.kind === 'doc') {
     return `<p>أضفنا إلى مكتبة الشركة: <b>${esc(mail.doc.title)}</b>. ${esc(mail.doc.summary)}</p>

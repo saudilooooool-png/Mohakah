@@ -73,7 +73,7 @@ export function appraise(pack, sim, pts) {
     role: { id: pack.id, title: pack.title, dept: pack.dept, grade: pack.grade },
     days: report.daysWorked, lengthDays: sim.lastDay, finished: sim.finished, points: pts.points,
     objectives, achieved, total: objectives.length,
-    competencies, violations,
+    competencies, violations, weekly: report.evidence.weekly,
     strengths: report.strengths, development: rated.slice(0, 2).map((c) => ({ competency: c.label, action: DEVELOP[c.id] })),
     decision,
   };

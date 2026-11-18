@@ -11,6 +11,15 @@
   "analyst"
  ],
  "lengthDays": 30,
+ "weeklyReport": {
+  "days": [
+   5,
+   10,
+   15,
+   20,
+   25
+  ]
+ },
  "randomEventChance": 0.15,
  "initialTrust": {
   "cpo": 60,

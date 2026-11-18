@@ -286,7 +286,7 @@ async function loadOrg() {
     const get = async (u) => { const r = await fetch(u, { credentials: 'same-origin' }); const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; };
     const me = await get('/api/orgs');
     const id = me.managed.find((o) => o.id === parseRoute().itemId)?.id ?? me.managed[0]?.id;
-    orgState = { me, org: id ? (await get(`/api/orgs/${id}`)).org : null };
+    orgState = { me, org: id ? (await get(`/api/orgs/${id}`)).org : null, tasks: me.membership ? (await get('/api/orgs/tasks')).tasks : [] };
   } catch (err) { orgState = { error: err.message }; }
   render();
 }
@@ -461,7 +461,12 @@ async function loadPlanExtra() {
   if (!session || !user) return;
   const w = await account.workSummary();
   session.planExtra = { realWork: w?.count ?? 0, market: w?.market?.confirmed ?? 0, portfolioPublished: !!w?.portfolioPublished };
-  if (['plan', 'desk'].includes(parseRoute().page)) render();
+  // مهام الجهة تصل في البريد
+  try {
+    const r = await fetch('/api/orgs/tasks', { credentials: 'same-origin' });
+    if (r.ok) { const d = await r.json(); session.orgTasks = d.tasks; session.orgName = d.org; }
+  } catch { /* دون اتصال */ }
+  if (['plan', 'desk', 'inbox'].includes(parseRoute().page)) render();
 }
 
 /** الجولة التعريفية تبدأ تلقائيًا أول مرة. (تُتجاهل في الفحوص الآلية حتى لا تحجب النقرات، ولها فحص خاص.) */
@@ -992,6 +997,22 @@ function onSubmit(e) {
       .then((d) => { toast('أُنشئت الجهة.', 'good'); location.hash = `#/org/${d.org.id}`; loadOrg(); }).catch((err) => toast(err.message, 'bad'));
     return;
   }
+  if (form.dataset.form === 'org-task') {
+    orgPost(`/api/orgs/${form.dataset.org}/tasks`, { cohortId: form.dataset.cohort, ...Object.fromEntries(new FormData(form).entries()) })
+      .then(() => { toast('أُضيفت المهمة لمتدربي الدفعة.', 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'org-grade') {
+    const f = new FormData(form);
+    orgPost(`/api/orgs/${form.dataset.org}/tasks/${form.dataset.task}/grade`, { userId: form.dataset.user, scores: f.getAll('score').map(Number), feedback: f.get('feedback') })
+      .then(() => { toast('حُفظ التقييم.', 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'org-submit') {
+    orgPost(`/api/orgs/tasks/${form.dataset.task}/submit`, Object.fromEntries(new FormData(form).entries()))
+      .then(() => { toast('سُلّمت المهمة.', 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'org-cohort') {
     orgPost(`/api/orgs/${form.dataset.org}/cohorts`, { name: new FormData(form).get('name') })
       .then(() => { toast('أُنشئت الدفعة. انسخ رمز الدعوة وأرسله لمتدربيك.', 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
@@ -1234,7 +1255,7 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'live') { loadLive(); return; }
   if (parseRoute().page === 'peer') { loadPeer(); return; }
   if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); loadRealWork(); }
-  if (['plan', 'desk'].includes(parseRoute().page)) loadPlanExtra();
+  if (['plan', 'desk', 'inbox'].includes(parseRoute().page)) loadPlanExtra();
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
   if (parseRoute().page === 'video') { loadVideo(); return; }
@@ -1289,7 +1310,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'video') loadVideo();
     if (parseRoute().page === 'pair') loadPair();
     if (parseRoute().page === 'work') loadWork();
-    if (['plan', 'desk'].includes(parseRoute().page)) loadPlanExtra();
+    if (['plan', 'desk', 'inbox'].includes(parseRoute().page)) loadPlanExtra();
     if (parseRoute().page === 'assessments') loadAssessAdmin();
     if (parseRoute().page === 'org') loadOrg();
     if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();

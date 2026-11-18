@@ -337,7 +337,7 @@ RES = [at(ev['d9_research_lost'], 9, 3), at(ev['d14_research_cac'], 14, 3), at(e
 
 def month(sid, role, role_id, manager, team, events, rotation):
     out = {"id": sid, "derivedFrom": src['id'], "company": src['company'], "role": role, "manager": manager, "team": team,
-           "lengthDays": 30, "randomEventChance": 0.15, "initialTrust": src['initialTrust'], "rotation": rotation,
+           "lengthDays": 30, "weeklyReport": {"days": [5, 10, 15, 20, 25]}, "randomEventChance": 0.15, "initialTrust": src['initialTrust'], "rotation": rotation,
            "events": sorted(events, key=lambda e: e['day']),
            "randomEvents": [copy.deepcopy(ev[i]) for i in ('r_backlog_spike', 'r_press', 'r_team_conflict')],
            "insights": src.get('insights', []), "memos": src.get('memos', [])}

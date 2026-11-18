@@ -64,3 +64,26 @@ test('قبل إكمال الفترة: القرار "قيد التجربة" وا�
   assert.equal(a.decision.id, 'in_progress');
   assert.equal(a.objectives.find((o) => o.id === 'reports').actual, 'لم يتم بعد');
 });
+
+test('التقرير الأسبوعي: كل خميس، بنصف ساعة، ولا يدخل في جودة المخرجات، ويظهر في تقييم الأداء', async () => {
+  const { Simulation, loadCompany, loadScenario, loadOccupations } = await import('../src/index.js');
+  const { goodRun: run } = await import('../scripts/lib/runs.js');
+  const { replay } = await import('../src/replay.js');
+  const w = { company: loadCompany('nova-tech'), scenario: loadScenario('cs-month'), occupations: loadOccupations() };
+  const sim = new Simulation({ ...w, seed: 4 });
+  while (sim.day < 5) sim.endDay();
+  const item = sim.inbox().find((i) => i.weekly === 1);
+  assert.ok(item, 'يصل يوم الخميس الأول');
+  assert.equal(sim.costOf(item), 0.5);
+  const before = sim.hoursLeft;
+  const ev = sim.submitDeliverable(item.id, 'أنجزت هذا الأسبوع قراءة دليل الموظف وأغلقت 12 تذكرة ورفعت مقال قاعدة المعرفة. الأسبوع القادم سأعمل على فرز التذاكر المتأخرة ومتابعة عميلين. لا عوائق حاليًا، وأحتاج صلاحية الاطلاع على لوحة التذاكر. '.repeat(2));
+  assert.equal(ev.score, 1);
+  assert.equal(before - sim.hoursLeft, 0.5);
+  while (sim.day < 11) sim.endDay(); // التقرير الثاني يفوت
+  const r = sim.report();
+  assert.deepEqual(r.evidence.weekly, { due: 2, submitted: 1, good: 1 });
+  assert.ok(!r.evidence.deliverables.some((d) => String(d.event).startsWith('weekly_')));
+  const full = replay(w, run(9, { scenario: 'cs-month' })).sim;
+  assert.deepEqual(full.report().evidence.weekly, { due: 5, submitted: 5, good: 5 });
+  assert.equal(new Simulation({ ...w, scenario: loadScenario('cs-assessment'), seed: 1 }).events.some((e) => e.weekly), false, 'لا تقرير أسبوعي في جلسة التقييم القصيرة');
+});

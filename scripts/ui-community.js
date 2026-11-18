@@ -38,6 +38,11 @@ const lastLink = (to, kind) => {
 async function account(name, email) {
   const call = apiClient();
   const r = await call('POST', '/api/auth/register', { name, email, password: 'secret-123', consents: { processing: true } });
+  if (r.status >= 400) { // الحساب موجود من فحص سابق على مجلد البيانات نفسه
+    const l = await call('POST', '/api/auth/login', { email, password: 'secret-123' });
+    call.id = l.data.id ?? l.data.user?.id; call.email = email;
+    return call;
+  }
   await call('POST', '/api/auth/verify', { token: lastLink(email, 'confirm-email').split('/').pop() });
   call.id = r.data.id;
   call.email = email;
