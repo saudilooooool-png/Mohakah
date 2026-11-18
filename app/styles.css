@@ -577,3 +577,11 @@ form[data-form="market-new"] input, form[data-form="market-new"] textarea, form[
 .plan-item.done > span:last-child { color: var(--muted, #6b7792); }
 .rot-chip { margin-inline-start: 10px; white-space: nowrap; }
 @media (max-width: 700px) { .rot-chip { display: none; } }
+.jd table td { padding: 5px 8px; }
+.sop { border-top: 1px solid var(--line); padding: 8px 0; }
+.sop ol { margin: 8px 0 0; padding-inline-start: 20px; line-height: 1.9; }
+.comp td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.stars { letter-spacing: 2px; color: var(--teal-ink, #00808a); white-space: nowrap; }
+.viol { padding-inline-start: 0; list-style: none; }
+.viol li { margin: 6px 0; }
+@media print { .side, .topbar, .verify-banner, .office-mini-wrap { display: none !important; } .shell { display: block; } }

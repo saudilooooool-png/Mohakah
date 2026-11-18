@@ -8,6 +8,7 @@ import {
 } from './lib/ui.js';
 import { generatedMail, mailBody } from './lib/mail.js';
 import { buildPlan, GOAL_ROLES, GOAL_NEEDS } from '../src/plan.js';
+import { appraise, packOf } from '../src/rolepack.js';
 
 const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
@@ -15,6 +16,7 @@ const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
 export const NAV = [
   { id: 'desk', label: 'مكتبي', sub: 'ملخص يوم العمل', icon: 'desk' },
+  { id: 'job', label: 'ملفي الوظيفي', sub: 'الوصف والأهداف والصلاحيات والتقييم', icon: 'briefcase' },
   { id: 'plan', label: 'خطتي', sub: 'هدفك وجاهزيتك لسوق العمل', icon: 'growth' },
   { id: 'inbox', label: 'البريد', sub: 'المهام والرسائل والتقارير', icon: 'mail' },
   { id: 'team', label: 'فريقي', sub: 'الزملاء والمديرون', icon: 'team' },
@@ -22,7 +24,7 @@ export const NAV = [
   { id: 'files', label: 'ملفات الشركة', sub: 'بيانات وتقارير ومستندات', icon: 'files' },
   { id: 'library', label: 'المكتبة', sub: 'أدلة وسياسات ودراسات', icon: 'book' },
   { id: 'company', label: 'نتائج الشركة', sub: 'الأداء والنمو والمؤشرات', icon: 'chart' },
-  { id: 'work', label: 'أعمال واقعية', sub: 'فرص حقيقية تُفتح بتقدمك', icon: 'briefcase' },
+  { id: 'work', label: 'أعمال واقعية', sub: 'فرص حقيقية تُفتح بتقدمك', icon: 'task' },
   { id: 'feed', label: 'سجل الشركة', sub: 'ما الذي حدث ولماذا', icon: 'feed' },
   { id: 'report', label: 'تطورك المهني', sub: 'متابعة مستمرة', icon: 'growth' },
 ];
@@ -43,7 +45,7 @@ export function shell(session, route, content) {
         <div><div class="co-name">NOVA TECH</div><div class="co-status">Online</div></div>
       </div>
       <nav class="nav">
-        ${NAV.filter((n) => !session.assess || !['work', 'report', 'plan'].includes(n.id)).map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
+        ${NAV.filter((n) => !session.assess || !['work', 'report', 'plan', 'job'].includes(n.id)).map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
           ${icon(n.icon)}<span class="lbl">${n.label}<small>${n.sub}</small></span>
           ${badges[n.id] ? `<span class="badge">${badges[n.id]}</span>` : ''}
         </a>`).join('')}
@@ -220,7 +222,7 @@ function roadmapBlock(dash, raw) {
 
 function mailRow(session, m, activeId, filterQ = '') {
   const from = session.person(m.from);
-  const label = { report: 'تقرير', memo: 'تعميم', doc: 'المكتبة' }[m.kind];
+  const label = { report: 'تقرير', memo: 'تعميم', doc: 'المكتبة', job: 'الموارد البشرية' }[m.kind];
   return `<a class="item ${m.id === activeId ? 'on' : ''} ${session.opened?.[m.id] ? '' : 'unread'}" href="#/inbox/${encodeURIComponent(m.id)}${filterQ}">
     <span class="ico">${icon(m.kind === 'report' ? 'chart' : m.kind === 'doc' ? 'book' : 'mail')}</span>
     <span><div class="tt">${m.title.startsWith('FYI') ? '' : '<abbr class="tag fyi" title="For Your Information: للعلم فقط">FYI</abbr>'}${esc(m.title)}</div><div class="meta"><span>${esc(from.name)}</span><span class="pill t-pill">${label}</span></div></span>
@@ -285,7 +287,7 @@ export function inbox(session, { itemId, filter = 'open' }, drafts, ui = {}) {
 function mailDetail(session, m) {
   const from = session.person(m.from);
   return `<div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
-    <div class="chips"><span class="pill t-pill">${{ report: 'تقرير يومي', memo: 'تعميم', doc: 'المكتبة' }[m.kind]}</span><span class="pill t-pill">يوم ${m.day}</span><span class="pill t-pill">للاطلاع</span></div>
+    <div class="chips"><span class="pill t-pill">${{ report: 'تقرير يومي', memo: 'تعميم', doc: 'المكتبة', job: 'الموارد البشرية' }[m.kind]}</span><span class="pill t-pill">يوم ${m.day}</span><span class="pill t-pill">للاطلاع</span></div>
     <h1>${jg(session, esc(m.title))}</h1>
     <div class="mail-body">${mailBody(session, m, (x) => jg(session, esc(x)))}</div>`;
 }
@@ -990,6 +992,7 @@ export function verifyPage(state) {
       <div class="breakdown">${r.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.score}%</span>${bar(b.score)}</div>`).join('')}</div>
     </div>
     ${r.realWork?.count ? `<p class="small"><b>أعمال واقعية معتمدة</b> (منفصلة عن نقاط المحاكاة): ${r.realWork.items.map((x) => `${esc(x.title)} لدى ${esc(x.org)} (تقييم <span class="num">${x.rating}</span> من 5)`).join('، ')} · <span class="num">${r.realWork.points}</span> نقطة إنجاز واقعي.</p>` : ''}
+    ${r.appraisal ? `<p class="small"><b>فترة التجربة (${esc(r.appraisal.role.title)}):</b> ${esc(r.appraisal.decision.label)} · حقق <span class="num">${r.appraisal.achieved}</span> من <span class="num">${r.appraisal.total}</span> أهداف${r.appraisal.violations ? ` · ${r.appraisal.violations} تجاوزات للإجراءات` : ' · دون تجاوزات للصلاحيات والإجراءات'}.</p>` : ''}
     ${r.marketResearch?.confirmed ? `<p class="small"><b>أبحاث سوق معتمدة</b> (منفصلة عن نقاط المحاكاة): <span class="num">${r.marketResearch.confirmed}</span> أبحاث طابقت الجواب المعتمد من مصادر مستقلة · <span class="num">${r.marketResearch.points}</span> نقطة بحث.</p>` : ''}
     ${r.collaboration && (r.collaboration.rolesPlayed || r.collaboration.reviewsGiven) ? `<p class="small"><b>التعاون ودعم الزملاء</b> (منفصل عن النقاط): لعب <span class="num">${r.collaboration.rolesPlayed}</span> دورًا في جلسات زملائه${r.collaboration.avgRoleRating ? ` بتقييم <span class="num">${r.collaboration.avgRoleRating}</span> من 5` : ''} · راجع <span class="num">${r.collaboration.reviewsGiven}</span> مستندًا، وجد أصحابها <span class="num">${r.collaboration.reviewsHelpful}</span> منها مفيدة.</p>` : ''}
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
@@ -2110,4 +2113,45 @@ function networkCard(n) {
   return `<section class="card" style="margin-top:16px"><h2>شبكة العلاقات</h2>
     <p class="small muted" style="margin-top:0">دليل منفصل عن النقاط: من بنيت معه علاقة داخل الشركة وخارجها.</p>
     <div class="pf-stats"><div><b class="num">${n.internal}</b><span>زملاء جلست معهم</span></div><div><b class="num">${n.departments}</b><span>إدارات</span></div><div><b class="num">${n.external}</b><span>عملاء</span></div><div><b class="num">${n.trusted}</b><span>يثقون بك (65+)</span></div></div></section>`;
+}
+
+// ——— ملفي الوظيفي: الوصف والأهداف والصلاحيات والإجراءات وتقييم الأداء ———
+
+const DECISION_CLS = { confirmed: 'good', extended: 'info', repeat: 'bad', in_progress: 'info' };
+
+export function jobPage(session) {
+  const sim = session.sim;
+  const pack = packOf(session.world.roles, sim.scenario.id);
+  if (!pack) return '<section class="card"><div class="empty"><b>لا يوجد ملف وظيفي لهذه الجلسة</b></div></section>';
+  const a = appraise(pack, sim, computePoints(sim.report(), { finished: sim.finished }));
+  const mgr = session.person(pack.reportsTo);
+  const who = session.user?.name ?? 'الموظف';
+  const stars = (n) => (n === null ? '—' : '●'.repeat(n) + '○'.repeat(5 - n));
+  return `<div class="page-h"><div><h1>ملفي الوظيفي</h1><p>وصفك الوظيفي، وأهداف فترة التجربة، وما تملك قراره، وكيف تُقيَّم. كما في أي شركة.</p></div>
+    ${sim.finished ? '<button class="btn" data-act="print">طباعة تقييم الأداء / PDF</button>' : ''}</div>
+  <div class="grid g-main">
+    <div>
+      <section class="card jd"><div class="small muted">الوصف الوظيفي · NOVA TECH</div><h2>${esc(pack.title)}</h2>
+        <table><tbody><tr><td class="muted">الإدارة</td><td>${esc(pack.dept)}</td></tr><tr><td class="muted">المدير المباشر</td><td>${esc(mgr.name)}</td></tr><tr><td class="muted">المستوى</td><td>${esc(pack.grade)}</td></tr><tr><td class="muted">فترة التجربة</td><td>${sim.lastDay} يوم عمل <span class="small muted">(${esc(pack.probation.note)})</span></td></tr></tbody></table>
+        <h3 class="section-t">الغرض من الوظيفة</h3><p>${esc(pack.purpose)}</p>
+        <h3 class="section-t">المسؤوليات</h3><ul>${pack.responsibilities.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <h3 class="section-t">مؤشرات الأداء</h3><div class="chips">${pack.kpis.map((x) => `<span class="pill t-pill">${esc(x)}</span>`).join('')}</div></section>
+      <section class="card" style="margin-top:12px"><h2>مصفوفة الصلاحيات</h2><p class="small muted" style="margin-top:0">ما تقرره وحدك، وما يحتاج موافقة. تجاوزها يُسجَّل في تقييمك.</p>
+        <div class="tbl-wrap"><table><thead><tr><th>القرار</th><th>صاحب الصلاحية</th><th>ملاحظة</th></tr></thead><tbody>${pack.authority.map((x) => `<tr><td>${esc(x.decision)}</td><td><span class="pill ${x.level === 'صلاحيتك' ? 's-done' : 'p-high'}">${esc(x.level)}</span></td><td class="small muted">${esc(x.note)}</td></tr>`).join('')}</tbody></table></div></section>
+      <section class="card" style="margin-top:12px"><h2>إجراءات العمل</h2>${pack.sops.map((x) => `<details class="sop"><summary><b>${esc(x.title)}</b></summary><ol>${x.steps.map((st) => `<li>${esc(st)}</li>`).join('')}</ol></details>`).join('')}</section>
+    </div>
+    <div>
+      <section class="card appraisal"><div class="small muted">تقييم الأداء · فترة التجربة</div><h2>${esc(who)}</h2>
+        <div class="outcome ${DECISION_CLS[a.decision.id]}"><b>${a.finished ? 'قرار التثبيت: ' : ''}${esc(a.decision.label)}</b><br><span class="small">${esc(a.decision.text)}</span></div>
+        <h3 class="section-t">أهداف الفترة <span class="muted small">(${a.achieved} من ${a.total})</span></h3>
+        ${a.objectives.map((o) => `<div class="plan-item ${o.ok ? 'done' : ''}"><span class="tick">${o.ok ? '✓' : ''}</span><span>${esc(o.label)} <span class="small muted">· الآن: ${esc(o.actual)}</span></span></div>`).join('')}
+        <h3 class="section-t" style="margin-top:14px">الجدارات</h3>
+        <table class="comp"><tbody>${a.competencies.map((c) => `<tr><td>${esc(c.label)}</td><td class="stars" title="${c.rating ?? ''} من 5">${stars(c.rating)}</td><td class="small muted">${esc(c.ratingLabel)}</td></tr>`).join('')}</tbody></table>
+        <h3 class="section-t" style="margin-top:14px">الالتزام بالصلاحيات والإجراءات</h3>
+        ${a.violations.length ? `<ul class="small viol">${a.violations.map((v) => `<li><span class="pill ${v.kind === 'authority' ? 'p-critical' : 'p-high'}">${v.kind === 'authority' ? 'تجاوز صلاحية' : 'مخالفة إجراء'}</span> يوم ${v.day}: ${esc(v.rule)}</li>`).join('')}</ul>` : '<p class="small" style="margin:0">لا تجاوزات مسجلة.</p>'}
+        ${a.days >= 5 ? `<h3 class="section-t" style="margin-top:14px">خطة التطوير</h3><ul class="small">${a.development.map((d) => `<li><b>${esc(d.competency)}:</b> ${esc(d.action)}</li>`).join('')}</ul>` : ''}
+        ${a.decision.id === 'extended' || a.decision.id === 'repeat' ? '<p class="small muted">هذه ليست النهاية: ابدأ فترة جديدة من "ابدأ من جديد"، وركّز على خطة التطوير. يُحتسب لك أفضل ما تحققه.</p>' : ''}
+      </section>
+    </div>
+  </div>`;
 }

@@ -186,3 +186,16 @@ test('شهر دور آخر: الخادم يعيد التشغيل بسيناري�
     assert.equal((await friend('GET', '/api/progress')).data.progress.scenario, undefined);
   });
 });
+
+test('السجل الموثّق يحمل تقييم فترة التجربة: قرار التثبيت والأهداف والجدارات', async () => {
+  await withServer(async ({ user, store }) => {
+    const me = await user('سارة العتيبي', 'sara@example.com');
+    const u = Object.values(store.users)[0]; u.emailVerifiedAt = new Date().toISOString();
+    await me('PUT', '/api/progress', goodRun(9));
+    const rec = (await me('POST', '/api/records/issue')).data;
+    assert.equal(rec.appraisal.role.id, 'pm');
+    assert.equal(rec.appraisal.total, 5);
+    assert.ok(['confirmed', 'extended'].includes(rec.appraisal.decision.id));
+    assert.equal(rec.appraisal.competencies.length, 7);
+  });
+});

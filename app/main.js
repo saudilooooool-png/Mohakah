@@ -385,6 +385,7 @@ function render() {
     case 'work': body = V.workPage(workState, route.itemId); break;
     case 'profile': body = V.profilePage(user); break;
     case 'plan': body = V.planPage(session, session.planExtra ?? {}); break;
+    case 'job': body = V.jobPage(session); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'

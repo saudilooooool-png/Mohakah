@@ -22,6 +22,8 @@ function loadWorld(root) {
     company: read('data/companies/nova-tech.json'),
     scenario: read('data/scenarios/pm-first-30-days.json'),
     occupations: { ...read('data/occupations/ssco.json'), profiles: read('data/occupations/ssco-profiles.json').profiles },
+    // حزم الأدوار: الوصف الوظيفي وأهداف فترة التجربة والصلاحيات والإجراءات
+    roles: Object.fromEntries(['pm', 'sales', 'cs'].map((r) => [r, read(`data/roles/${r}.json`)])),
   };
   // الشهر الكامل لكل دور (بنظام التدوير بين الإدارات)
   base.byScenario = Object.fromEntries(['sales-month', 'cs-month'].map((id) => [id, { ...base, scenario: read(`data/scenarios/${id}.json`) }]));

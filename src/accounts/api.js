@@ -10,6 +10,7 @@ import { collaborationSummary, forgetUser } from '../community/collab.js';
 
 import { realWorkSummary } from '../work/summary.js';
 import { marketSummary } from '../market/summary.js';
+import { appraise, packOf } from '../rolepack.js';
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { replay, worldOf } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
@@ -419,6 +420,13 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         collaboration: collaborationSummary(store.community, u.id),
         realWork: realWorkSummary(store, u.id),
         marketResearch: marketSummary(store, u.id),
+        // تقييم فترة التجربة بلغة الموارد البشرية: الأهداف، والجدارات، والتجاوزات، وقرار التثبيت
+        appraisal: (() => {
+          const a = appraise(packOf(world.roles, sim.scenario.id), sim, points);
+          return a && { role: a.role, decision: { id: a.decision.id, label: a.decision.label }, achieved: a.achieved, total: a.total,
+            objectives: a.objectives.map((o) => ({ label: o.label, ok: o.ok, actual: o.actual })),
+            competencies: a.competencies.map((c) => ({ label: c.label, rating: c.rating, ratingLabel: c.ratingLabel })), violations: a.violations.length };
+        })(),
         logHash,
         verifiedBy: 'server-replay',
       };

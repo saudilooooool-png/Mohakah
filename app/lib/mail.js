@@ -1,3 +1,5 @@
+import { packOf } from '../../src/rolepack.js';
+
 // بريد العمل: يجمع بنود المحرك (مهام ورسائل واجتماعات) مع بريد يُولَّد من حالة الشركة:
 // التقرير الصباحي، وتعميم اجتماع الموظفين الأسبوعي، وإشعارات المستندات الجديدة في المكتبة.
 // البريد المولَّد للعرض فقط، ولا يؤثر على المحرك (يُبنى من سجل الشركة نفسه).
@@ -16,6 +18,7 @@ export function generatedMail(session) {
   const day = Math.min(sim.day, sim.lastDay);
   const out = [];
   for (let d = 2; d <= day; d++) out.push({ id: `mail:report:${d}`, kind: 'report', day: d, from: 'analyst', title: `التقرير الصباحي — يوم العمل ${d}` });
+  if (packOf(session.world.roles, sim.scenario.id)) out.push({ id: 'mail:job', kind: 'job', day: 1, from: sim.scenario.manager, title: 'FYA: وصفك الوظيفي وأهداف فترة التجربة' });
   for (const m of sim.scenario.memos ?? []) if (m.day <= day) out.push({ id: `mail:memo:${m.day}`, kind: 'memo', day: m.day, from: m.from, title: m.title, memo: m });
   for (const doc of session.world.library?.docs ?? []) {
     if ((doc.fromDay ?? 1) > 1 && doc.fromDay <= day) out.push({ id: `mail:doc:${doc.id}`, kind: 'doc', day: doc.fromDay, from: doc.from, title: `مستند جديد في المكتبة: ${doc.title}`, doc });
@@ -50,6 +53,14 @@ export function mailBody(session, mail, esc) {
   }
   if (mail.kind === 'memo') {
     return `<p>إلى جميع الموظفين،</p><ul class="memo">${mail.memo.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="small muted">هذا ملخص اجتماع الموظفين الأسبوعي (الخميس).</p>`;
+  }
+  if (mail.kind === 'job') {
+    const pack = packOf(session.world.roles, sim.scenario.id);
+    return `<p>أهلًا بك. PFA وصفك الوظيفي: <b>${esc(pack.title)}</b>، ${esc(pack.dept)}.</p>
+      <p>فترة التجربة ${sim.lastDay} يوم عمل. اتفقنا على ${pack.objectives.length} أهداف تُراجَع في آخرها، ومعها يصدر قرار التثبيت:</p>
+      <ul class="memo">${pack.objectives.map((o) => `<li>${esc(o.label)}</li>`).join('')}</ul>
+      <p class="small muted">راجع مصفوفة الصلاحيات قبل أي وعد أو خصم: ما تقرره وحدك، وما يحتاج موافقة.</p>
+      <div class="actions"><a class="btn primary" href="#/job">افتح ملفي الوظيفي</a></div>`;
   }
   if (mail.kind === 'doc') {
     return `<p>أضفنا إلى مكتبة الشركة: <b>${esc(mail.doc.title)}</b>. ${esc(mail.doc.summary)}</p>

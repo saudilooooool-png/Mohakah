@@ -1,0 +1,27 @@
+// فحص "ملفي الوظيفي": الوصف الوظيفي، والأهداف، والصلاحيات، وتقييم الأداء وقرار التثبيت.
+import { createRequire } from 'node:module';
+import { goodRun } from '../lib/runs.js';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const O = 'http://localhost:4173';
+const SH = process.env.SHOTS || '/tmp';
+let cookie = '';
+const call = async (m, p, b) => { const r = await fetch(O + p, { method: m, headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) }, body: b ? JSON.stringify(b) : undefined }); const s = r.headers.get('set-cookie'); if (s) cookie = s.split(';')[0]; return r.json().catch(() => ({})); };
+await call('POST', '/api/auth/register', { name: 'سارة العتيبي', email: `job-${Date.now()}@x.sa`, password: 'secret-123', consents: { processing: true } });
+await call('PUT', '/api/progress', goodRun(9, { scenario: 'sales-month' }));
+const errs = [];
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+await ctx.addCookies([{ name: 'mohaki_session', value: cookie.split('=')[1], url: O }]);
+const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(`${O}/app/#/job`);
+await p.waitForSelector('.jd');
+if (!(await p.locator('.jd h2').textContent()).includes('أخصائي مبيعات')) errs.push('JD title');
+if (await p.locator('.appraisal .plan-item').count() !== 5) errs.push('objectives count');
+if (!(await p.locator('.appraisal .outcome').textContent()).includes('قرار التثبيت')) errs.push('no decision after finish');
+await p.screenshot({ path: `${SH}/job.png`, fullPage: true });
+await p.goto(`${O}/app/#/inbox?f=all`);
+await p.waitForSelector('.inbox-list .item');
+await p.locator('.inbox-list .item', { hasText: 'وصفك الوظيفي' }).click();
+await p.waitForSelector('.mail-body .memo');
+await b.close();
+console.log(errs.length ? errs.join('\n') : 'ok');

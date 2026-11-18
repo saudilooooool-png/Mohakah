@@ -13,7 +13,7 @@ export async function loadWorld() {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario, ssco, profiles, library, quiz, salesMonth, csMonth] = await Promise.all([
+  const [company, scenario, ssco, profiles, library, quiz, salesMonth, csMonth, rPm, rSales, rCs] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
     get('../data/occupations/ssco.json'),
@@ -22,8 +22,9 @@ export async function loadWorld() {
     get('../data/questions/pm.json'),
     get('../data/scenarios/sales-month.json'),
     get('../data/scenarios/cs-month.json'),
+    get('../data/roles/pm.json'), get('../data/roles/sales.json'), get('../data/roles/cs.json'),
   ]);
-  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library, quiz, scenarios: { 'sales-month': salesMonth, 'cs-month': csMonth } };
+  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library, quiz, scenarios: { 'sales-month': salesMonth, 'cs-month': csMonth }, roles: { pm: rPm, sales: rSales, cs: rCs } };
 }
 
 function readSave() {
