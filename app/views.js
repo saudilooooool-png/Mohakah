@@ -55,7 +55,7 @@ export function shell(session, route, content) {
         <div class="me">${esc(session.assess?.name ?? session.user?.name ?? 'ضيف')}</div>
         <div>${esc(session.assess ? `جلسة تقييم · ${session.assess.company}` : sim.scenario.role)}</div>
         ${session.assess ? '<div class="small">يُحفظ تقدمك تلقائيًا. تُسلَّم الجلسة عند إنهاء اليوم الأخير.</div>' : session.user
-          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/profile" class="side-link">صفحتي</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a> · <a href="#/leagues" class="side-link">الدوري</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a> · <a href="#/assessments" class="side-link">تقييمات الشركات</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
+          ? `<a href="#/account" class="side-link">حسابي</a> · <a href="#/profile" class="side-link">صفحتي</a> · <a href="#/org" class="side-link">دفعتي والجهة</a> · <a href="#/live" class="side-link">الجلسات الحية</a> · <a href="#/peer" class="side-link">مراجعة الأقران</a> · <a href="#/leagues" class="side-link">الدوري</a>${session.user.role === 'facilitator' ? ' · <a href="#/facilitator" class="side-link">لوحة المُيسِّر</a> · <a href="#/assessments" class="side-link">تقييمات الشركات</a>' : ''} · <button type="button" data-act="logout">خروج</button>`
           : `<button type="button" class="side-cta" data-act="open-auth" data-mode="register">أنشئ حسابًا لحفظ تقدمك</button>`}
         <div><button type="button" data-act="tour">جولة في المنصة</button>${session.assess ? '' : ' · <button type="button" data-act="reset">ابدأ من جديد</button>'}</div>
       </div>
@@ -2154,4 +2154,56 @@ export function jobPage(session) {
       </section>
     </div>
   </div>`;
+}
+
+// ——— حساب الجهة: دفعات الأكاديميات والجامعات والشركات ———
+
+export function orgPage(user, state, orgId) {
+  const back = '<a href="#/desk" class="small" style="text-decoration:none">→ العودة</a>';
+  if (!user) return `<section class="card"><div class="empty"><b>سجّل الدخول أولًا</b><button class="btn primary" data-act="open-auth" data-mode="login">تسجيل الدخول</button></div></section>`;
+  if (state.loading) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  if (state.error) return `<section class="card"><div class="empty"><b>${esc(state.error)}</b></div></section>`;
+  const me = state.me ?? {};
+  const m = me.membership;
+  const join = `<section class="card" id="org-join"><h2>دفعتي</h2>${m
+    ? `<p>أنت ضمن <b>${esc(m.cohort)}</b> في <b>${esc(m.org)}</b>.</p>
+       <p class="small muted">تشاهد الجهة: اسمك وبريدك، ويوم العمل الذي وصلته، ونقاطك، وقرار فترة التجربة، وعدد التجاوزات، ورمز سجلك الموثّق. لا تشاهد نصوص حواراتك ولا مستنداتك.</p>
+       <div class="actions"><button class="btn" data-act="org-leave">مغادرة الدفعة وإيقاف المشاركة</button></div>`
+    : `<p class="small">إن أعطتك أكاديميتك أو جامعتك أو شركتك رمز دعوة، أدخله هنا.</p>
+       <form data-form="org-join" class="grid" style="gap:10px">
+         <div class="field"><label for="org-code">رمز الدعوة</label><input id="org-code" name="code" dir="ltr" maxlength="12" required style="text-transform:uppercase;letter-spacing:2px"></div>
+         <label class="small" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required> <span>أوافق على أن تشاهد الجهة صاحبة الرمز: اسمي وبريدي، وتقدمي، ونقاطي، وقرار فترة التجربة، ورمز سجلي. وأستطيع إيقاف ذلك بمغادرة الدفعة.</span></label>
+         <div class="actions"><button class="btn primary" type="submit">انضمام</button></div>
+       </form>`}</section>`;
+  const create = me.facilitator ? `<section class="card" style="margin-top:14px"><h2>جهة جديدة</h2>
+      <form data-form="org-new" class="grid" style="gap:10px">
+        <div class="field"><label>اسم الجهة</label><input name="name" required minlength="2"></div>
+        <div class="field"><label>النوع</label><select name="kind"><option value="academy">أكاديمية أو معسكر تدريب</option><option value="university">جامعة أو كلية</option><option value="company">شركة</option></select></div>
+        <div class="field"><label>بريد مديري الجهة <span class="muted small">(مفصول بفواصل)</span></label><input name="managers" dir="ltr" placeholder="lead@academy.sa, ops@academy.sa"></div>
+        <span class="small muted">مدير الجهة يسجّل في محاكي بهذا البريد ويؤكده، فتظهر له لوحة جهته.</span>
+        <div class="actions"><button class="btn primary" type="submit">إنشاء الجهة</button></div>
+      </form></section>` : '';
+  const managed = me.managed ?? [];
+  const org = state.org;
+  const decisionPill = (x) => (x.decisionId ? `<span class="pill ${{ confirmed: 's-done', extended: 'p-medium', repeat: 'p-high', in_progress: 't-pill' }[x.decisionId] ?? 't-pill'}">${esc(x.decision)}</span>` : '—');
+  const dash = org ? `
+    ${managed.length > 1 ? `<div class="tabs" style="margin-bottom:12px">${managed.map((o) => `<a class="tab ${o.id === org.id ? 'on' : ''}" href="#/org/${esc(o.id)}">${esc(o.name)}</a>`).join('')}</div>` : ''}
+    <section class="card" style="margin-bottom:14px"><div class="office-h"><h2>${esc(org.name)} <span class="pill t-pill">${esc(org.kindLabel)}</span></h2>
+      <a class="btn sm" href="/api/orgs/${esc(org.id)}/export" download>تصدير الكل CSV</a></div>
+      <p class="small muted">المديرون: <span dir="ltr">${esc(org.managers.join(', ') || '—')}</span></p>
+      <form data-form="org-cohort" data-org="${esc(org.id)}" class="actions" style="align-items:flex-end"><div class="field" style="flex:1"><label>دفعة جديدة</label><input name="name" required minlength="2" placeholder="مثل: معسكر تحليل الأعمال، نوفمبر"></div><button class="btn primary" type="submit">إنشاء دفعة برمز دعوة</button></form>
+    </section>
+    ${org.cohorts.length ? org.cohorts.map((co) => `<section class="card cohort" style="margin-bottom:14px">
+      <div class="office-h"><h2>${esc(co.name)}</h2><span>رمز الدعوة: <b dir="ltr" class="num" style="letter-spacing:2px">${esc(co.code)}</b> <button class="btn sm ghost" data-act="copy-url" data-url="${esc(co.code)}">نسخ</button> <a class="btn sm ghost" href="/api/orgs/${esc(org.id)}/export?cohort=${esc(co.id)}" download>CSV</a></span></div>
+      <div class="kpis" style="display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 12px">
+        ${[['انضموا', co.summary.joined], ['بدؤوا', co.summary.started], ['أكملوا الشهر', co.summary.finished], ['اجتازوا فترة التجربة', co.summary.confirmed], ['متوسط النقاط', co.summary.avgPoints ?? '—']].map(([l, v]) => `<div><div class="small muted">${l}</div><b class="num" style="font-size:20px">${v}</b></div>`).join('')}
+      </div>
+      ${co.members.length ? `<div style="overflow-x:auto"><table class="board"><thead><tr><th>المتدرب</th><th>الدور</th><th>اليوم</th><th>النقاط</th><th>الأهداف</th><th>قرار فترة التجربة</th><th>تجاوزات</th><th>السجل</th></tr></thead><tbody>
+        ${co.members.map((x) => `<tr><td>${esc(x.name)}<br><span class="small muted" dir="ltr">${esc(x.email)}</span></td>${x.started
+          ? `<td class="small">${esc(x.role)}</td><td class="num">${x.day}/${x.lengthDays}</td><td class="num"><b>${x.points}</b><br><span class="small muted">${esc(x.band)}</span></td><td class="num">${esc(x.objectives ?? '—')}</td><td>${decisionPill(x)}</td><td class="num">${x.violations}</td><td>${x.record ? `<a href="#/verify/${esc(x.record)}" target="_blank" dir="ltr">${esc(x.record)}</a>` : '—'}</td>`
+          : '<td colspan="7" class="muted small">لم يبدأ بعد</td>'}</tr>`).join('')}
+        </tbody></table></div>` : '<div class="empty small">لم ينضم أحد بعد. أرسل رمز الدعوة لمتدربيك: يسجّلون في محاكي ثم يدخلون الرمز من «حسابي ← دفعتي».</div>'}
+    </section>`).join('') : '<section class="card"><div class="empty"><b>لا توجد دفعات بعد</b><span class="small muted">أنشئ دفعة فتحصل على رمز دعوة.</span></div></section>'}` : '';
+  return `<div class="page-h"><div>${back}<h1>${managed.length ? 'حساب الجهة' : 'دفعتي'}</h1><p>${managed.length ? 'دفعاتك في محاكي: من انضم، وأين وصل، وما قرار فترة التجربة لكل متدرب. الأرقام يحسبها الخادم من أفعال المتدرب.' : 'انضم إلى دفعة جهتك برمز الدعوة.'}</p></div></div>
+  ${managed.length ? `<div class="grid g-main"><div>${dash}</div><div>${join}${create}</div></div>` : `<div class="grid g-2"><div>${join}</div><div>${create}</div></div>`}`;
 }

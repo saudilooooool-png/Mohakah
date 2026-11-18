@@ -239,6 +239,7 @@ const SEAT_PEOPLE = new Set(['ceo', 'cfo', 'cpo', 'eng_lead', 'dev2', 'analyst',
 let assess = null;            // { token, info } حين يدخل مرشح برابط تقييم
 let assessReport = { loading: true };
 let assessAdmin = { loading: true };
+let orgState = { loading: true };
 const ASSESS_KEY = 'mohaki.assess.token';
 
 async function enterAssess(token) {
@@ -278,6 +279,21 @@ async function loadAssessAdmin() {
   try { const r = await fetch('/api/assess', { credentials: 'same-origin' }); const d = await r.json(); assessAdmin = r.ok ? { list: d.assessments } : { error: d.error }; } catch (err) { assessAdmin = { error: err.message }; }
   render();
 }
+async function loadOrg() {
+  if (!user) { orgState = {}; render(); return; }
+  if (!orgState.me) { orgState = { loading: true }; render(); }
+  try {
+    const get = async (u) => { const r = await fetch(u, { credentials: 'same-origin' }); const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; };
+    const me = await get('/api/orgs');
+    const id = me.managed.find((o) => o.id === parseRoute().itemId)?.id ?? me.managed[0]?.id;
+    orgState = { me, org: id ? (await get(`/api/orgs/${id}`)).org : null };
+  } catch (err) { orgState = { error: err.message }; }
+  render();
+}
+const orgPost = async (path, body = {}) => {
+  const r = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json(); if (!r.ok) throw new Error(d.error); return d;
+};
 const DRAFT_KEY = 'mohaki.drafts.v1';
 let drafts = {};
 try { drafts = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); } catch { drafts = {}; }
@@ -300,7 +316,7 @@ function parseRoute() {
   const [path, query = ''] = raw.split('?');
   const [page = 'desk', id] = path.split('/');
   const params = new URLSearchParams(query);
-  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league', 'profile', 'assess', 'assess-report', 'assessments'];
+  const extra = ['account', 'verify', 'confirm-email', 'reset-password', 'facilitator', 'live', 'peer', 'challenge', 'portfolio', 'video', 'pair', 'leagues', 'league', 'profile', 'assess', 'assess-report', 'assessments', 'org'];
   // "أعمال واقعية" في القائمة الرئيسية (NAV)
   return { page: V.NAV.some((n) => n.id === page) || extra.includes(page) ? page : 'desk', itemId: id ? decodeURIComponent(id) : null, filter: params.get('f') || 'open' };
 }
@@ -320,6 +336,7 @@ function render() {
   }
   if (route.page === 'assess-report') { app.innerHTML = V.assessReportPage(assessReport); document.title = 'تقرير التقييم — محاكي'; return; }
   if (route.page === 'assessments' && !assess) { app.innerHTML = `<div class="content" style="margin:0 auto">${V.assessAdminPage(user, assessAdmin)}</div>`; return; }
+  if (route.page === 'org' && !assess) { app.innerHTML = `<div class="content" style="margin:0 auto">${V.orgPage(user, orgState, route.itemId)}</div>`; document.title = 'حساب الجهة — محاكي'; return; }
   if (assess) {
     document.title = 'جلسة تقييم — محاكي';
     if (assess.error || assess.info.finished || !session) { app.innerHTML = V.assessGate(assess); return; }
@@ -632,6 +649,10 @@ const actions = {
     if (user) saver.save(session.saveData());
     toast('بدأ شهر الدوري: نفس الشركة والأحداث لكل الفرق. بالتوفيق!', 'good');
     location.hash = '#/desk';
+  },
+  async 'org-leave'() {
+    if (!confirm('تغادر الدفعة وتتوقف مشاركة تقدمك مع الجهة؟')) return;
+    await orgPost('/api/orgs/leave'); toast('غادرت الدفعة.', 'good'); loadOrg();
   },
   async 'copy-url'(e) {
     const url = e.target.closest('[data-url]').dataset.url;
@@ -960,6 +981,22 @@ function onSubmit(e) {
       .catch((err) => toast(err.message, 'bad'));
     return;
   }
+  if (form.dataset.form === 'org-join') {
+    const f = new FormData(form);
+    orgPost('/api/orgs/join', { code: f.get('code'), consent: f.get('consent') === 'on' })
+      .then((d) => { toast(`انضممت إلى ${d.membership.cohort}.`, 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'org-new') {
+    orgPost('/api/orgs', Object.fromEntries(new FormData(form).entries()))
+      .then((d) => { toast('أُنشئت الجهة.', 'good'); location.hash = `#/org/${d.org.id}`; loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'org-cohort') {
+    orgPost(`/api/orgs/${form.dataset.org}/cohorts`, { name: new FormData(form).get('name') })
+      .then(() => { toast('أُنشئت الدفعة. انسخ رمز الدعوة وأرسله لمتدربيك.', 'good'); loadOrg(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
   if (form.dataset.form === 'trainee-profile') {
     account.update({ profile: Object.fromEntries(new FormData(form).entries()) })
       .then((u) => { user = u; if (session) session.user = u; toast('حُفظت صفحتك.', 'good'); render(); })
@@ -1205,6 +1242,7 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'work') { loadWork(); return; }
   if (parseRoute().page === 'assess-report') { loadAssessReport(); return; }
   if (parseRoute().page === 'assessments') { loadAssessAdmin(); return; }
+  if (parseRoute().page === 'org') { loadOrg(); return; }
   if (parseRoute().page === 'assess' && parseRoute().itemId && assess?.token !== parseRoute().itemId) { enterAssess(parseRoute().itemId); return; }
   if (['leagues', 'league'].includes(parseRoute().page)) { loadLeagues(); return; }
   if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
@@ -1253,6 +1291,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'work') loadWork();
     if (['plan', 'desk'].includes(parseRoute().page)) loadPlanExtra();
     if (parseRoute().page === 'assessments') loadAssessAdmin();
+    if (parseRoute().page === 'org') loadOrg();
     if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();
     if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();
   } catch (err) {

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), 'checks');
 let failed = 0;
-for (const n of [1, 2, 3, 4, 5, 'assess', 'research', 'market', 'plan', 'rotation', 'job']) {
+for (const n of [1, 2, 3, 4, 5, 'assess', 'research', 'market', 'plan', 'rotation', 'job', 'org']) {
   try {
     const out = execFileSync(process.execPath, [join(dir, typeof n === 'string' ? `${n}.mjs` : `phase${n}.mjs`)], { env: process.env, encoding: 'utf8', timeout: 180000 });
     const last = out.trim().split('\n').at(-1);
