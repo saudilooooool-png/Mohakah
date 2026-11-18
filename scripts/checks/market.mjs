@@ -1,0 +1,40 @@
+// فحص بحث السوق بتطابق الإجابات في المتصفح.
+import { createRequire } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const O = 'http://localhost:4173'; const DATA = process.env.MOHAKI_DATA_DIR;
+const SH = process.env.SHOTS || '/tmp';
+const st = Date.now();
+const link = (to) => { for (const f of readdirSync(join(DATA, 'outbox')).sort().reverse()) { const m = JSON.parse(readFileSync(join(DATA, 'outbox', f), 'utf8')); if (m.to === to && m.link?.includes('confirm-email')) return m.link; } };
+async function acct(name, email) {
+  let cookie = '';
+  const call = async (m, p, b) => { const r = await fetch(O + p, { method: m, headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) }, body: b ? JSON.stringify(b) : undefined }); const s = r.headers.get('set-cookie'); if (s) cookie = s.split(';')[0]; return r.json().catch(() => ({})); };
+  const r = await call('POST', '/api/auth/register', { name, email, password: 'secret-123', consents: { processing: true } });
+  if (r.error) await call('POST', '/api/auth/login', { email, password: 'secret-123' });
+  else await call('POST', '/api/auth/verify', { token: link(email).split('/').pop() });
+  call.cookie = () => cookie.split('=')[1];
+  return call;
+}
+const errs = [];
+const fac = await acct('هيا المُيسِّرة', 'fac@example.com');
+const q = (await fac('POST', '/api/market', { title: `سعر الباقة الأساسية لنظام منافس ${st}`, question: 'كم السعر الشهري للمستخدم في الباقة الأساسية؟ أرفق صفحة الأسعار.', type: 'number', unit: 'ر.س', minDays: 0 })).question;
+const t1 = await acct('سارة', `m1-${st}@x.sa`); const t2 = await acct('خالد', `m2-${st}@x.sa`); const t3 = await acct('منى', `m3-${st}@x.sa`);
+await t1('POST', `/api/market/${q.id}/answer`, { value: 75, sourceUrl: 'https://vendor.example/pricing' });
+await t2('POST', `/api/market/${q.id}/answer`, { value: 79, sourceUrl: 'https://reviews.example/x' });
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+await ctx.addCookies([{ name: 'mohaki_session', value: t3.cookie(), url: O }]);
+const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(`${O}/app/#/work`);
+await p.waitForSelector('[data-tab="market"]'); await p.click('[data-tab="market"]');
+await p.waitForSelector('form[data-form="market-answer"]');
+const form = p.locator('.market-q', { hasText: String(st) });
+await form.locator('input[name="value"]').fill('77');
+await form.locator('input[name="sourceUrl"]').fill('https://compare.example/crm');
+await form.getByRole('button', { name: 'أرسل الجواب' }).click();
+await p.waitForSelector('.market-q .outcome.good');
+if (!(await p.locator('.market-q', { hasText: String(st) }).textContent()).includes('+20')) errs.push('no points after consensus');
+await p.screenshot({ path: `${SH}/mk-trainee.png`, fullPage: true });
+await b.close();
+console.log(errs.length ? errs.join('\n') : 'ok');

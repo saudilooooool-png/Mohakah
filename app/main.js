@@ -32,7 +32,8 @@ async function loadWork() {
     if (session) await account.saveProgress(session.saveData()).catch(() => {});
     const data = await account.work();
     const review = data.reviewer ? await account.workReview().catch(() => []) : [];
-    workState = { data, review, tab };
+    const market = await account.market().catch(() => ({ questions: [], summary: { answered: 0, confirmed: 0, points: 0 } }));
+    workState = { data, review, market, tab };
   } catch (err) { workState = { error: err.message, tab }; }
   render();
 }
@@ -917,6 +918,22 @@ function onSubmit(e) {
     account.update({ profile: Object.fromEntries(new FormData(form).entries()) })
       .then((u) => { user = u; if (session) session.user = u; toast('حُفظت صفحتك.', 'good'); render(); })
       .catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'market-answer') {
+    const f = new FormData(form);
+    account.marketAnswer(form.dataset.id, { value: f.get('value'), sourceUrl: f.get('sourceUrl'), note: f.get('note') })
+      .then(() => { toast('وصلت إجابتك. تُعتمد إذا طابقت إجابات زملائك من مصادر مختلفة.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'market-new') {
+    account.marketCreate(Object.fromEntries(new FormData(form).entries()))
+      .then(() => { toast('نُشر السؤال.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
+    return;
+  }
+  if (form.dataset.form === 'market-confirm') {
+    account.marketConfirm(form.dataset.id, new FormData(form).get('value'))
+      .then(() => { toast('حُسم الجواب.', 'good'); loadWork(); }).catch((err) => toast(err.message, 'bad'));
     return;
   }
   if (form.dataset.form === 'work-apply') {

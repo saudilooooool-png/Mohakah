@@ -318,6 +318,10 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         delete store.showcase.portfolios?.[u.id];
         store.saveShowcase?.();
       }
+      if (store.market) {
+        for (const [k, a] of Object.entries(store.market.answers ?? {})) if (a.userId === u.id) delete store.market.answers[k];
+        store.saveMarket?.();
+      }
       // مكتبة الأعمال الواقعية: تُحذف طلباته وتسليماته
       if (store.work) {
         for (const [k, a] of Object.entries(store.work.apps ?? {})) if (a.userId === u.id) delete store.work.apps[k];

@@ -1662,7 +1662,7 @@ export function workPage(state, gigId) {
   const t = (id, label) => `<button class="${tab === id ? 'on' : ''}" data-act="work-tab" data-tab="${id}">${label}</button>`;
   const head = `<div class="page-h"><div><h1>أعمال واقعية</h1><p>فرص عمل حقيقية من جهات حقيقية، مدفوعة أو تطوعية: تواصل مع عملاء، واختبار تجربة مستخدم، وتقارير وملفات إكسل، وتسويق، وقضايا وعقود. تُفتح بتقدمك في المحاكاة، ويعتمدها مراجع، وتُضاف إلى سجلك الموثّق.</p></div></div>
     <section class="card readiness"><b>جاهزيتك:</b> أكملت <span class="num">${d.readiness.days}</span> يوم عمل · <span class="num">${d.readiness.points}</span> نقطة · أعمال معتمدة <span class="num">${d.summary.count}</span> (${d.summary.points} نقطة إنجاز واقعي)</section>`;
-  const tabs = `<div class="tabs fac-tabs" style="margin:14px 0">${t('gigs', 'الفرص')}${t('mine', 'أعمالي')}${d.reviewer ? t('review', 'المراجعة') : ''}${d.facilitator ? t('new', 'فرصة جديدة') : ''}</div>`;
+  const tabs = `<div class="tabs fac-tabs" style="margin:14px 0">${t('gigs', 'الفرص')}${t('market', 'أبحاث السوق')}${t('mine', 'أعمالي')}${d.reviewer ? t('review', 'المراجعة') : ''}${d.facilitator ? t('new', 'فرصة جديدة') : ''}</div>`;
   const gig = gigId && d.gigs.find((g) => g.id === gigId);
   if (gig) return `${head}${tabs}${gigDetail(gig)}`;
   let body = '';
@@ -1672,6 +1672,8 @@ export function workPage(state, gigId) {
   } else if (tab === 'mine') {
     const mine = d.gigs.filter((g) => g.mine);
     body = mine.length ? `<div class="grid g-2">${mine.map(gigCard).join('')}</div>` : '<section class="card"><div class="empty"><b>لم تتقدم لأي فرصة بعد</b></div></section>';
+  } else if (tab === 'market') {
+    body = marketTab(state.market);
   } else if (tab === 'review') {
     body = reviewList(state.review ?? []);
   } else if (tab === 'new') {
@@ -1970,4 +1972,45 @@ function researchView(session, item) {
         <div class="actions"><button class="btn primary" type="submit">سلّم الجواب</button><span class="small muted">الجواب المعتمد يحتاج مصدرين على الأقل يدعمانه. بعد التسليم لا يمكن التعديل.</span></div>
       </form>
     </div>`;
+}
+
+// ——— بحث السوق الحقيقي بتطابق الإجابات ———
+
+const M_STATUS = { open: 'مفتوح', consensus: 'معتمد بتطابق الإجابات', same_source: 'ينتظر المُيسِّر (مصدر واحد)', disputed: 'إجابات متضاربة', confirmed: 'حسمه المُيسِّر' };
+
+function marketTab(m) {
+  if (!m) return '<section class="card"><div class="empty">جارٍ التحميل…</div></section>';
+  const valueInput = (q) => (q.type === 'choice'
+    ? `<span class="seg">${q.options.map((o) => `<label><input type="radio" name="value" value="${esc(o)}" required><span>${esc(o)}</span></label>`).join('')}</span>`
+    : `<input name="value" type="number" step="any" required dir="ltr" style="max-width:200px"> ${esc(q.unit ?? '')}`);
+  const card = (q) => `<section class="card market-q">
+    <div class="office-h"><h3 style="margin:0">${esc(q.title)}</h3><span class="pill ${q.status === 'consensus' || q.status === 'confirmed' ? 's-done' : 't-pill'}">${M_STATUS[q.status]}</span></div>
+    <p>${esc(q.question)}</p>
+    <div class="chips"><span class="pill t-pill">${q.points} نقطة</span><span class="pill t-pill">${q.answers} من ${q.slots} باحثين</span></div>
+    ${q.mine ? `<div class="outcome ${q.mine.matched === true ? 'good' : q.mine.matched === false ? 'bad' : 'info'}"><b>إجابتك: ${esc(String(q.mine.value))} ${esc(q.unit ?? '')}</b>
+        ${q.result ? ` · الجواب المعتمد: <b>${esc(String(q.result.value))} ${esc(q.unit ?? '')}</b> · ${q.mine.matched ? `+${q.mine.points} نقطة` : 'لم تطابق'}` : ' · بانتظار إجابات زملائك.'}
+        <br><span class="small" dir="ltr">${esc(q.mine.sourceUrl)}</span></div>`
+      : q.locked ? `<div class="outcome info">🔒 ${esc(q.locked)}</div>`
+      : q.all ? '' : `<form data-form="market-answer" data-id="${esc(q.id)}" class="card-lite">
+        <div class="field"><label>جوابك</label>${valueInput(q)}</div>
+        <div class="field"><label>رابط المصدر <span class="muted small">(الصفحة التي وجدت فيها الجواب)</span></label><input name="sourceUrl" type="url" required dir="ltr" placeholder="https://…"></div>
+        <div class="field"><label>ملاحظة <span class="muted small">(اختياري: كيف وصلت للجواب)</span></label><input name="note" maxlength="500"></div>
+        <div class="actions"><button class="btn primary" type="submit">أرسل الجواب</button><span class="small muted">لا ترى إجابات زملائك قبل أن تجيب. جواب واحد لكل سؤال.</span></div></form>`}
+    ${q.all ? `<table class="board"><thead><tr><th>الباحث</th><th>الجواب</th><th>المصدر</th></tr></thead><tbody>${q.all.map((a) => `<tr><td>${esc(a.name)}</td><td class="num"><b>${esc(String(a.value))}</b></td><td><a href="${esc(a.sourceUrl)}" target="_blank" rel="noopener" dir="ltr">${esc(a.domain)}</a>${a.note ? `<br><span class="small muted">${esc(a.note)}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">لا إجابات بعد.</td></tr>'}</tbody></table>
+      ${q.consensus ? `<p class="small">الأغلبية: <b>${esc(String(q.consensus.value))}</b> (${q.consensus.agree} من ${q.consensus.total}، من ${q.consensus.domains} مواقع).</p>` : ''}
+      <form data-form="market-confirm" data-id="${esc(q.id)}" class="actions"><span class="small">الجواب النهائي:</span>${q.type === 'choice' ? `<select name="value">${q.options.map((o) => `<option ${String(q.consensus?.value) === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : `<input name="value" type="number" step="any" dir="ltr" value="${esc(String(q.result?.value ?? q.consensus?.value ?? ''))}" style="max-width:140px">`}<button class="btn" type="submit">${q.status === 'confirmed' ? 'تعديل الحسم' : 'حسم'}</button></form>` : ''}
+  </section>`;
+  return `<section class="card readiness"><b>أبحاث السوق:</b> أجبت عن <span class="num">${m.summary.answered}</span> · اعتُمد منها <span class="num">${m.summary.confirmed}</span> · <span class="num">${m.summary.points}</span> نقطة بحث
+      <p class="small muted" style="margin:6px 0 0">السؤال نفسه يُعطى لعدة متدربين. ابحث على الإنترنت وأرفق مصدرك. يُعتمد الجواب حين تتطابق أغلبية الإجابات من مصادر مختلفة. هذه النقاط منفصلة عن نقاط المحاكاة.</p></section>
+    ${m.questions.length ? m.questions.map(card).join('') : '<section class="card" style="margin-top:12px"><div class="empty"><b>لا توجد أسئلة بحث مفتوحة الآن</b></div></section>'}
+    ${m.facilitator ? `<section class="card" style="margin-top:12px"><h2>سؤال بحث جديد</h2>
+      <form data-form="market-new" class="grid" style="gap:10px">
+        <div class="field"><label>العنوان</label><input name="title" required placeholder="مثال: سعر الباقة الأساسية لنظام منافس"></div>
+        <div class="field"><label>السؤال</label><textarea name="question" rows="2" required placeholder="سؤال له جواب واحد يمكن التحقق منه، مع ما يُرفق مصدرًا."></textarea></div>
+        <div class="round-row"><select name="type"><option value="number">جواب رقمي</option><option value="choice">اختيار من خيارات</option></select><input name="unit" placeholder="الوحدة (ر.س، %…)"><input name="tolerancePct" type="number" min="0" max="50" value="10" title="هامش التطابق %"></div>
+        <div class="field"><label>الخيارات <span class="muted small">(للاختيار فقط، كل خيار في سطر)</span></label><textarea name="options" rows="2"></textarea></div>
+        <div class="round-row"><input name="points" type="number" min="5" max="100" value="20" title="النقاط"><input name="slots" type="number" min="3" max="15" value="5" title="عدد الباحثين"><input name="minDays" type="number" min="0" max="30" value="5" title="يُفتح بعد أيام"></div>
+        <span class="small muted">النوع · الوحدة · هامش التطابق % — ثم: النقاط · عدد الباحثين · يُفتح بعد كم يوم عمل</span>
+        <div class="actions"><button class="btn primary" type="submit">نشر السؤال</button></div>
+      </form></section>` : ''}`;
 }

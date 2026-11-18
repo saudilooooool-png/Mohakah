@@ -23,6 +23,8 @@ export class FileStore {
     this.work = { gigs: {}, apps: {}, ...this._read('work.json', {}) };
     // جلسات التقييم القصيرة للشركات
     this.assess = { assessments: {}, ...this._read('assess.json', {}) };
+    // بحث السوق الحقيقي بتطابق الإجابات
+    this.market = { questions: {}, answers: {}, ...this._read('market.json', {}) };
   }
 
   _read(name, fallback) {
@@ -47,6 +49,7 @@ export class FileStore {
   saveTeams() { this._write('teams.json', this.teams); }
   saveWork() { this._write('work.json', this.work); }
   saveAssess() { this._write('assess.json', this.assess); }
+  saveMarket() { this._write('market.json', this.market); }
   /** كل ملفات التقدم: [userId, progress] */
   allProgress() {
     return readdirSync(join(this.dir, 'progress')).filter((f) => f.endsWith('.json'))

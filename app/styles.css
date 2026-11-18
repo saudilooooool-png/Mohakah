@@ -557,3 +557,6 @@ form[data-form="assess-new"] select { width: 100%; border: 1.5px solid var(--lin
 .research-form { margin-top: 14px; }
 .research-form input[type=number] { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-family: inherit; }
 @media (max-width: 700px) { .hours span { display: none; } }
+.market-q { margin-top: 12px; }
+form[data-form="market-answer"] input, form[data-form="market-new"] input, form[data-form="market-new"] textarea, form[data-form="market-new"] select, form[data-form="market-confirm"] input, form[data-form="market-confirm"] select { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-family: inherit; }
+form[data-form="market-new"] input, form[data-form="market-new"] textarea, form[data-form="market-answer"] input[type=url], form[data-form="market-answer"] input[name=note] { width: 100%; }
