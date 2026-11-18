@@ -973,6 +973,7 @@ export function verifyPage(state) {
       <div class="breakdown">${r.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.score}%</span>${bar(b.score)}</div>`).join('')}</div>
     </div>
     ${r.realWork?.count ? `<p class="small"><b>أعمال واقعية معتمدة</b> (منفصلة عن نقاط المحاكاة): ${r.realWork.items.map((x) => `${esc(x.title)} لدى ${esc(x.org)} (تقييم <span class="num">${x.rating}</span> من 5)`).join('، ')} · <span class="num">${r.realWork.points}</span> نقطة إنجاز واقعي.</p>` : ''}
+    ${r.marketResearch?.confirmed ? `<p class="small"><b>أبحاث سوق معتمدة</b> (منفصلة عن نقاط المحاكاة): <span class="num">${r.marketResearch.confirmed}</span> أبحاث طابقت الجواب المعتمد من مصادر مستقلة · <span class="num">${r.marketResearch.points}</span> نقطة بحث.</p>` : ''}
     ${r.collaboration && (r.collaboration.rolesPlayed || r.collaboration.reviewsGiven) ? `<p class="small"><b>التعاون ودعم الزملاء</b> (منفصل عن النقاط): لعب <span class="num">${r.collaboration.rolesPlayed}</span> دورًا في جلسات زملائه${r.collaboration.avgRoleRating ? ` بتقييم <span class="num">${r.collaboration.avgRoleRating}</span> من 5` : ''} · راجع <span class="num">${r.collaboration.reviewsGiven}</span> مستندًا، وجد أصحابها <span class="num">${r.collaboration.reviewsHelpful}</span> منها مفيدة.</p>` : ''}
     <p class="small">الأدلة: <span class="num">${r.evidence.decisions}</span> قرارًا وحوارًا · <span class="num">${r.evidence.deliverables}</span> مستندات · أُطلق خلال عمله: ${r.evidence.shipped.map(esc).join('، ') || '—'}</p>
     <p class="small muted">تاريخ الإصدار: ${d(r.issuedAt)} · احتُسبت النتيجة بإعادة تشغيل كل القرارات على خادم محاكي · بصمة سجل الأفعال: <span class="num" style="word-break:break-all">${esc(r.logHash.slice(0, 16))}…</span></p>
@@ -1428,6 +1429,8 @@ export function portfolioPage(state) {
     </div>
     ${p.shipped.length ? `<p class="small"><b>ما أُطلق خلال الشهر:</b> ${p.shipped.map((s) => esc(s.title)).join('، ')}</p>` : ''}
   </section>
+  ${p.marketResearch?.confirmed ? `<section class="card"><h2>أبحاث سوق معتمدة</h2><p class="small muted" style="margin-top:0">أسئلة سوق حقيقية أجاب عنها بمصدر، وطابق جوابه الجواب المعتمد من عدة باحثين مستقلين.</p>
+    <ul class="feed">${p.marketResearch.items.map((x) => `<li><span class="dot"></span>${esc(x.title)}</li>`).join('')}</ul></section>` : ''}
   ${p.realWork?.count ? `<section class="card"><h2>أعمال واقعية معتمدة</h2><p class="small muted" style="margin-top:0">أعمال حقيقية لجهات حقيقية، راجعها واعتمدها مراجع من الجهة أو مُيسِّر.</p>
     ${p.realWork.items.map((x) => `<article class="pf-item"><h3>${esc(x.title)}</h3><p class="small">${esc(x.org)} · تقييم المراجع <b class="num">${x.rating}</b> من 5</p></article>`).join('')}</section>` : ''}
   <section class="card"><h2>المهارات</h2><div class="grid" style="gap:12px">${p.skills.map((s) => `<div class="barrow"><span>${esc(s.label)}</span><span class="num">${s.score}%</span>${bar(s.score)}</div>`).join('')}</div></section>
@@ -1647,10 +1650,12 @@ const INTERNAL_RULES = `<div class="outcome info internal-rules"><b>قواعد �
   <li>سجّل كل تواصل (الجهة، والتاريخ، والنتيجة) في تسليمك.</li></ul></div>`;
 
 function realWorkCard(s) {
-  if (!s?.count) return '';
+  if (!s?.count && !s?.market?.confirmed) return '';
+  if (!s.count) return `<section class="card" style="margin-top:16px"><h2>أبحاث سوق معتمدة</h2><p class="small muted" style="margin-top:0">تظهر في سجلك الموثّق وملف أعمالك، منفصلة عن نقاط المحاكاة.</p>
+    <div class="pf-stats small-stats"><div><b class="num">${s.market.confirmed}</b><span>أبحاث معتمدة</span></div><div><b class="num">${s.market.points}</b><span>نقاط بحث</span></div></div></section>`;
   return `<section class="card" style="margin-top:16px"><h2>أعمال واقعية موثّقة</h2>
     <p class="small muted" style="margin-top:0">أعمال حقيقية لجهات حقيقية، اعتمدها مراجع. تظهر في سجلك الموثّق وملف أعمالك، منفصلة عن نقاط المحاكاة.</p>
-    <div class="pf-stats small-stats"><div><b class="num">${s.count}</b><span>أعمال معتمدة</span></div><div><b class="num">${s.points}</b><span>نقاط إنجاز واقعي</span></div></div>
+    <div class="pf-stats small-stats"><div><b class="num">${s.count}</b><span>أعمال معتمدة</span></div><div><b class="num">${s.points}</b><span>نقاط إنجاز واقعي</span></div>${s.market?.confirmed ? `<div><b class="num">${s.market.confirmed}</b><span>أبحاث سوق معتمدة (${s.market.points} نقطة)</span></div>` : ''}</div>
     <ul class="feed" style="margin-top:10px">${s.items.map((x) => `<li><span class="dot"></span>${esc(x.title)} · ${esc(x.org)} · ${x.rating} من 5</li>`).join('')}</ul></section>`;
 }
 

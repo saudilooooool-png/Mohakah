@@ -61,6 +61,13 @@ test('بحث السوق: الأغلبية المتطابقة من مصادر م�
     assert.equal((await ts[3]('GET', '/api/market')).data.questions.length, 0);
     const all = (await fac('GET', '/api/market')).data.questions[0].all;
     assert.equal(all.length, 3);
+    // تظهر في السجل الموثّق دون أن تغيّر نقاط المحاكاة
+    const { goodRun } = await import('../scripts/lib/runs.js');
+    await ts[0]('PUT', '/api/progress', goodRun(9));
+    const rec = (await ts[0]('POST', '/api/records/issue')).data;
+    assert.deepEqual([rec.marketResearch.confirmed, rec.marketResearch.points, rec.marketResearch.items[0].title], [1, 20, 'سعر نظام منافس']);
+    assert.ok(rec.points > 700);
+    assert.equal((await ts[0]('GET', '/api/work/summary')).data.market.points, 20);
   });
 });
 

@@ -9,6 +9,7 @@
 // - الأجوبة المعتمدة قاعدة بيانات سوق تملكها محاكي.
 import { randomUUID } from 'node:crypto';
 import { HttpError } from '../accounts/api.js';
+import { matches, settled, pointsFor, marketSummary } from './summary.js';
 
 const str = (v, n = 200) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const now = () => new Date().toISOString();
@@ -26,10 +27,6 @@ export function createMarketApi({ store, accountsApi, clock = now }) {
   const requireFac = (req) => { const u = requireUser(req); if (!isFac(u)) throw new HttpError(403, 'للمُيسِّرين فقط'); return u; };
   const daysOf = (uid) => (store.progress(uid)?.log ?? []).filter((a) => a.t === 'endDay').length;
   const answersOf = (qid) => Object.values(M.answers).filter((a) => a.questionId === qid);
-
-  const matches = (q, value, target) => (q.type === 'number'
-    ? Math.abs(Number(value) - Number(target)) <= Math.abs(Number(target)) * (q.tolerancePct / 100) + 1e-9
-    : String(value) === String(target));
 
   /** يحسب حالة السؤال من إجاباته: هل تطابقت الأغلبية؟ ومن مصادر مختلفة؟ */
   function evaluate(q) {
@@ -52,14 +49,7 @@ export function createMarketApi({ store, accountsApi, clock = now }) {
     // أغلبية من موقع واحد = ربما نقل الجميع الخطأ نفسه: تنتظر المُيسِّر
     q.status = domains.size >= 2 ? 'consensus' : 'same_source';
   }
-  const settled = (q) => (q.final ? q.final.value : q.status === 'consensus' ? q.consensus.value : null);
-  const pointsFor = (q, a) => { const v = settled(q); return v !== null && matches(q, a.value, v) ? q.points : 0; };
-
-  function summary(uid) {
-    const mine = Object.values(M.answers).filter((a) => a.userId === uid);
-    const scored = mine.map((a) => pointsFor(M.questions[a.questionId], a));
-    return { answered: mine.length, confirmed: scored.filter(Boolean).length, points: scored.reduce((x, y) => x + y, 0) };
-  }
+  const summary = (uid) => { const { items, ...rest } = marketSummary(store, uid); return rest; };
 
   function view(q, u) {
     const mine = answersOf(q.id).find((a) => a.userId === u.id);

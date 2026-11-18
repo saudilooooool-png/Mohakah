@@ -11,6 +11,7 @@ import { replay } from '../replay.js';
 import { computePoints } from '../points.js';
 import { HttpError } from '../accounts/api.js';
 import { firstName } from '../showcase/api.js';
+import { marketSummary } from '../market/summary.js';
 
 export const KINDS = {
   customers: 'التواصل مع عملاء',
@@ -206,7 +207,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
     },
     'GET /api/work/review': (req) => ({ applications: reviewQueue(requireUser(req)) }),
     'POST /api/work/apps/:id/decide': (req, body, id) => decide(requireUser(req), id, body),
-    'GET /api/work/summary': (req) => summary(requireUser(req).id),
+    'GET /api/work/summary': (req) => { const u = requireUser(req); const { items, ...market } = marketSummary(store, u.id); return { ...summary(u.id), market }; },
   };
 
   async function handle(req, res) {

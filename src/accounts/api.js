@@ -9,6 +9,7 @@
 import { collaborationSummary, forgetUser } from '../community/collab.js';
 
 import { realWorkSummary } from '../work/summary.js';
+import { marketSummary } from '../market/summary.js';
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { replay } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
@@ -388,6 +389,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         // نفس الأفعال = نفس النقاط، لكن الأدلة المنفصلة (التعاون والأعمال الواقعية) قد تتحدث
         existing.collaboration = collaborationSummary(store.community, u.id);
         existing.realWork = realWorkSummary(store, u.id);
+        existing.marketResearch = marketSummary(store, u.id);
         store.saveRecords();
         return existing;
       }
@@ -414,6 +416,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         evidence: { decisions: report.evidence.decisions.length, deliverables: report.evidence.deliverables.length, shipped: report.evidence.shipped.map((s) => s.title) },
         collaboration: collaborationSummary(store.community, u.id),
         realWork: realWorkSummary(store, u.id),
+        marketResearch: marketSummary(store, u.id),
         logHash,
         verifiedBy: 'server-replay',
       };
