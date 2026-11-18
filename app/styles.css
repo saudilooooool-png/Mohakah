@@ -540,3 +540,4 @@ form[data-form="trainee-profile"] textarea, form[data-form="work-new"] select, f
 .cand-detail h4 { margin: 12px 0 6px; }
 form[data-form="assess-new"] input, form[data-form="assess-new"] textarea { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-family: inherit; }
 @media print { .cand-detail { display: table-row !important; } .actions, .office-mini-wrap { display: none !important; } }
+form[data-form="assess-new"] select { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-family: inherit; background: #fff; }

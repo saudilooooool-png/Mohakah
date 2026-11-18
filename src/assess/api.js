@@ -14,7 +14,13 @@ const now = () => new Date().toISOString();
 const token = () => randomBytes(12).toString('hex');
 const MAX_LOG = 400;
 
-export function createAssessApi({ store, world, accountsApi, mailer = null, env = process.env, clock = now }) {
+export const ROLES = {
+  pm: { label: 'مدير منتجات (مبتدئ)', as: 'مديرًا للمنتجات' },
+  sales: { label: 'أخصائي مبيعات', as: 'أخصائيًا للمبيعات' },
+  cs: { label: 'أخصائي نجاح العملاء وخدمتهم', as: 'أخصائيًا لنجاح العملاء' },
+};
+
+export function createAssessApi({ store, worlds, accountsApi, mailer = null, env = process.env, clock = now }) {
   store.assess ??= {};
   const A = store.assess;
   A.assessments ??= {};
@@ -22,6 +28,7 @@ export function createAssessApi({ store, world, accountsApi, mailer = null, env 
   const base = (env.MOHAKI_PUBLIC_URL || 'http://localhost:4173').replace(/\/$/, '');
   const requireFac = (req) => { const u = accountsApi.userFrom(req); if (!u || !accountsApi.isFacilitator(u)) throw new HttpError(403, 'للمُيسِّرين فقط'); return u; };
   const all = () => Object.values(A.assessments);
+  const worldOf = (a) => worlds[a.role ?? 'pm'];
   const findCandidate = (t) => { for (const a of all()) { const c = a.candidates.find((x) => x.token === t); if (c) return [a, c]; } throw new HttpError(404, 'رابط التقييم غير صالح'); };
   const hasToken = (t) => all().some((a) => a.candidates.some((c) => c.token === t));
 
@@ -42,15 +49,16 @@ export function createAssessApi({ store, world, accountsApi, mailer = null, env 
     const link = `${base}/a/${c.token}`;
     try {
       await mailer.send({ to: c.email, subject: `${a.company}: دعوة إلى يوم عمل تجريبي`, link,
-        text: `مرحبًا ${c.name}،\n\nتدعوك ${a.company} إلى جلسة تقييم عملية (${a.title}) على منصة محاكي: تعمل ثلاثة أيام عمل مكثفة مديرًا للمنتجات في شركة افتراضية، في نحو ${a.minutes} دقيقة، في الوقت الذي يناسبك.\n\nرابطك الخاص: ${link}\n\nلا يحتاج الرابط حسابًا ولا تثبيتًا. لا تشاركه مع أحد.` });
+        text: `مرحبًا ${c.name}،\n\nتدعوك ${a.company} إلى جلسة تقييم عملية (${a.title}) على منصة محاكي: تعمل ثلاثة أيام عمل مكثفة ${ROLES[a.role ?? 'pm'].as} في شركة افتراضية، في نحو ${a.minutes} دقيقة، في الوقت الذي يناسبك.\n\nرابطك الخاص: ${link}\n\nلا يحتاج الرابط حسابًا ولا تثبيتًا. لا تشاركه مع أحد.` });
     } catch (err) { console.error('تعذر إرسال دعوة التقييم', err.message); }
   }
 
   function create(fac, body) {
-    const title = str(body.title, 100) || 'مدير منتجات (مبتدئ)';
+    const role = ROLES[body.role] ? body.role : 'pm';
+    const title = str(body.title, 100) || ROLES[role].label;
     const company = str(body.company, 100);
     if (company.length < 2) throw new HttpError(400, 'اسم الشركة مطلوب');
-    const a = { id: randomUUID(), title, company, seed: randomInt(1, 1_000_000), reportToken: token(), minutes: Math.min(240, Math.max(30, Math.round(Number(body.minutes) || 120))), createdBy: fac.id, createdAt: clock(), candidates: [] };
+    const a = { id: randomUUID(), role, title, company, seed: randomInt(1, 1_000_000), reportToken: token(), minutes: Math.min(240, Math.max(30, Math.round(Number(body.minutes) || 120))), createdBy: fac.id, createdAt: clock(), candidates: [] };
     const added = addCandidates(a, body.candidates);
     if (!added.length) throw new HttpError(400, 'أضف مرشحًا واحدًا على الأقل');
     A.assessments[a.id] = a;
@@ -61,13 +69,13 @@ export function createAssessApi({ store, world, accountsApi, mailer = null, env 
 
   const status = (c) => (c.finishedAt ? 'finished' : c.startedAt ? 'started' : 'invited');
   const facView = (a) => ({
-    id: a.id, title: a.title, company: a.company, minutes: a.minutes, createdAt: a.createdAt,
+    id: a.id, role: a.role ?? 'pm', roleLabel: ROLES[a.role ?? 'pm'].label, title: a.title, company: a.company, minutes: a.minutes, createdAt: a.createdAt,
     reportLink: `${base}/r/${a.reportToken}`,
     candidates: a.candidates.map((c) => ({ name: c.name, email: c.email, status: status(c), link: `${base}/a/${c.token}` })),
   });
 
   function candidateView(a, c) {
-    return { title: a.title, company: a.company, name: c.name, seed: a.seed, minutes: a.minutes, startedAt: c.startedAt, finished: !!c.finishedAt, progress: c.finishedAt ? null : c.progress };
+    return { title: a.title, company: a.company, role: a.role ?? 'pm', roleAs: ROLES[a.role ?? 'pm'].as, scenario: `${a.role ?? 'pm'}-assessment`, name: c.name, seed: a.seed, minutes: a.minutes, startedAt: c.startedAt, finished: !!c.finishedAt, progress: c.finishedAt ? null : c.progress };
   }
 
   function saveProgress(t, body) {
@@ -77,7 +85,7 @@ export function createAssessApi({ store, world, accountsApi, mailer = null, env 
     if (!Array.isArray(body.log) || body.log.length > MAX_LOG) throw new HttpError(400, 'سجل أفعال غير صالح');
     if ((c.progress?.log.length ?? 0) > body.log.length) throw new HttpError(409, 'نسخة أقدم من المحفوظة');
     let sim;
-    try { ({ sim } = replay(world, { seed: a.seed, log: body.log }, { strict: true })); } catch (err) { throw new HttpError(422, `سجل غير صالح: ${err.message}`); }
+    try { ({ sim } = replay(worldOf(a), { seed: a.seed, log: body.log }, { strict: true })); } catch (err) { throw new HttpError(422, `سجل غير صالح: ${err.message}`); }
     const clip = (o) => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).slice(0, 200).map(([k, v]) => [String(k).slice(0, 80), Number(v) || 0])) : {});
     c.progress = { seed: a.seed, startedAt: c.startedAt, log: body.log, threads: body.threads && typeof body.threads === 'object' ? body.threads : {}, read: clip(body.read), opened: clip(body.opened), savedAt: clock() };
     if (sim.finished) c.finishedAt = clock();
@@ -89,6 +97,7 @@ export function createAssessApi({ store, world, accountsApi, mailer = null, env 
   function report(reportToken) {
     const a = all().find((x) => x.reportToken === reportToken);
     if (!a) throw new HttpError(404, 'رابط التقرير غير صالح');
+    const world = worldOf(a);
     const rows = a.candidates.map((c) => {
       const row = { name: c.name, status: status(c), startedAt: c.startedAt, finishedAt: c.finishedAt, minutes: c.startedAt && c.finishedAt ? Math.max(1, Math.round((Date.parse(c.finishedAt) - Date.parse(c.startedAt)) / 60000)) : null };
       if (!c.progress) return row;

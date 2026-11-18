@@ -1858,7 +1858,7 @@ export function assessGate(a) {
   return assessFrame(`<section class="card challenge-hero">
     <div class="muted small">${esc(i.company)} تدعوك إلى</div>
     <h1>يوم عمل تجريبي: ${esc(i.title)}</h1>
-    <p>أهلًا ${esc(i.name)}. بدل المقابلة النظرية، ستعمل <b>ثلاثة أيام عمل مكثفة</b> مديرًا للمنتجات في NOVA TECH، شركة SaaS سعودية افتراضية. المدة المتوقعة نحو <b>${i.minutes} دقيقة</b>.</p>
+    <p>أهلًا ${esc(i.name)}. بدل المقابلة النظرية، ستعمل <b>ثلاثة أيام عمل مكثفة</b> ${esc(i.roleAs)} في NOVA TECH، شركة SaaS سعودية افتراضية. المدة المتوقعة نحو <b>${i.minutes} دقيقة</b>.</p>
     <ul class="checks-list">
       <li><b>بريد عمل</b> فيه رسائل وشكاوى ومهام. تكتب ردودك بحرية، لا اختيارات جاهزة.</li>
       <li><b>اجتماعات</b> يعترض فيها زملاؤك، وعليك أن تقنعهم بالأرقام.</li>
@@ -1912,14 +1912,15 @@ export function assessAdminPage(user, state) {
   return `<div class="page-h"><div><a href="#/desk" class="small" style="text-decoration:none">→ العودة</a><h1>تقييمات الشركات</h1><p>«يوم عمل تجريبي بدل المقابلة»: أنشئ تقييمًا لشركة، وأرسل لكل مرشح رابطه، وأرسل للشركة رابط تقرير المقارنة.</p></div></div>
   <div class="grid g-main">
     <div>${state.loading ? '<section class="card"><div class="empty">جارٍ التحميل…</div></section>' : list.length ? list.map((a) => `<section class="card" style="margin-bottom:14px">
-      <div class="office-h"><h2>${esc(a.company)} · ${esc(a.title)}</h2><span class="small muted">${a.minutes} دقيقة</span></div>
+      <div class="office-h"><h2>${esc(a.company)} · ${esc(a.title)} <span class="pill t-pill">${esc(a.roleLabel)}</span></h2><span class="small muted">${a.minutes} دقيقة</span></div>
       <p class="small">رابط تقرير الشركة: <a href="${esc(a.reportLink)}" target="_blank" dir="ltr">${esc(a.reportLink)}</a> <button class="btn sm ghost" data-act="copy-url" data-url="${esc(a.reportLink)}">نسخ</button></p>
       <table class="board"><thead><tr><th>المرشح</th><th>الحالة</th><th>رابطه</th></tr></thead><tbody>${a.candidates.map((c) => `<tr><td>${esc(c.name)}${c.email ? `<br><span class="small muted" dir="ltr">${esc(c.email)}</span>` : ''}</td><td>${{ invited: 'لم يبدأ', started: 'بدأ', finished: 'أكمل' }[c.status]}</td><td><button class="btn sm ghost" data-act="copy-url" data-url="${esc(c.link)}">نسخ الرابط</button></td></tr>`).join('')}</tbody></table></section>`).join('')
       : '<section class="card"><div class="empty"><b>لا توجد تقييمات بعد</b></div></section>'}</div>
     <section class="card"><h2>تقييم جديد</h2>
       <form data-form="assess-new" class="grid" style="gap:10px">
         <div class="field"><label>الشركة</label><input name="company" required></div>
-        <div class="field"><label>الوظيفة</label><input name="title" value="مدير منتجات (مبتدئ)"></div>
+        <div class="field"><label>الدور</label><select name="role"><option value="pm">مدير منتجات (مبتدئ)</option><option value="sales">أخصائي مبيعات</option><option value="cs">أخصائي نجاح العملاء وخدمتهم</option></select></div>
+        <div class="field"><label>مسمى الوظيفة عند الشركة <span class="muted small">(اختياري)</span></label><input name="title" placeholder="يظهر للمرشح وفي التقرير"></div>
         <div class="field"><label>المدة المتوقعة (دقيقة)</label><input name="minutes" type="number" min="30" max="240" value="120"></div>
         <div class="field"><label>المرشحون <span class="muted small">(كل مرشح في سطر: الاسم، ثم بريده اختياريًا)</span></label><textarea name="candidates" rows="5" required placeholder="أحمد سالم, ahmad@example.com&#10;منى فهد"></textarea>
           <span class="small muted">من له بريد تصله الدعوة تلقائيًا إن كان البريد مفعّلًا. وإلا انسخ الروابط وأرسلها.</span></div>

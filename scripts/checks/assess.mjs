@@ -19,6 +19,7 @@ const pf = await fctx.newPage(); pf.on('pageerror', (e) => errs.push(e.message))
 await pf.goto(`${O}/app/#/assessments`);
 await pf.waitForSelector('form[data-form="assess-new"]');
 await pf.fill('input[name="company"]', 'شركة التقنية الأولى');
+await pf.selectOption('select[name="role"]', process.env.ROLE || 'pm');
 await pf.fill('textarea[name="candidates"]', 'أحمد سالم\nمنى فهد');
 await pf.getByRole('button', { name: 'إنشاء التقييم' }).click();
 await pf.waitForSelector('.board');
@@ -38,7 +39,7 @@ if (await pc.locator('.nav a[href="#/work"]').count()) errs.push('work nav visib
 await pc.goto(`${O}/app/#/inbox`); await pc.waitForSelector('.inbox-list .item');
 await pc.screenshot({ path: `${SH}/as-inbox.png` });
 // مستند اليوم الأول
-await pc.locator('.inbox-list .item', { hasText: 'تحليل انخفاض' }).click();
+await pc.locator('.inbox-list .item', { hasText: process.env.ROLE === 'sales' ? 'ترتيب أولويات' : 'تحليل انخفاض' }).click();
 await pc.fill('#doc', 'المشكلة: انخفاض استخدام التقارير من 58% إلى 41%. البيانات بالمقارنة تظهر أن السبب الأرجح بطء التقارير عند الحسابات الكبيرة. التوصية: نقترح إصلاح الأداء أولًا. مؤشر النجاح: قياس نسبة الاستخدام أسبوعيًا والهدف 55% خلال شهر.');
 await pc.getByRole('button', { name: 'تسليم العمل' }).click();
 await pc.waitForSelector('.outcome');

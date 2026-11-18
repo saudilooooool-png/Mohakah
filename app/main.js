@@ -250,7 +250,7 @@ async function enterAssess(token) {
   const raw = window.fetch.bind(window);
   if (!window.__assessFetch) { window.__assessFetch = true; window.fetch = (u, o = {}) => (typeof u === 'string' && u.startsWith('/api/') ? raw(u, { ...o, headers: { ...(o.headers ?? {}), 'x-assess-token': token } }) : raw(u, o)); }
   setStorageKey(`mohaki.assess.${token}`);
-  world = { ...world, scenario: await (await fetch('../data/scenarios/pm-assessment.json')).json() };
+  world = { ...world, scenario: await (await fetch(`../data/scenarios/${data.assessment.scenario}.json`)).json() };
   refreshAgents();
   const p = assess.info.progress;
   const local = Session.localSave();
@@ -885,7 +885,7 @@ function onSubmit(e) {
   if (form.dataset.form === 'assess-new') {
     const f = new FormData(form);
     const candidates = String(f.get('candidates') || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = l.match(/^(.*?)[,،\s]+(\S+@\S+)$/); return m ? { name: m[1].trim(), email: m[2] } : { name: l }; });
-    fetch('/api/assess', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company: f.get('company'), title: f.get('title'), minutes: Number(f.get('minutes')), candidates }) })
+    fetch('/api/assess', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company: f.get('company'), role: f.get('role'), title: f.get('title'), minutes: Number(f.get('minutes')), candidates }) })
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); toast('أُنشئ التقييم. انسخ الروابط وأرسلها.', 'good'); loadAssessAdmin(); })
       .catch((err) => toast(err.message, 'bad'));
     return;

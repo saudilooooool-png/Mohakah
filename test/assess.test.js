@@ -40,8 +40,8 @@ async function withServer(fn) {
   }
 }
 
-const play = (seed, { good = true, days = 3 } = {}) => {
-  const world2 = { ...world, scenario: JSON.parse(readFileSync(new URL('../data/scenarios/pm-assessment.json', import.meta.url), 'utf8')) };
+const play = (seed, { good = true, days = 3, role = 'pm' } = {}) => {
+  const world2 = { ...world, scenario: JSON.parse(readFileSync(new URL(`../data/scenarios/${role}-assessment.json`, import.meta.url), 'utf8')) };
   const sim = new Simulation({ ...world2, seed });
   const log = [];
   for (let d = 0; d < days && !sim.finished; d++) {
@@ -99,5 +99,33 @@ test('جلسة التقييم: العالم نفسه للجميع، والتقر
     assert.ok(r.candidates[0].deliverables[0].text.length > 50 && r.candidates[0].decisions.length >= 8);
     assert.equal(r.candidates[2].points, undefined);
     assert.equal((await guest('GET', '/api/assess/report/000000000000000000000000')).status, 404);
+  });
+});
+
+test('أدوار التقييم: مبيعات وخدمة عملاء بسيناريو خاص لكل دور، والحوارات متسقة', async () => {
+  const { validateDialogueSpec, openMeeting, offlineTurn, applyTurn, offlineClose } = await import('../src/agents/meeting.js');
+  const scen = (r) => JSON.parse(readFileSync(new URL(`../data/scenarios/${r}-assessment.json`, import.meta.url), 'utf8'));
+  for (const r of ['pm', 'sales', 'cs']) for (const e of scen(r).events.filter((x) => x.dialogue)) assert.deepEqual(validateDialogueSpec(e, world.company.people), [], `${r}/${e.id}`);
+  // الوضع المحلي: الرد الجيد والرد الضعيف يصلان إلى نتيجتين مختلفتين
+  const run = (e, msgs) => { let m = openMeeting({ id: e.id, eventId: e.id, dialogue: e.dialogue }); for (const t of msgs) m = applyTurn(m, t, offlineTurn(e.dialogue, m, t)); return offlineClose(e.dialogue, m).decision; };
+  const ev = (r, id) => scen(r).events.find((x) => x.id === id);
+  assert.equal(run(ev('sales', 's_discovery'), ['كم مندوبًا في فريقكم، وكيف تتابعون العملاء حاليًا؟', 'أقترح عرضًا تجريبيًا يوم الأحد مع المدير العام.']), 'qualified');
+  assert.equal(run(ev('sales', 's_discovery'), ['نظامنا أفضل نظام وفيه مزايا كثيرة.']), 'pitch');
+  assert.equal(run(ev('sales', 's_promise'), ['أعدك أنها ستكون جاهزة خلال شهر.']), 'promise');
+  assert.equal(run(ev('sales', 's_discount'), ['عميل واحد يضيع شهريًا يغطي الاشتراك. أعرض 15% مقابل التزام سنوي.']), 'trade');
+  assert.equal(run(ev('cs', 'c_escalation'), ['الخلل أصاب 12 عميلًا منهم رواسي، و19 تذكرة. أطلب حلًا مؤقتًا وموعدًا، وأرسل لك ملف مثال.']), 'case');
+  assert.equal(run(ev('cs', 'c_onboarding'), ['انظري المقال في مركز المساعدة.']), 'link');
+  await withServer(async ({ user }) => {
+    const fac = await user('هيا', 'fac@example.com');
+    const guest = await user();
+    const a = (await fac('POST', '/api/assess', { company: 'شركة', role: 'sales', candidates: [{ name: 'بائع' }] })).data.assessment;
+    assert.deepEqual([a.role, a.title], ['sales', 'أخصائي مبيعات']);
+    const t = a.candidates[0].link.split('/').pop();
+    const v = (await guest('POST', `/api/assess/c/${t}/start`, { consent: true })).data.assessment;
+    assert.equal(v.scenario, 'sales-assessment');
+    assert.equal((await guest('PUT', `/api/assess/c/${t}/progress`, { log: play(v.seed, { role: 'pm' }) })).status, 422, 'سجل دور آخر لا يُقبل');
+    assert.equal((await guest('PUT', `/api/assess/c/${t}/progress`, { log: play(v.seed, { role: 'sales' }) })).data.finished, true);
+    const r = (await guest('GET', `/api/assess/report/${a.reportLink.split('/').pop()}`)).data.report;
+    assert.ok(r.role.includes('Sales') && r.candidates[0].points > 600);
   });
 });

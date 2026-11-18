@@ -48,7 +48,10 @@ export function createMohakiServer({
   teamsApi = createTeamsApi({ store, world, accountsApi }),
   workApi = createWorkApi({ store, world, accountsApi }),
   // جلسة التقييم القصيرة تستخدم السيناريو المختصر مع الشركة نفسها
-  assessApi = createAssessApi({ store, world: { ...world, scenario: JSON.parse(readFileSync(join(root, 'data/scenarios/pm-assessment.json'), 'utf8')) }, accountsApi, mailer: lazy(mailer) }),
+  assessApi = createAssessApi({
+    store, accountsApi, mailer: lazy(mailer),
+    worlds: Object.fromEntries(['pm', 'sales', 'cs'].map((r) => [r, { ...world, scenario: JSON.parse(readFileSync(join(root, `data/scenarios/${r}-assessment.json`), 'utf8')) }])),
+  }),
   agentApi = createAgentApi({
     root,
     meter: createMeter({ dir: join(dataDir, 'usage') }),

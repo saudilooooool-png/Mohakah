@@ -3,7 +3,6 @@
  "derivedFrom": "pm-first-30-days",
  "company": "nova-tech",
  "role": "Product Manager — جلسة تقييم",
- "roleId": "product-manager",
  "manager": "cpo",
  "team": [
   "ux",
@@ -2131,5 +2130,6 @@
  ],
  "randomEvents": [],
  "insights": [],
- "memos": []
+ "memos": [],
+ "roleId": "product-manager"
 }
