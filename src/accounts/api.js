@@ -359,7 +359,8 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       const lg = store.teams?.leagues?.[str(body.league, 64)];
       const league = lg && lg.seed === seed && lg.teams.some((tm) => tm.members.includes(u.id)) ? lg.id : undefined;
       const before = store.progress(u.id);
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), quiz: clip(body.quiz, 200), ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), quiz: clip(body.quiz, 200), videoMade: body.videoMade ? 1 : 0,
+        goal: body.goal && typeof body.goal === 'object' ? { role: str(body.goal.role, 20), need: str(body.goal.need, 20) } : null, ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
       maybeDigest(u, before, store.progress(u.id)).catch(() => {});
       return { ok: true };
     },

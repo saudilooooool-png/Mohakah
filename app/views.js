@@ -7,6 +7,7 @@ import {
   lineChart, ring, bar, weekday, weekOf,
 } from './lib/ui.js';
 import { generatedMail, mailBody } from './lib/mail.js';
+import { buildPlan, GOAL_ROLES, GOAL_NEEDS } from '../src/plan.js';
 
 const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
@@ -14,6 +15,7 @@ const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
 export const NAV = [
   { id: 'desk', label: 'مكتبي', sub: 'ملخص يوم العمل', icon: 'desk' },
+  { id: 'plan', label: 'خطتي', sub: 'هدفك وجاهزيتك لسوق العمل', icon: 'growth' },
   { id: 'inbox', label: 'البريد', sub: 'المهام والرسائل والتقارير', icon: 'mail' },
   { id: 'team', label: 'فريقي', sub: 'الزملاء والمديرون', icon: 'team' },
   { id: 'meetings', label: 'الاجتماعات', sub: 'المواعيد والمناقشات', icon: 'meeting' },
@@ -41,7 +43,7 @@ export function shell(session, route, content) {
         <div><div class="co-name">NOVA TECH</div><div class="co-status">Online</div></div>
       </div>
       <nav class="nav">
-        ${NAV.filter((n) => !session.assess || !['work', 'report'].includes(n.id)).map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
+        ${NAV.filter((n) => !session.assess || !['work', 'report', 'plan'].includes(n.id)).map((n) => `<a href="#/${n.id}" class="${route.page === n.id ? 'on' : ''}" ${route.page === n.id ? 'aria-current="page"' : ''}>
           ${icon(n.icon)}<span class="lbl">${n.label}<small>${n.sub}</small></span>
           ${badges[n.id] ? `<span class="badge">${badges[n.id]}</span>` : ''}
         </a>`).join('')}
@@ -154,6 +156,7 @@ export function desk(session) {
     ${open.length ? `<div class="actions" style="position:relative;z-index:1"><a class="btn teal" href="#/inbox/${encodeURIComponent(open[0].id)}">ابدأ بالأهم: ${esc(open[0].title)}</a></div>` : ''}
   </section>
 
+  ${session.assess ? '' : planStrip(session)}
   ${!first && !open.length && !sim.finished ? whatNow(session) : ''}
 
   <section class="card office-card" style="margin-top:16px">
@@ -2018,4 +2021,72 @@ function marketTab(m) {
         <span class="small muted">النوع · الوحدة · هامش التطابق % — ثم: النقاط · عدد الباحثين · يُفتح بعد كم يوم عمل</span>
         <div class="actions"><button class="btn primary" type="submit">نشر السؤال</button></div>
       </form></section>` : ''}`;
+}
+
+// ——— خطتي: الهدف والجاهزية لسوق العمل ———
+
+/** يجمع حالة المتدرب من الجلسة والحساب وما حُمّل من الخادم، ويبني خطته. */
+export function planOf(session, extra = {}) {
+  const sim = session.sim;
+  const r = sim.report();
+  const pts = computePoints(r, { finished: sim.finished });
+  const scored = r.skills.filter((x) => x.score !== null).sort((a, b) => a.score - b.score);
+  const u = session.user;
+  return buildPlan({
+    days: r.daysWorked, lengthDays: sim.lastDay, finished: sim.finished, points: pts.points, weakest: scored[0] ?? null,
+    hasRecord: !!u?.records?.length, emailVerified: !!u?.emailVerified, profile: u?.profile, sharing: !!u?.consents?.employerSharing,
+    portfolioPublished: !!extra.portfolioPublished, realWork: extra.realWork ?? 0, market: extra.market ?? 0, videoMade: !!session.videoMade, goal: session.goal,
+  });
+}
+
+function planStrip(session) {
+  const p = planOf(session, session.planExtra ?? {});
+  return `<a class="card plan-strip" href="#/plan" style="margin-top:16px">
+    <div class="plan-ring">${ring(p.readiness, 76, '#00C2D1')}<b class="num">${p.readiness}</b></div>
+    <div><div class="small muted">جاهزيتك لسوق العمل${session.goal?.role && session.goal.role !== 'undecided' ? ` · هدفك: ${esc(GOAL_ROLES[session.goal.role])}` : ''}</div>
+      <b>${esc(p.band)}</b>${p.next ? `<div class="small">خطوتك التالية: <b>${esc(p.next.label)}</b>${p.next.hint ? ` <span class="muted">(${esc(p.next.hint)})</span>` : ''}</div>` : '<div class="small">أكملت خطتك. أحسنت!</div>'}</div>
+    <span class="plan-go">خطتي ←</span></a>`;
+}
+
+export function goalModal(goal = null) {
+  const pick = (name, map, cur) => Object.entries(map).map(([k, v]) => `<label class="opt"><input type="radio" name="${name}" value="${k}" ${cur === k ? 'checked' : ''} required><span>${esc(v)}</span></label>`).join('');
+  return `<form data-form="goal"><h2>قبل أن تبدأ: ما هدفك؟</h2>
+    <p class="muted" style="margin-top:0">نبني لك خطة على هدفك، ونريك كل يوم أين تقف منها.</p>
+    <fieldset class="options"><legend class="section-t">أي وظيفة تسعى إليها؟</legend>${pick('role', GOAL_ROLES, goal?.role)}</fieldset>
+    <fieldset class="options"><legend class="section-t">ما أكثر ما ينقصك الآن؟</legend>${pick('need', GOAL_NEEDS, goal?.need)}</fieldset>
+    <div class="actions"><button class="btn primary" type="submit">ابنِ خطتي</button></div>
+    <p class="small muted">محاكي يساعدك على بناء خبرة وإثباتها. لا نعد بوظيفة، والفرص تأتي مع تقدمك.</p></form>`;
+}
+
+export function planPage(session, extra = {}) {
+  const p = planOf(session, extra);
+  const g = session.goal;
+  const NEED_TIP = {
+    experience: 'ما تنجزه هنا يُكتب في سيرتك: شهر عمل، ومستندات، وأعمال واقعية معتمدة.',
+    level: 'تابع نقاطك ومهاراتك في "تطورك المهني"، وأجب عن أسئلة المهارات التي تظهر خلال يومك.',
+    confidence: 'ركّز على الاجتماعات والمحادثات: كل واحدة تدريب على موقف ستواجهه فعلًا.',
+    proof: 'هدفك الأقرب: السجل الموثّق وملف الأعمال. كلاهما يتحقق منه صاحب العمل بنفسه.',
+  };
+  return `<div class="page-h"><div><h1>خطتي</h1><p>طريقك من أول يوم إلى أن يراك أصحاب العمل. كل بند يُحسب مما أنجزته فعلًا.</p></div>
+    <button class="btn" data-act="edit-goal">${g ? 'عدّل هدفي' : 'حدّد هدفي'}</button></div>
+  <div class="grid g-main">
+    <div>
+      ${p.next ? `<section class="card plan-next"><div class="small muted">خطوتك التالية · ${esc(p.next.stage)}</div><h2>${esc(p.next.label)}</h2>${p.next.hint ? `<p class="small muted">${esc(p.next.hint)}</p>` : ''}
+        <a class="btn primary" href="${esc(p.next.href)}">ابدأ الآن</a></section>` : '<section class="card plan-next"><h2>أكملت خطتك 👏</h2><p>حدّث ملف أعمالك، وتابع الفرص الجديدة في الأعمال الواقعية.</p></section>'}
+      ${p.stages.map((st, i) => { const done = st.items.filter((x) => x.done).length; return `<section class="card plan-stage ${done === st.items.length ? 'complete' : ''}" style="margin-top:12px">
+        <div class="office-h"><h2><span class="num-badge">${i + 1}</span> ${esc(st.title)} <span class="small muted">· ${esc(st.sub)}</span></h2><span class="pill ${done === st.items.length ? 's-done' : 't-pill'}">${done} من ${st.items.length}</span></div>
+        ${st.items.map((x) => `<a class="plan-item ${x.done ? 'done' : ''}" href="${esc(x.href)}"><span class="tick">${x.done ? '✓' : ''}</span><span>${esc(x.label)}${x.hint && !x.done ? ` <span class="small muted">· ${esc(x.hint)}</span>` : ''}</span></a>`).join('')}
+      </section>`; }).join('')}
+    </div>
+    <div>
+      <section class="card" style="text-align:center"><div class="plan-ring big">${ring(p.readiness, 150, '#00C2D1')}<b class="num">${p.readiness}</b></div>
+        <h2 style="margin:8px 0 2px">جاهزيتك لسوق العمل</h2><p class="muted" style="margin:0">${esc(p.band)} · ${p.done} من ${p.total} بندًا</p></section>
+      <section class="card" style="margin-top:12px"><h2>كيف يُحسب المؤشر</h2>
+        ${p.breakdown.map((b) => `<div class="barrow"><span>${esc(b.label)}</span><span class="num">${b.earned} / ${b.weight}</span><div class="bar"><i style="width:${(b.earned / b.weight) * 100}%;background:var(--teal)"></i></div></div>`).join('')}
+        <p class="small muted" style="margin-bottom:0">مؤشر إرشادي يقيس ما أنجزته وأثبتّه. ليس وعدًا بوظيفة، والفرص تأتي مع تقدمك.</p></section>
+      ${g?.role ? `<section class="card" style="margin-top:12px"><h2>هدفك</h2><p style="margin:0"><b>${esc(GOAL_ROLES[g.role] ?? '')}</b></p>
+        ${g.need ? `<p class="small">${esc(NEED_TIP[g.need] ?? '')}</p>` : ''}
+        ${!['pm', 'undecided'].includes(g.role) ? '<p class="small muted">الشهر الحالي في دور مدير المنتجات. مهاراته (ترتيب الأولويات، والتواصل، والقرار بالأرقام) مشتركة بين كل الأدوار، ومسارات بقية الأدوار قادمة.</p>' : ''}</section>` : ''}
+    </div>
+  </div>`;
 }

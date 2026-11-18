@@ -384,6 +384,7 @@ function render() {
     case 'league': body = V.leaguePage(leagueState.league); break;
     case 'work': body = V.workPage(workState, route.itemId); break;
     case 'profile': body = V.profilePage(user); break;
+    case 'plan': body = V.planPage(session, session.planExtra ?? {}); break;
     case 'peer': body = user ? V.peerPage(user, peerState) : '<section class="card"><div class="empty"><b>سجّل الدخول لمراجعة مستندات زملائك</b></div></section>'; break;
     case 'account': body = V.accountPage(session, user); break;
     case 'live': body = !user ? '<section class="card"><div class="empty"><b>سجّل الدخول للانضمام إلى الجلسات الحية</b></div></section>'
@@ -419,6 +420,20 @@ function openModal(html) {
   (modalRoot.querySelector('.modal input:not([type=checkbox]), .modal textarea') ?? modalRoot.querySelector('.modal button, .modal a'))?.focus();
 }
 function closeModal() { modalRoot.innerHTML = ''; }
+
+/** أول ما يراه المتدرب الجديد: سؤال الهدف، ثم الجولة. (يُتجاوز في الفحوص الآلية.) */
+function askGoalThenTour() {
+  if (!session || session.assess || session.goal || navigator.webdriver) { maybeTour(); return; }
+  openModal(V.goalModal());
+}
+
+/** ما تحتاجه الخطة من الخادم: هل نُشر ملف الأعمال؟ وكم عملًا واقعيًا وبحث سوق معتمدًا؟ */
+async function loadPlanExtra() {
+  if (!session || !user) return;
+  const [w, pf] = await Promise.all([account.workSummary(), account.portfolioMe().catch(() => null)]);
+  session.planExtra = { realWork: w?.count ?? 0, market: w?.market?.confirmed ?? 0, portfolioPublished: !!pf?.portfolio?.published };
+  if (['plan', 'desk'].includes(parseRoute().page)) render();
+}
 
 /** الجولة التعريفية تبدأ تلقائيًا أول مرة. (تُتجاهل في الفحوص الآلية حتى لا تحجب النقرات، ولها فحص خاص.) */
 async function maybeTour() {
@@ -462,7 +477,7 @@ const actions = {
     if (user) saver.save(session.saveData());
     location.hash = '#/desk';
     render();
-    maybeTour();
+    askGoalThenTour();
   },
   resume() {
     session = attach(Session.resume(world));
@@ -506,6 +521,7 @@ const actions = {
       });
       const file = new File([out.blob], `mohaki-${videoState.slug}.${out.ext}`, { type: out.blob.type });
       videoState.file = { ...out, url: URL.createObjectURL(out.blob), file };
+      session?.markVideo();
       videoState.canShareFile = !!navigator.canShare?.({ files: [file] });
     } catch (err) { toast(err.message, 'bad'); }
     videoState.recording = false;
@@ -560,6 +576,7 @@ const actions = {
     render();
   },
   'work-hour'() { session.wait(); toast('مرّت ساعة عمل.', 'good'); render(); },
+  'edit-goal'() { openModal(V.goalModal(session.goal)); },
   async tour() { (await import('./lib/tour.js')).startTour(); },
   'work-tab'(e) { workState.tab = e.target.closest('[data-tab]').dataset.tab; location.hash = '#/work'; render(); },
   async 'work-withdraw'(e) {
@@ -898,6 +915,16 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'goal') {
+    const f = new FormData(form);
+    const first = !session.goal;
+    session.setGoal({ role: f.get('role'), need: f.get('need') });
+    closeModal();
+    toast('بُنيت خطتك. تجدها في "خطتي".', 'good');
+    render();
+    if (first) maybeTour();
+    return;
+  }
   if (form.dataset.form === 'research') {
     const answers = Object.fromEntries(new FormData(form).entries());
     const r = session.research(itemId, answers);
@@ -1151,6 +1178,7 @@ window.addEventListener('hashchange', () => {
   if (parseRoute().page === 'live') { loadLive(); return; }
   if (parseRoute().page === 'peer') { loadPeer(); return; }
   if (parseRoute().page === 'report') { loadCollab(); loadChallengesForReport(); loadRealWork(); }
+  if (['plan', 'desk'].includes(parseRoute().page)) loadPlanExtra();
   if (parseRoute().page === 'challenge') { loadChallenge(); return; }
   if (parseRoute().page === 'portfolio') { loadPortfolio(); return; }
   if (parseRoute().page === 'video') { loadVideo(); return; }
@@ -1204,6 +1232,7 @@ window.addEventListener('hashchange', () => {
     if (parseRoute().page === 'video') loadVideo();
     if (parseRoute().page === 'pair') loadPair();
     if (parseRoute().page === 'work') loadWork();
+    if (['plan', 'desk'].includes(parseRoute().page)) loadPlanExtra();
     if (parseRoute().page === 'assessments') loadAssessAdmin();
     if (['leagues', 'league'].includes(parseRoute().page)) loadLeagues();
     if (parseRoute().page === 'team' && !parseRoute().itemId) loadPairs();

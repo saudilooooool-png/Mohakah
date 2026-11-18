@@ -50,6 +50,9 @@ export class Session {
     // أسئلة تنمية المهارات: { [معرّف السؤال]: 1 صحيح | 0 خطأ }. للتعلم، لا تدخل في النقاط الرسمية.
     this.quiz = save.quiz ?? {};
     this.quizDay = {};
+    // هدف المتدرب: أي وظيفة يسعى إليها، وما الذي ينقصه. تُبنى عليه خطته.
+    this.goal = save.goal ?? null;
+    this.videoMade = save.videoMade ?? 0;
     this.sim = new Simulation({ company: world.company, scenario: world.scenario, seed: this.seed, occupations: world.occupations });
     for (const a of save.log ?? []) {
       try { this._apply(a); this.log.push(a); } catch (e) { console.warn('تعذرت إعادة فعل محفوظ', a, e); break; }
@@ -72,7 +75,7 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, quiz: this.quiz, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
+  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, quiz: this.quiz, goal: this.goal, videoMade: this.videoMade, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
 
   static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null, league = null } = {}) {
     const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge, league });
@@ -108,6 +111,9 @@ export class Session {
   insight(id) {
     return this._do({ t: 'insight', id });
   }
+
+  setGoal(goal) { this.goal = goal; this._persist(); }
+  markVideo() { this.videoMade = 1; this._persist(); }
 
   answerQuiz(id, correct) {
     this.quiz = { ...this.quiz, [id]: correct ? 1 : 0 };

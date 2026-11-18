@@ -89,9 +89,9 @@ export function lineChart(values, { color = '#00C2D1', height = 110, format = fm
   </svg>`;
 }
 
-export function ring(score, size = 150) {
+export function ring(score, size = 150, fixed = null) {
   const r = size / 2 - 10, c = 2 * Math.PI * r;
-  const color = score >= 80 ? '#1f9d63' : score >= 60 ? '#00C2D1' : score >= 40 ? '#F5B301' : '#d64545';
+  const color = fixed ?? (score >= 80 ? '#1f9d63' : score >= 60 ? '#00C2D1' : score >= 40 ? '#F5B301' : '#d64545');
   return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
     <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#edf0f5" stroke-width="12"/>
     <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"
