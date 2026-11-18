@@ -441,8 +441,8 @@ function askGoalThenTour() {
 /** ما تحتاجه الخطة من الخادم: هل نُشر ملف الأعمال؟ وكم عملًا واقعيًا وبحث سوق معتمدًا؟ */
 async function loadPlanExtra() {
   if (!session || !user) return;
-  const [w, pf] = await Promise.all([account.workSummary(), account.portfolioMe().catch(() => null)]);
-  session.planExtra = { realWork: w?.count ?? 0, market: w?.market?.confirmed ?? 0, portfolioPublished: !!pf?.portfolio?.published };
+  const w = await account.workSummary();
+  session.planExtra = { realWork: w?.count ?? 0, market: w?.market?.confirmed ?? 0, portfolioPublished: !!w?.portfolioPublished };
   if (['plan', 'desk'].includes(parseRoute().page)) render();
 }
 

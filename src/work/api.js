@@ -207,7 +207,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
     },
     'GET /api/work/review': (req) => ({ applications: reviewQueue(requireUser(req)) }),
     'POST /api/work/apps/:id/decide': (req, body, id) => decide(requireUser(req), id, body),
-    'GET /api/work/summary': (req) => { const u = requireUser(req); const { items, ...market } = marketSummary(store, u.id); return { ...summary(u.id), market }; },
+    'GET /api/work/summary': (req) => { const u = requireUser(req); const { items, ...market } = marketSummary(store, u.id); return { ...summary(u.id), market, portfolioPublished: !!store.showcase?.portfolios?.[u.id]?.published }; },
   };
 
   async function handle(req, res) {
