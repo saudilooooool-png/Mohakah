@@ -11,7 +11,7 @@ import { collaborationSummary, forgetUser } from '../community/collab.js';
 import { realWorkSummary } from '../work/summary.js';
 import { marketSummary } from '../market/summary.js';
 import { randomBytes, scryptSync, timingSafeEqual, createHash, randomUUID } from 'node:crypto';
-import { replay } from '../replay.js';
+import { replay, worldOf } from '../replay.js';
 import { computePoints, RECOMMENDATION_RULES } from '../points.js';
 import { renderEmail } from './mailer.js';
 
@@ -140,7 +140,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
     const today = clock().slice(0, 10);
     if (u.lastDigestOn === today) return;
     let sim;
-    try { ({ sim } = replay(world, { ...after, reviews: store.community?.reviews?.[u.id] ?? {} })); } catch { return; }
+    try { ({ sim } = replay(worldOf(world, after), { ...after, reviews: store.community?.reviews?.[u.id] ?? {} })); } catch { return; }
     const h = sim.history; const now = h.at(-1); const prev = h.at(-2) ?? now;
     const d = (a, b) => { const x = Math.round(a - b); return x ? ` (${x > 0 ? '+' : ''}${x.toLocaleString('en')})` : ''; };
     const lastDay = sim.day - 1;
@@ -354,12 +354,13 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       const read = clip(body.read, 100);
       // الانضمام لتحدٍّ: يُقبل فقط إن كان التحدي قائمًا وبالبذرة نفسها
       const ch = store.showcase?.challenges?.[str(body.challenge, 12)];
-      const challenge = ch && !ch.revoked && ch.seed === seed && ch.ownerId !== u.id ? ch.code : undefined;
+      const challenge = ch && !ch.revoked && ch.seed === seed && (ch.scenario ?? '') === (world.byScenario?.[str(body.scenario, 40)] ? str(body.scenario, 40) : '') && ch.ownerId !== u.id ? ch.code : undefined;
       // الانضمام لدوري فرق: عضو في أحد فرقه، وبذرة الدوري نفسها
       const lg = store.teams?.leagues?.[str(body.league, 64)];
       const league = lg && lg.seed === seed && lg.teams.some((tm) => tm.members.includes(u.id)) ? lg.id : undefined;
       const before = store.progress(u.id);
-      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), read, opened: clip(body.opened), quiz: clip(body.quiz, 200), videoMade: body.videoMade ? 1 : 0,
+      store.saveProgress(u.id, { seed, startedAt: str(body.startedAt, 40) || clock(), log: body.log, threads, savedAt: clock(), ...(world.byScenario?.[str(body.scenario, 40)] ? { scenario: str(body.scenario, 40) } : {}),
+        read, opened: clip(body.opened), quiz: clip(body.quiz, 200), videoMade: body.videoMade ? 1 : 0,
         goal: body.goal && typeof body.goal === 'object' ? { role: str(body.goal.role, 20), need: str(body.goal.need, 20) } : null, ...(challenge ? { challenge } : {}), ...(league ? { league } : {}) });
       maybeDigest(u, before, store.progress(u.id)).catch(() => {});
       return { ok: true };
@@ -372,11 +373,11 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
       if (!p) throw new HttpError(400, 'لا يوجد تقدم محفوظ');
       let sim;
       try {
-        ({ sim } = replay(world, { ...p, reviews: store.community.reviews[u.id] ?? {} }, { strict: true }));
+        ({ sim } = replay(worldOf(world, p), { ...p, reviews: store.community.reviews[u.id] ?? {} }, { strict: true }));
       } catch (err) {
         throw new HttpError(422, `تعذر التحقق من سجل الأفعال: ${err.message}`);
       }
-      if (!sim.finished) throw new HttpError(400, `يُصدر السجل بعد إكمال ${world.scenario.lengthDays} يوم عمل`);
+      if (!sim.finished) throw new HttpError(400, `يُصدر السجل بعد إكمال ${sim.scenario.lengthDays} يوم عمل`);
       // نتيجة أي اجتماع حي يجب أن تطابق حكم المُيسِّر المسجّل على الخادم (لا يمكن تعديلها من المتصفح)
       for (const a of p.log.filter((x) => x.t === 'respond' && x.mode === 'human')) {
         const live = store.community?.liveResults?.[u.id]?.[String(a.itemId).split('#')[0]];
@@ -384,7 +385,7 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         if (!same) throw new HttpError(422, 'نتيجة اجتماع حي في سجلك لا تطابق حكم المُيسِّر المسجّل.');
       }
       const reviews = store.community.reviews[u.id] ?? {};
-      const logHash = sha256(JSON.stringify({ seed: p.seed, log: p.log, reviews: Object.keys(reviews).length ? reviews : undefined }));
+      const logHash = sha256(JSON.stringify({ scenario: p.scenario, seed: p.seed, log: p.log, reviews: Object.keys(reviews).length ? reviews : undefined }));
       const existing = Object.values(store.records).find((r) => r.userId === u.id && r.logHash === logHash && !r.revoked);
       if (existing) {
         // نفس الأفعال = نفس النقاط، لكن الأدلة المنفصلة (التعاون والأعمال الواقعية) قد تتحدث
@@ -403,10 +404,10 @@ export function createAccountsApi({ store, world, env = process.env, now: clock 
         userId: u.id,
         name: u.name,
         issuedAt: clock(),
-        scenarioId: world.scenario.id,
-        role: world.scenario.role,
+        scenarioId: sim.scenario.id,
+        role: sim.scenario.role,
         company: world.company.name,
-        days: world.scenario.lengthDays,
+        days: sim.scenario.lengthDays,
         startedAt: p.startedAt,
         overall: report.overall,
         points: points.points,

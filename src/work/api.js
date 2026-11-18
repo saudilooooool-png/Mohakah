@@ -7,7 +7,7 @@
 // - التسليم لا يراه إلا المراجع والمُيسِّر. وبيانات تواصل الجهة لا تظهر للمتدرب.
 // - الدفع (إن وُجد) اتفاق بين الجهة والمتدرب خارج المنصة، والمنصة تسجّل حالته فقط.
 import { randomUUID } from 'node:crypto';
-import { replay } from '../replay.js';
+import { replay, worldOf } from '../replay.js';
 import { computePoints } from '../points.js';
 import { HttpError } from '../accounts/api.js';
 import { firstName } from '../showcase/api.js';
@@ -47,7 +47,7 @@ export function createWorkApi({ store, world, accountsApi, clock = now }) {
     if (cache.get(uid)?.key === key) return cache.get(uid).value;
     let value = { days: 0, points: 0 };
     try {
-      const { sim } = replay(world, { ...p, reviews: store.community?.reviews?.[uid] ?? {} });
+      const { sim } = replay(worldOf(world, p), { ...p, reviews: store.community?.reviews?.[uid] ?? {} });
       const r = sim.report();
       value = { days: r.daysWorked, points: computePoints(r, { finished: sim.finished }).points };
     } catch { /* سجل غير صالح: غير جاهز */ }

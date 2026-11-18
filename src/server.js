@@ -18,11 +18,14 @@ import { createMarketApi } from './market/api.js';
 
 function loadWorld(root) {
   const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
-  return {
+  const base = {
     company: read('data/companies/nova-tech.json'),
     scenario: read('data/scenarios/pm-first-30-days.json'),
     occupations: { ...read('data/occupations/ssco.json'), profiles: read('data/occupations/ssco-profiles.json').profiles },
   };
+  // الشهر الكامل لكل دور (بنظام التدوير بين الإدارات)
+  base.byScenario = Object.fromEntries(['sales-month', 'cs-month'].map((id) => [id, { ...base, scenario: read(`data/scenarios/${id}.json`) }]));
+  return base;
 }
 
 const types = {

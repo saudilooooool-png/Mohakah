@@ -41,6 +41,13 @@ let caption = '';
 // الحرف الأول من الاسم الأول (الحروف العربية المتفرقة تُعرض معكوسة ومتصلة، فحرف واحد أوضح)
 const initials = (name) => name.replace(/^(م\.|أ\.)\s*/, '').trim()[0] ?? '؟';
 
+const MY_SEAT = { product: [470, 245], sales: [840, 290], cs: [780, 410], data: [200, 270] };
+function seatMe(session) {
+  const dept = session.sim.rotationNow?.()?.dept ?? 'product';
+  const seat = MY_SEAT[dept] ?? MY_SEAT.product;
+  if (SEATS.me[0] !== seat[0] || SEATS.me[1] !== seat[1]) { SEATS.me = seat; delete pos.me; }
+}
+
 function people(session) {
   const ids = Object.keys(SEATS).filter((id) => id === 'me' || session.world.company.people.some((p) => p.id === id));
   // ريان يظهر من يوم انضمامه
@@ -54,7 +61,7 @@ function svg(session) {
     <rect x="0" y="0" width="1000" height="460" rx="18" fill="#f3f6fb"/>
     ${ROOMS.map((r) => `<g><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="12" fill="${r.id === 'product' ? '#e6f9fb' : '#fff'}" stroke="#dfe5ef" stroke-width="2"/>
       <text x="${r.x + r.w / 2}" y="${r.y + 22}" text-anchor="middle" class="room-l">${r.label}</text></g>`).join('')}
-    <rect x="${SEATS.me[0] - 34}" y="${SEATS.me[1] + 18}" width="68" height="10" rx="4" fill="#00C2D1" opacity=".5"/>
+
     ${ids.map((id, i) => {
       const [x, y] = pos[id] ?? SEATS[id];
       const me = id === 'me';
@@ -209,6 +216,7 @@ function ambient(session) {
 export function mount(el, session, scene) {
   if (!el) return;
   host = el;
+  seatMe(session);
   el.innerHTML = svg(session);
   el.onclick = (e) => { const g = e.target.closest('.ppl[data-href]'); if (g) location.hash = g.dataset.href; };
   el.onkeydown = (e) => { const g = e.target.closest('.ppl[data-href]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.hash = g.dataset.href; } };

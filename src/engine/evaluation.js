@@ -8,7 +8,7 @@ const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : nul
 
 export function buildReport(sim, runBaseline) {
   // الاكتشافات مبادرة إضافية: تؤثر على الشركة والثقة، ولا تدخل في حساب الوقت والأولويات
-  const acts = sim.actions.filter((a) => a.kind !== 'insight');
+  const acts = sim.actions.filter((a) => a.kind !== 'insight' && a.kind !== 'connect');
   const handled = acts.filter((a) => a.kind !== 'expired');
   const important = acts.filter((a) => a.priority === 'critical' || a.priority === 'high');
 
@@ -96,6 +96,19 @@ export function buildReport(sim, runBaseline) {
       deliverables: delivs.map((d) => ({ day: d.day, event: d.eventId, score: d.kind === 'deliverable' ? d.evaluation.score : 0, missing: d.kind === 'deliverable' ? d.evaluation.feedback : ['لم يُسلَّم'] })),
       shipped: sim.state.company.roadmap.shipped.map((x) => ({ title: x.title, day: x.shippedDay })),
       insights: sim.actions.filter((a) => a.kind === 'insight').map((a) => ({ day: a.day, id: a.insightId })),
+      // شبكة العلاقات: دليل منفصل عن النقاط. من بنى علاقة قبل أن يحتاجها؟
+      network: (() => {
+        const people = sim.companyData.people;
+        const met = Object.keys(sim.connections ?? {});
+        const depts = new Set(met.map((id) => people.find((p) => p.id === id)?.dept).filter((d) => d && d !== 'external'));
+        return {
+          sessions: Object.values(sim.connections ?? {}).reduce((n, l) => n + l.length, 0),
+          internal: met.filter((id) => !people.find((p) => p.id === id)?.external).length,
+          external: met.filter((id) => people.find((p) => p.id === id)?.external).length,
+          departments: depts.size,
+          trusted: Object.entries(sim.state.player.trust).filter(([, v]) => v >= 65).length,
+        };
+      })(),
     },
     companyOutcome: { you: mine, baselineNoActions: base },
     recommendation: recommend(overall, sorted),

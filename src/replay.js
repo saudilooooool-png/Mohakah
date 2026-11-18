@@ -21,6 +21,7 @@ export function applyAction(sim, a, reviews = null) {
   if (a.t === 'investigate') return sim.investigate(a.itemId, a.sourceId);
   if (a.t === 'research') return sim.submitResearch(a.itemId, a.answers);
   if (a.t === 'wait') return sim.wait();
+  if (a.t === 'connect') return sim.connect(a.personId);
   throw new Error(`فعل غير معروف: ${a.t}`);
 }
 
@@ -29,6 +30,9 @@ export function applyAction(sim, a, reviews = null) {
  * @param {{seed:number, log:Array}} save
  * @param {{strict?: boolean}} opts strict: يرمي خطأ عند أول فعل غير صالح (للخادم)
  */
+/** عالم المتدرب بحسب سيناريو شهره (منتجات، مبيعات، نجاح العملاء). الافتراضي هو العالم الأساسي. */
+export const worldOf = (world, p) => (p?.scenario && world.byScenario?.[p.scenario]) || world;
+
 export function replay(world, { seed, log = [], reviews = null }, { strict = false } = {}) {
   const sim = new Simulation({ company: world.company, scenario: world.scenario, seed, occupations: world.occupations ?? null });
   const applied = [];

@@ -196,3 +196,41 @@ test('طلب التحليل الذي لا يكتمل اليوم يجهز صبا�
   sim.wait(); sim.wait();
   assert.equal(item.pending.length, 0, 'جهز في اليوم التالي');
 });
+
+test('بناء العلاقات: جلسة التعارف تبني الثقة مرة كل خمسة أيام، ومع العميل ترفع رضاه، وتُسجَّل دليلًا', () => {
+  const sim = newSim(4);
+  const t0 = sim.state.player.trust.eng_lead;
+  const r = sim.connect('eng_lead');
+  assert.deepEqual([r.first, r.gain], [true, 3]);
+  assert.equal(sim.state.player.trust.eng_lead, t0 + 3);
+  assert.equal(sim.hoursLeft, 7.5);
+  assert.throws(() => sim.connect('eng_lead'), /قبل أيام/);
+  const h0 = sim.state.company.accounts.find((a) => a.id === 'masar').health;
+  sim.connect('masar_contact');
+  assert.equal(sim.state.company.accounts.find((a) => a.id === 'masar').health, h0 + 3);
+  for (let i = 0; i < 5; i++) sim.endDay();
+  assert.equal(sim.connect('eng_lead').gain, 1, 'الأثر الأكبر في المرة الأولى');
+  const n = sim.report().evidence.network;
+  assert.deepEqual([n.sessions, n.internal, n.external], [3, 1, 1]);
+});
+
+test('شهر المبيعات وشهر نجاح العملاء: تهيئة، ثم إدارتك، ثم تدوير في إدارتين، ثم عودة', async () => {
+  const { loadScenario } = await import('../src/index.js');
+  const { validateDialogueSpec } = await import('../src/agents/meeting.js');
+  for (const [id, home, r1] of [['sales-month', 'sales', 'cs'], ['cs-month', 'cs', 'sales']]) {
+    const sc = loadScenario(id);
+    assert.equal(sc.lengthDays, 30);
+    for (const e of [...sc.events, ...sc.randomEvents].filter((x) => x.dialogue)) assert.deepEqual(validateDialogueSpec(e, company.people), [], `${id}/${e.id}`);
+    const sim = new Simulation({ company, scenario: sc, seed: 5 });
+    assert.equal(sim.rotationNow().dept, home);
+    assert.ok(sim.inbox().some((i) => i.attachments.includes('handbook')), 'تهيئة في اليوم الأول');
+    while (sim.day < 11) sim.endDay();
+    assert.deepEqual([sim.rotationNow().dept, !!sim.rotationNow().home], [r1, false]);
+    assert.ok(sim.inbox().some((i) => i.title.includes('تدويرك')));
+    while (sim.day < 16) sim.endDay();
+    assert.equal(sim.rotationNow().dept, 'product');
+    while (sim.day < 21) sim.endDay();
+    assert.equal(sim.rotationNow().home, true);
+  }
+  assert.equal(newSim().rotationNow(), null, 'شهر المنتجات بلا تدوير حاليًا');
+});

@@ -11,7 +11,8 @@ const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
 export const HOURS_PER_DAY = 8;
 /** تكلفة كل نوع عمل بساعات يوم العمل. */
-export const COST = { message: 0.5, meeting: 1, deliverable: 1.5, research: 0.5, ask: 0.5, request: 0.25, wait: 1 };
+export const COST = { message: 0.5, meeting: 1, deliverable: 1.5, research: 0.5, ask: 0.5, request: 0.25, wait: 1, connect: 0.5 };
+export const CONNECT_GAP = 5; // أيام عمل بين جلستي تعارف مع الشخص نفسه
 export const SLOW_PER_DAY = 2; // طلبات التحليل التي يقبلها الفريق منك في اليوم
 
 export class Simulation {
@@ -50,6 +51,7 @@ export class Simulation {
     this.delegations = [];     // بنود أُسندت إلى الزميل المنفّذ وتعود في يوم محدد
     this.hoursUsed = 0;
     this.slowToday = 0;
+    this.connections = {};     // جلسات التعارف: { personId: [أيام] }
     this.history = [];        // لقطة يومية من مؤشرات الشركة
     this._seq = 0;
 
@@ -283,6 +285,36 @@ export class Simulation {
   wait() {
     if (this.finished) throw new Error('انتهت فترة المحاكاة');
     this._spend(COST.wait);
+  }
+
+  // ——— التدوير بين الإدارات ———
+  /** الإدارة التي يعمل فيها المتدرب اليوم (في الأدوار التي فيها تدوير). */
+  rotationNow() {
+    const day = Math.min(this.day, this.lastDay);
+    return (this.scenario.rotation ?? []).find((r) => day >= r.from && day <= r.to) ?? null;
+  }
+
+  // ——— بناء العلاقات ———
+  /**
+   * جلسة تعارف قصيرة مع زميل أو جهة اتصال خارجية (نصف ساعة من يومك). تبني الثقة قبل أن تحتاج الشخص،
+   * وتعرّفك بما يهمه. مرة لكل شخص كل خمسة أيام عمل، وأثرها الأكبر في المرة الأولى.
+   */
+  connect(personId) {
+    const p = this.companyData.people.find((x) => x.id === personId);
+    if (!p) throw new Error(`لا يوجد شخص ${personId}`);
+    const past = this.connections[personId] ?? [];
+    if (past.length && this.day - past.at(-1) < CONNECT_GAP) throw new Error(`جلست مع ${p.name} قبل أيام. أعطِ العلاقة وقتها (مرة كل ${CONNECT_GAP} أيام عمل).`);
+    this._spend(COST.connect);
+    this.connections[personId] = [...past, this.day];
+    const gain = past.length ? 1 : 3;
+    if (p.external) {
+      const acc = this.state.company.accounts.find((a) => a.id === p.account && a.status === 'active');
+      if (acc) acc.health = Math.min(100, acc.health + gain);
+    } else if (this.state.player.trust[personId] !== undefined) {
+      this.state.player.trust[personId] = Math.min(100, this.state.player.trust[personId] + gain);
+    } else this.state.player.trust[personId] = 50 + gain;
+    this.actions.push({ day: this.day, kind: 'connect', personId, skills: ['people'], onTime: true, higherPriorityOpen: 0 });
+    return { first: !past.length, gain, cares: p.cares ?? [], external: !!p.external };
   }
 
   // ——— مهام البحث ———

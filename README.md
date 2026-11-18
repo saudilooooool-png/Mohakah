@@ -30,6 +30,7 @@
 | [`docs/17-assessment.md`](docs/17-assessment.md) | جلسة التقييم القصيرة للشركات، وأسئلة تنمية المهارات، وصفحة المتدرب، والعمولة المتغيرة |
 | [`docs/18-longer-sessions.md`](docs/18-longer-sessions.md) | جلسة أطول وأنفع: ساعات يوم العمل، ومهام البحث، والطلبات التي تأخذ وقتًا، وبحث السوق بتطابق الإجابات |
 | [`docs/19-trainee-plan.md`](docs/19-trainee-plan.md) | خطتي: هدف المتدرب، وطريقه خطوة بخطوة، ومؤشر جاهزيته لسوق العمل |
+| [`docs/20-rotation-and-relationships.md`](docs/20-rotation-and-relationships.md) | شهر المبيعات وشهر نجاح العملاء بالتدوير بين الإدارات، وبناء العلاقات داخل الشركة وخارجها |
 | [`docs/11-accounts-and-records.md`](docs/11-accounts-and-records.md) | رحلة المستخدم والتسجيل والموافقات، ونقاط محاكي، وسجل الأداء الموثّق، والتوصية لجهات التوظيف |
 | [`docs/10-occupations.md`](docs/10-occupations.md) | ربط الوظائف بالتصنيف السعودي الموحد للمهن، مع حالة التحقق والمصادر الرسمية |
 | [`docs/09-saudi-market-validation.md`](docs/09-saudi-market-validation.md) | التحقق من الواقع السعودي، والمصادر والقنوات القابلة للدمج، والمتطلبات النظامية |

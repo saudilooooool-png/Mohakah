@@ -167,3 +167,22 @@ test('حذف الحساب يوقف روابط التحدي وملف الأعما
     assert.equal((await guest('GET', `/api/portfolio/${slug}`)).status, 404);
   });
 });
+
+test('شهر دور آخر: الخادم يعيد التشغيل بسيناريو الدور، والسجل يحمل الدور، والتحدي يبقى على الدور نفسه', async () => {
+  await withServer(async ({ user }) => {
+    const me = await user('سارة العتيبي', 'sara@example.com');
+    await me('PUT', '/api/progress', goodRun(9, { scenario: 'sales-month' }));
+    assert.equal((await me('GET', '/api/progress')).data.progress.scenario, 'sales-month');
+    const c = (await me('POST', '/api/challenges')).data.challenge;
+    assert.deepEqual([c.scenario, c.owner.finished], ['sales-month', true]);
+    assert.ok(c.role.includes('Sales'));
+    const friend = await user('خالد', 'khalid@example.com');
+    await friend('PUT', '/api/progress', { ...goodRun(9, { stopDay: 2 }), challenge: c.code }); // شهر المنتجات بالبذرة نفسها: ليس التحدي نفسه
+    assert.equal((await friend('GET', `/api/challenges/${c.code}`)).data.challenge.participants, 0);
+    await friend('PUT', '/api/progress', { ...goodRun(9, { stopDay: 2, scenario: 'sales-month' }), challenge: c.code });
+    assert.equal((await friend('GET', `/api/challenges/${c.code}`)).data.challenge.participants, 1);
+    // سيناريو غير معروف يُتجاهل
+    await friend('PUT', '/api/progress', { ...goodRun(9, { stopDay: 1 }), scenario: 'hack' });
+    assert.equal((await friend('GET', '/api/progress')).data.progress.scenario, undefined);
+  });
+});

@@ -5,8 +5,9 @@ export const world = { company: loadCompany('nova-tech'), scenario: loadScenario
 export const DOC = 'المشكلة انخفاض الاستخدام 41% مقابل 58%. البيانات والإيرادات والعملاء. السبب بطء. التوصية: نقترح ونوصي بالحل. الخيارات والبدائل. الميزانية والتكلفة والفريق. الجدول أسابيع على مراحل. مؤشر النجاح وقياس الهدف. المخاطر والتحديات. أنجزنا وأطلقنا. الخطوات القادمة. المستخدمين والشريحة. المتطلبات يجب. خارج النطاق لن نبني. '.repeat(3);
 
 /** سجل أفعال متدرب جيد (أفضل خيار، كل الاعتراضات مجابة، مستندات مكتوبة). */
-export function goodRun(seed = 9, { stopDay = Infinity } = {}) {
-  const sim = new Simulation({ ...world, seed });
+export function goodRun(seed = 9, { stopDay = Infinity, scenario = null } = {}) {
+  // scenario: شهر دور آخر (sales-month أو cs-month)
+  const sim = new Simulation({ ...world, ...(scenario ? { scenario: loadScenario(scenario) } : {}), seed });
   const log = [];
   while (!sim.finished && sim.day <= stopDay) {
     for (const item of sim.inbox()) {
@@ -25,6 +26,6 @@ export function goodRun(seed = 9, { stopDay = Infinity } = {}) {
     }
     sim.endDay(); log.push({ t: 'endDay' });
   }
-  return { seed, log };
+  return { ...(scenario ? { scenario } : {}), seed, log };
 }
 

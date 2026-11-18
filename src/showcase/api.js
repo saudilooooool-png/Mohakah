@@ -3,7 +3,7 @@
 // المبدأ: كل ما يُعرض للعامة يُحسب على الخادم بإعادة تشغيل الأفعال بالمحرك الحتمي،
 // فلا يمكن تجميله من المتصفح. ولا يظهر للعامة إلا الاسم الأول والنتيجة، ولا بريد ولا بيانات تواصل.
 import { randomBytes } from 'node:crypto';
-import { replay } from '../replay.js';
+import { replay, worldOf } from '../replay.js';
 import { computePoints } from '../points.js';
 import { Simulation } from '../engine/simulation.js';
 import { HttpError } from '../accounts/api.js';
@@ -35,10 +35,10 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     if (hit?.key === key) return hit.value;
     let value = null;
     try {
-      const { sim } = replay(world, { ...p, reviews: store.community?.reviews?.[userId] ?? {} });
+      const { sim } = replay(worldOf(world, p), { ...p, reviews: store.community?.reviews?.[userId] ?? {} });
       const report = sim.report();
       const pts = computePoints(report, { finished: sim.finished });
-      value = { seed: p.seed, challenge: p.challenge ?? null, points: pts.points, band: pts.band.label, days: report.daysWorked, finished: sim.finished };
+      value = { seed: p.seed, scenario: p.scenario ?? null, challenge: p.challenge ?? null, points: pts.points, band: pts.band.label, days: report.daysWorked, finished: sim.finished };
     } catch { value = null; }
     cache.set(userId, { key, value });
     return value;
@@ -51,7 +51,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     if (existing) return existing;
     let c;
     do c = code(); while (S.challenges[c]);
-    const ch = { code: c, ownerId: u.id, seed: st.seed, createdAt: clock(), revoked: false, snapshot: { points: st.points, band: st.band, days: st.days, finished: st.finished } };
+    const ch = { code: c, ownerId: u.id, seed: st.seed, scenario: st.scenario, createdAt: clock(), revoked: false, snapshot: { points: st.points, band: st.band, days: st.days, finished: st.finished } };
     S.challenges[c] = ch;
     save();
     return ch;
@@ -74,17 +74,17 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     for (const [userId] of store.allProgress()) {
       if (userId === ch.ownerId || !store.users[userId]) continue;
       const st = standing(userId);
-      if (!st || st.challenge !== ch.code || st.seed !== ch.seed) continue;
+      if (!st || st.challenge !== ch.code || st.seed !== ch.seed || (st.scenario ?? null) !== (ch.scenario ?? null)) continue;
       board.push({ name: firstName(store.users[userId].name), points: st.points, band: st.band, days: st.days, finished: st.finished, you: viewer?.id === userId });
     }
     const o = ownerStanding(ch);
     board.push({ name: firstName(owner?.name), points: o.points, band: o.band, days: o.days, finished: o.finished, owner: true, you: viewer?.id === ch.ownerId });
     board.sort((a, b) => b.points - a.points || b.days - a.days);
     return {
-      code: ch.code, seed: ch.seed, createdAt: ch.createdAt, mine: viewer?.id === ch.ownerId,
+      code: ch.code, seed: ch.seed, scenario: ch.scenario ?? null, createdAt: ch.createdAt, mine: viewer?.id === ch.ownerId,
       owner: { name: firstName(owner?.name), ...o },
       board: board.slice(0, 50), participants: board.length - 1,
-      lengthDays: world.scenario.lengthDays, company: world.company.name, role: world.scenario.role,
+      lengthDays: world.scenario.lengthDays, company: world.company.name, role: worldOf(world, ch).scenario.role,
     };
   }
 
@@ -120,7 +120,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     const p = store.progress(userId);
     if (!p) return null;
     let sim;
-    try { ({ sim } = replay(world, { ...p, reviews: store.community?.reviews?.[userId] ?? {} })); } catch { return null; }
+    try { ({ sim } = replay(worldOf(world, p), { ...p, reviews: store.community?.reviews?.[userId] ?? {} })); } catch { return null; }
     const report = sim.report();
     const points = computePoints(report, { finished: sim.finished });
     const itemOf = (id) => sim.items.find((i) => i.id === id);
@@ -138,7 +138,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
         });
       }
     }
-    const baseline = Simulation.runBaseline(world.company, world.scenario, p.seed, sim.history.length - 1);
+    const baseline = Simulation.runBaseline(world.company, sim.scenario, p.seed, sim.history.length - 1);
     return {
       seed: p.seed, sim, report, points,
       candidates: { deliverables, decisions, quotes },
@@ -206,7 +206,7 @@ export function createShowcaseApi({ store, world, accountsApi, clock = now }) {
     return {
       slug, name: pf.displayName === 'full' ? u.name : firstName(u.name), headline: pf.headline,
       role: m.report.role, company: m.report.company, occupation: m.report.occupation && { code: m.report.occupation.code, titleAr: m.report.occupation.titleAr },
-      days: m.report.daysWorked, lengthDays: world.scenario.lengthDays, finished: m.sim.finished,
+      days: m.report.daysWorked, lengthDays: m.sim.scenario.lengthDays, finished: m.sim.finished,
       points: m.points.points, band: m.points.band.label, skills: m.report.skills.filter((x) => x.score !== null).map((x) => ({ label: x.label, score: x.score })),
       strengths: m.report.strengths,
       impact: { mrr: you.mrr, mrrBaseline: base.mrr, customers: you.customers, customersBaseline: base.customers, health: you.avgHealth, healthBaseline: base.avgHealth },

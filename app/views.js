@@ -64,6 +64,7 @@ export function shell(session, route, content) {
           <b>${finished ? 'انتهت فترة العمل' : `يوم العمل ${day}`}</b>
           <span>${finished ? 'افتح سجلك المهني' : `${weekday(day)} · الأسبوع ${weekOf(day)} من ${Math.ceil(sim.lastDay / 5)} · ${dueToday ? `${dueToday} بند تنتهي مهلته اليوم` : 'لا مهلات تنتهي اليوم'}`}</span>
         </div>
+        ${sim.rotationNow() ? `<span class="pill ${sim.rotationNow().home ? 't-pill' : 'p-high'} rot-chip" title="برنامج التدوير بين الإدارات">${sim.rotationNow().home ? 'إدارتك' : 'تدوير'}: ${esc(sim.rotationNow().label)}</span>` : ''}
         <div class="daybar" aria-hidden="true"><i style="width:${((day - (finished ? 0 : 1)) / sim.lastDay) * 100}%"></i></div>
         ${finished ? '' : `<div class="hours" title="ساعات يوم العمل: كل مهمة تستهلك وقتًا"><b class="num">${fmtH(sim.hoursLeft)}</b><span>من 8 ساعات باقية</span></div>`}
         <div class="spacer"></div>
@@ -421,24 +422,36 @@ export function team(session, ui = {}) {
   const directIds = [sim.scenario.manager, ...sim.scenario.team].filter((id) => id !== 'junior' || sim.day >= 6);
   const direct = directIds.map((id) => people.find((p) => p.id === id)).filter(Boolean);
   const others = people.filter((p) => !directIds.includes(p.id) && !p.external);
+  const externals = people.filter((p) => p.external);
+  const rot = sim.rotationNow();
+  const net = sim.report().evidence.network;
   const card = (p) => {
     const t = sim.state.player.trust[p.id];
+    const met = sim.connections[p.id] ?? [];
+    const wait = met.length ? 5 - (sim.day - met.at(-1)) : 0;
     return `<section class="card person">${avatar(p)}<div style="flex:1;min-width:0">
       <div class="nm">${esc(p.name)}</div><div class="ti">${esc(p.title)}</div>
       <div class="pe">${esc(p.persona)}</div>
       ${t !== undefined ? `<div class="barrow"><span>ثقته بك</span><span class="num">${Math.round(t)}</span>${bar(t)}</div>`
         : '<div class="muted small">لم تتعامل معه مباشرة بعد.</div>'}
       <div class="tag-list" style="margin-top:10px">${(p.cares ?? []).map((c) => `<span class="pill t-pill">${esc(c)}</span>`).join('')}</div>
-      ${canMessage(p) ? `<div class="actions" style="margin-top:12px"><a class="btn sm" href="#/team/${esc(p.id)}">راسل ${esc(firstName(p))}${session.thread(p.id).length ? ` <span class="muted num">(${session.thread(p.id).length})</span>` : ''}</a></div>` : ''}
+      ${canMessage(p) ? `<div class="actions" style="margin-top:12px"><a class="btn sm" href="#/team/${esc(p.id)}">راسل ${esc(firstName(p))}${session.thread(p.id).length ? ` <span class="muted num">(${session.thread(p.id).length})</span>` : ''}</a>
+        <button class="btn sm ghost" data-act="connect" data-person="${esc(p.id)}" ${wait > 0 || sim.finished ? 'disabled' : ''} title="نصف ساعة من يومك">${wait > 0 ? `جلسة تعارف بعد ${wait} أيام` : met.length ? 'جلسة متابعة ☕' : 'جلسة تعارف ☕'}</button>${met.length ? `<span class="small muted">التقيتما ${met.length} ${met.length === 1 ? 'مرة' : 'مرات'}</span>` : ''}</div>`
+        : p.external ? `<div class="actions" style="margin-top:12px"><button class="btn sm ghost" data-act="connect" data-person="${esc(p.id)}" ${wait > 0 || sim.finished ? 'disabled' : ''}>${wait > 0 ? `اتصال متابعة بعد ${wait} أيام` : 'اتصال اطمئنان ☕'}</button>${met.length ? `<span class="small muted">تواصلتما ${met.length} ${met.length === 1 ? 'مرة' : 'مرات'}</span>` : ''}</div>` : ''}
     </div></section>`;
   };
   return `
   <div class="page-h"><div><h1>فريقي</h1><p>كل شخص في الشركة له أولوياته. الثقة تُبنى بالقرارات وتُفقد بالتجاهل والوعود غير المنفذة. ويمكنك مراسلة أي زميل في أي وقت لتسأله عمّا يعرفه.</p></div></div>
+  <section class="card network" style="margin-bottom:16px"><h2>شبكة علاقاتك</h2>
+    <p class="small muted" style="margin-top:0">ابنِ العلاقة قبل أن تحتاجها: جلسة تعارف تأخذ نصف ساعة من يومك، وتعرّفك بما يهم الشخص. ${rot && !rot.home ? `<b>أنت هذا الأسبوع في ${esc(rot.label)}: تعرّف على اثنين من الفريق على الأقل.</b>` : ''}</p>
+    <div class="pf-stats"><div><b class="num">${net.internal}</b><span>زملاء جلست معهم</span></div><div><b class="num">${net.departments}</b><span>إدارات تعرفت عليها</span></div><div><b class="num">${net.external}</b><span>عملاء تواصلت معهم</span></div><div><b class="num">${net.trusted}</b><span>يثقون بك (65+)</span></div></div></section>
   ${realPartnerCard(session, ui)}
   <h2 class="section-t">مديرك وفريقك المباشر</h2>
   <div class="grid g-2">${direct.map(card).join('')}</div>
   <h2 class="section-t" style="margin-top:24px">بقية الشركة</h2>
-  <div class="grid g-2">${others.map(card).join('')}</div>`;
+  <div class="grid g-2">${others.map(card).join('')}</div>
+  <h2 class="section-t" style="margin-top:24px">خارج الشركة: العملاء</h2>
+  <div class="grid g-2">${externals.map(card).join('')}</div>`;
 }
 
 // ——— الاجتماعات ———
@@ -589,6 +602,7 @@ export function report(session, ui = {}) {
     </div>
   </section>
   ${pointsCard(session, r)}
+  ${networkCard(r.evidence.network)}
   ${quizCard(session)}
   ${realWorkCard(ui.realWork)}
   ${challengeCard(session, session.user, ui)}
@@ -2086,7 +2100,14 @@ export function planPage(session, extra = {}) {
         <p class="small muted" style="margin-bottom:0">مؤشر إرشادي يقيس ما أنجزته وأثبتّه. ليس وعدًا بوظيفة، والفرص تأتي مع تقدمك.</p></section>
       ${g?.role ? `<section class="card" style="margin-top:12px"><h2>هدفك</h2><p style="margin:0"><b>${esc(GOAL_ROLES[g.role] ?? '')}</b></p>
         ${g.need ? `<p class="small">${esc(NEED_TIP[g.need] ?? '')}</p>` : ''}
-        ${!['pm', 'undecided'].includes(g.role) ? '<p class="small muted">الشهر الحالي في دور مدير المنتجات. مهاراته (ترتيب الأولويات، والتواصل، والقرار بالأرقام) مشتركة بين كل الأدوار، ومسارات بقية الأدوار قادمة.</p>' : ''}</section>` : ''}
+        <p class="small muted">${session.sim.scenario.rotation ? `شهرك في دور ${esc(session.sim.scenario.role.split('—')[0].trim())}، مع أسبوعين من التدوير في إدارتين أخريين لتفهم الشركة كلها.` : !['pm', 'undecided'].includes(g.role) ? 'شهرك الحالي في دور مدير المنتجات. مهاراته مشتركة بين كل الأدوار. شهر دورك يبدأ عند "ابدأ من جديد".' : ''}</p></section>` : ''}
     </div>
   </div>`;
+}
+
+function networkCard(n) {
+  if (!n?.sessions) return '';
+  return `<section class="card" style="margin-top:16px"><h2>شبكة العلاقات</h2>
+    <p class="small muted" style="margin-top:0">دليل منفصل عن النقاط: من بنيت معه علاقة داخل الشركة وخارجها.</p>
+    <div class="pf-stats"><div><b class="num">${n.internal}</b><span>زملاء جلست معهم</span></div><div><b class="num">${n.departments}</b><span>إدارات</span></div><div><b class="num">${n.external}</b><span>عملاء</span></div><div><b class="num">${n.trusted}</b><span>يثقون بك (65+)</span></div></div></section>`;
 }

@@ -13,15 +13,17 @@ export async function loadWorld() {
     if (!r.ok) throw new Error(`تعذر تحميل ${p}`);
     return r.json();
   });
-  const [company, scenario, ssco, profiles, library, quiz] = await Promise.all([
+  const [company, scenario, ssco, profiles, library, quiz, salesMonth, csMonth] = await Promise.all([
     get('../data/companies/nova-tech.json'),
     get('../data/scenarios/pm-first-30-days.json'),
     get('../data/occupations/ssco.json'),
     get('../data/occupations/ssco-profiles.json'),
     get('../data/library/nova-tech.json'),
     get('../data/questions/pm.json'),
+    get('../data/scenarios/sales-month.json'),
+    get('../data/scenarios/cs-month.json'),
   ]);
-  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library, quiz };
+  return { company, scenario, occupations: { ...ssco, profiles: profiles.profiles }, library, quiz, scenarios: { 'sales-month': salesMonth, 'cs-month': csMonth } };
 }
 
 function readSave() {
@@ -34,6 +36,9 @@ function writeSave(data) {
 
 export class Session {
   constructor(world, save) {
+    // شهر الدور الذي اختاره المتدرب (مبيعات أو نجاح عملاء)، وإلا السيناريو الأساسي
+    this.scenarioId = save.scenario && world.scenarios?.[save.scenario] ? save.scenario : null;
+    if (this.scenarioId) world = { ...world, scenario: world.scenarios[this.scenarioId] };
     this.world = world;
     this.seed = save.seed;
     this.startedAt = save.startedAt;
@@ -75,10 +80,10 @@ export class Session {
   }
 
   /** بيانات الحفظ الحالية (لرفعها إلى الخادم). */
-  saveData() { return { seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, quiz: this.quiz, goal: this.goal, videoMade: this.videoMade, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
+  saveData() { return { ...(this.scenarioId ? { scenario: this.scenarioId } : {}), seed: this.seed, startedAt: this.startedAt, log: this.log, threads: this.threads, reviews: this.reviews, read: this.read, opened: this.opened, quiz: this.quiz, goal: this.goal, videoMade: this.videoMade, ...(this.challenge ? { challenge: this.challenge } : {}), ...(this.league ? { league: this.league } : {}) }; }
 
-  static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null, league = null } = {}) {
-    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge, league });
+  static start(world, seed = Math.floor(Math.random() * 1e6) + 1, { challenge = null, league = null, scenario = null, goal = null } = {}) {
+    const s = new Session(world, { seed, startedAt: new Date().toISOString(), log: [], challenge, league, scenario, goal });
     s._persist();
     return s;
   }
@@ -101,6 +106,8 @@ export class Session {
   investigate(itemId, sourceId) { return this._do({ t: 'investigate', itemId, sourceId }); }
   research(itemId, answers) { return this._do({ t: 'research', itemId, answers }); }
   wait() { return this._do({ t: 'wait' }); }
+  /** جلسة تعارف لبناء العلاقة مع زميل أو جهة اتصال خارجية. */
+  connect(personId) { return this._do({ t: 'connect', personId }); }
 
   /** إسناد بند إلى الزميل المنفّذ بنص تكليف. */
   delegate(itemId, brief) {

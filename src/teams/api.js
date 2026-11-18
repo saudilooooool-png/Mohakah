@@ -85,7 +85,7 @@ export function createTeamsApi({ store, world, accountsApi, env = process.env, c
   /** نقاط عضو حتى نهاية يوم معين (يُقتطع سجله عند ذلك اليوم). */
   function pointsUntil(uid, league, untilDay) {
     const p = store.progress(uid);
-    if (!p || p.league !== league.id || p.seed !== league.seed) return null;
+    if (!p || p.league !== league.id || p.seed !== league.seed || p.scenario) return null; // الدوري على شهر المنتجات
     let ends = 0; const cut = [];
     for (const a of p.log) { cut.push(a); if (a.t === 'endDay' && ++ends >= untilDay) break; }
     if (ends < untilDay) return { reached: false, day: ends + 1 };

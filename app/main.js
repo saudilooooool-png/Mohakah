@@ -421,6 +421,17 @@ function openModal(html) {
 }
 function closeModal() { modalRoot.innerHTML = ''; }
 
+const ROLE_SCENARIO = { sales: 'sales-month', cs: 'cs-month' };
+/** يبدأ شهرًا جديدًا في دور هدف المتدرب (مبيعات، أو نجاح عملاء، وإلا المنتجات). */
+function startMonth(goal, extra = {}) {
+  ui.startGoal = null; ui.askingStart = false;
+  session = attach(Session.start(world, extra.seed, { scenario: extra.scenario ?? ROLE_SCENARIO[goal?.role] ?? null, goal, challenge: extra.challenge ?? null }));
+  if (user) saver.save(session.saveData());
+  location.hash = '#/desk';
+  render();
+  maybeTour();
+}
+
 /** أول ما يراه المتدرب الجديد: سؤال الهدف، ثم الجولة. (يُتجاوز في الفحوص الآلية.) */
 function askGoalThenTour() {
   if (!session || session.assess || session.goal || navigator.webdriver) { maybeTour(); return; }
@@ -473,11 +484,9 @@ const actions = {
     drafts = {}; saveDrafts();
     for (const k of Object.keys(meetings)) delete meetings[k];
     saveMeetings();
-    session = attach(Session.start(world));
-    if (user) saver.save(session.saveData());
-    location.hash = '#/desk';
-    render();
-    askGoalThenTour();
+    // الهدف أولًا: منه نعرف شهر أي دور يبدأ (في الفحوص الآلية يبدأ شهر المنتجات مباشرة)
+    if (!navigator.webdriver && !ui.startGoal) { ui.askingStart = true; openModal(V.goalModal()); return; }
+    startMonth(ui.startGoal ?? null);
   },
   resume() {
     session = attach(Session.resume(world));
@@ -577,6 +586,14 @@ const actions = {
   },
   'work-hour'() { session.wait(); toast('مرّت ساعة عمل.', 'good'); render(); },
   'edit-goal'() { openModal(V.goalModal(session.goal)); },
+  connect(e) {
+    const id = e.target.closest('[data-person]').dataset.person;
+    const r = session.connect(id);
+    const p = session.person(id);
+    ui.officeScene = { kind: 'insight', to: id };
+    toast(`جلسة تعارف مع ${p.name}.${r.cares.length ? ` يهمّه: ${r.cares.join('، ')}.` : ''}`, 'good');
+    render();
+  },
   async tour() { (await import('./lib/tour.js')).startTour(); },
   'work-tab'(e) { workState.tab = e.target.closest('[data-tab]').dataset.tab; location.hash = '#/work'; render(); },
   async 'work-withdraw'(e) {
@@ -654,7 +671,7 @@ const actions = {
     drafts = {}; saveDrafts();
     for (const k of Object.keys(meetings)) delete meetings[k];
     saveMeetings();
-    session = attach(Session.start(world, c.seed, { challenge: c.code }));
+    session = attach(Session.start(world, c.seed, { challenge: c.code, scenario: c.scenario ?? null }));
     if (user) saver.save(session.saveData());
     toast(`بدأ التحدي. نفس عالم ${c.owner.name} بالضبط. بالتوفيق!`, 'good');
     location.hash = '#/desk';
@@ -917,6 +934,7 @@ function onSubmit(e) {
   const itemId = form.dataset.item;
   if (form.dataset.form === 'goal') {
     const f = new FormData(form);
+    if (ui.askingStart || !session) { closeModal(); startMonth({ role: f.get('role'), need: f.get('need') }); toast('بُنيت خطتك، وبدأ شهرك. بالتوفيق!', 'good'); return; }
     const first = !session.goal;
     session.setGoal({ role: f.get('role'), need: f.get('need') });
     closeModal();
@@ -1243,4 +1261,4 @@ window.addEventListener('hashchange', () => {
 }());
 
 // للاختبار الآلي وأدوات المطور
-window.__mohaki = { get session() { return session; }, nextOpenItemHref, meetings };
+window.__mohaki = { startRole: (role) => startMonth({ role, need: 'experience' }), get session() { return session; }, nextOpenItemHref, meetings };

@@ -4,7 +4,7 @@
 // لا الزملاء. أداء المتدرب في لعب أدوار زملائه ومراجعة مستنداتهم يُسجَّل جدارةً مستقلة
 // ("التعاون ودعم الزملاء") ولا يؤثر على نقاط أحد.
 import { randomUUID } from 'node:crypto';
-import { replay } from '../replay.js';
+import { replay, worldOf } from '../replay.js';
 import { HttpError } from '../accounts/api.js';
 import { ensurePeer, collaborationSummary } from './collab.js';
 
@@ -13,7 +13,9 @@ const now = () => new Date().toISOString();
 
 export function createCommunityApi({ store, world, accountsApi, clock = now }) {
   const C = store.community;
-  const events = [...world.scenario.events, ...(world.scenario.randomEvents ?? [])];
+  // أحداث كل السيناريوهات (شهر كل دور)، حتى يراجع المُيسِّر حوارات أي متدرب
+  const allWorlds = [world, ...Object.values(world.byScenario ?? {})];
+  const events = [...new Map(allWorlds.flatMap((w) => [...w.scenario.events, ...(w.scenario.randomEvents ?? [])]).map((e) => [e.id, e])).values()];
   const eventOf = (itemId) => events.find((e) => e.id === String(itemId).split('#')[0]);
   const userFrom = (req) => accountsApi.userFrom(req);
   const requireUser = (req) => { const u = userFrom(req); if (!u) throw new HttpError(401, 'سجّل الدخول أولًا'); return u; };
@@ -64,7 +66,7 @@ export function createCommunityApi({ store, world, accountsApi, clock = now }) {
     const next = { ...(C.reviews[userId] ?? {}), [itemId]: { addressed, optionId, note: str(body.note, 600), by: fac.id, byName: fac.name, at: clock(), ai: { addressed: action.addressed ?? [], optionId: action.optionId, mode: action.mode ?? null } } };
     // تغيير النتيجة قد يغيّر ما يحدث بعدها (أحداث مشروطة)، فيُرفض التصحيح إن أبطل أفعالًا لاحقة
     try {
-      replay(world, { ...p, reviews: next }, { strict: true });
+      replay(worldOf(world, p), { ...p, reviews: next }, { strict: true });
     } catch (err) {
       throw new HttpError(422, `لا يمكن تطبيق هذا التصحيح لأنه يغيّر مسار الأحداث اللاحقة لدى المتدرب (${err.message}). صحّح الاعتراضات فقط، أو اترك النتيجة كما هي.`);
     }
