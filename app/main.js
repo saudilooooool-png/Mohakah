@@ -234,6 +234,7 @@ function attach(s) {
 }
 
 // ——— جلسة التقييم للشركات ———
+const SEAT_PEOPLE = new Set(['ceo', 'cfo', 'cpo', 'eng_lead', 'dev2', 'analyst', 'junior', 'mentor', 'ux', 'sales_head', 'marketing_lead', 'cs_lead']);
 let assess = null;            // { token, info } حين يدخل مرشح برابط تقييم
 let assessReport = { loading: true };
 let assessAdmin = { loading: true };
@@ -550,6 +551,14 @@ const actions = {
     maybeTour();
   },
   'assess-toggle'(e) { const i = e.target.closest('[data-i]').dataset.i; assessReport.open = assessReport.open === i ? null : i; render(); },
+  'research-ask'(e) {
+    const el = e.target.closest('[data-source]');
+    const r = session.investigate(el.dataset.item, el.dataset.source);
+    toast(r.pending ? `طلبت التحليل. يجهز بعد ${r.delay} ساعات عمل.` : r.data ? 'وصلتك معلومة.' : 'لا معلومة عنده، لكنه دلّك على اتجاه.', r.data || r.pending ? 'good' : undefined);
+    if (SEAT_PEOPLE.has(el.dataset.source)) ui.officeScene = { kind: 'insight', to: el.dataset.source };
+    render();
+  },
+  'work-hour'() { session.wait(); toast('مرّت ساعة عمل.', 'good'); render(); },
   async tour() { (await import('./lib/tour.js')).startTour(); },
   'work-tab'(e) { workState.tab = e.target.closest('[data-tab]').dataset.tab; location.hash = '#/work'; render(); },
   async 'work-withdraw'(e) {
@@ -732,6 +741,8 @@ const actions = {
   'join-meeting'(e) {
     const id = e.target.closest('[data-item]').dataset.item;
     const item = session.sim.items.find((i) => i.id === id);
+    // لا يبدأ حوارًا لا تكفي ساعات اليوم لإتمامه
+    if (!session.sim.canAfford(session.sim.costOf(item))) { toast('لا تكفي ساعات اليوم لهذا البند. أنهِ يوم العمل وأكمل غدًا.', 'bad'); return; }
     meetings[id] = openMeeting(item);
     saveMeetings();
     render();
@@ -748,12 +759,16 @@ const actions = {
 
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
-  if (el && actions[el.dataset.act]) { e.preventDefault(); actions[el.dataset.act](e); }
+  if (el && actions[el.dataset.act]) { e.preventDefault(); guard(() => actions[el.dataset.act](e)); }
 });
 modalRoot.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
-  if (el && actions[el.dataset.act]) actions[el.dataset.act](e);
+  if (el && actions[el.dataset.act]) guard(() => actions[el.dataset.act](e));
 });
+/** أخطاء المحرك (مثل انتهاء ساعات اليوم) تظهر للمتدرب رسالةً لا عطلًا صامتًا. */
+function guard(fn) {
+  try { const r = fn(); if (r?.catch) r.catch((err) => { toast(err.message, 'bad'); render(); }); } catch (err) { toast(err.message, 'bad'); render(); }
+}
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalRoot.innerHTML) closeModal(); });
 
 app.addEventListener('change', (e) => {
@@ -882,6 +897,14 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   const itemId = form.dataset.item;
+  if (form.dataset.form === 'research') {
+    const answers = Object.fromEntries(new FormData(form).entries());
+    const r = session.research(itemId, answers);
+    ui.officeScene = { kind: 'deliver' };
+    toast(r.good ? 'جوابك صحيح ومدعوم بالمصادر.' : 'الجواب لم يصمد أمام الأرقام.', r.good ? 'good' : 'bad');
+    render(); quizSoon();
+    return;
+  }
   if (form.dataset.form === 'assess-new') {
     const f = new FormData(form);
     const candidates = String(f.get('candidates') || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = l.match(/^(.*?)[,،\s]+(\S+@\S+)$/); return m ? { name: m[1].trim(), email: m[2] } : { name: l }; });
@@ -1078,7 +1101,7 @@ function onSubmit(e) {
     render();
   }
 }
-app.addEventListener('submit', onSubmit);
+app.addEventListener('submit', (e) => guard(() => onSubmit(e)));
 modalRoot.addEventListener('submit', onSubmit);
 
 async function loadVerify() {

@@ -75,7 +75,7 @@ test('المتدرب الفاعل يتفوق على المتدرب السلبي 
   const passive = runAll(newSim(5));
   const active = runAll(newSim(5), (sim) => {
     for (const item of sim.inbox()) {
-      if (item.deliverable) continue;
+      if (item.deliverable || item.research) continue;
       const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
       sim.respond(item.id, best.id, { rationale: 'قرار مبني على البيانات وأثره على العملاء والفريق والإيرادات في هذه المرحلة' });
     }
@@ -136,4 +136,63 @@ test('الزميل المنفّذ: التكليف الواضح يعود بنتي
   assert.ok(vague.feed.some((f) => f.text.includes('مقابلتين فقط')));
   const people = (s) => s.report().skills.find((x) => x.id === 'people').score;
   assert.ok(people(clear) > people(vague), 'وضوح التكليف يُحتسب في إدارة الأشخاص');
+});
+
+test('ساعات يوم العمل: 8 ساعات تستهلكها المهام، ومن تنتهي ساعاته ينتظر الغد', () => {
+  const sim = newSim();
+  assert.equal(sim.hoursLeft, 8);
+  const meeting = sim.inbox().find((i) => i.eventId === 'd1_kickoff');
+  sim.respond(meeting.id, 'listen_ask', {});
+  assert.equal(sim.hoursLeft, 7, 'الاجتماع ساعة');
+  for (let i = 0; i < 7; i++) sim.wait();
+  assert.equal(sim.hoursLeft, 0);
+  assert.throws(() => sim.respond('d1_welcome', 'reply_thanks', {}), /انتهت ساعات/);
+  sim.endDay();
+  assert.equal(sim.hoursLeft, 8, 'يوم جديد');
+});
+
+test('مهمة البحث: مصادر متضاربة، وطلب تحليل يأخذ وقتًا، وحد يومي، والجواب الصحيح يحتاج دليلًا', () => {
+  const at = () => { const s = newSim(6); while (s.day < 9) s.endDay(); return s; };
+  const sim = at();
+  const item = sim.inbox().find((i) => i.eventId === 'd9_research_lost');
+  assert.ok(item.research);
+  // مصدر لا يعرف: تلميح لا معلومة
+  assert.equal(sim.investigate(item.id, 'cfo').data, false);
+  assert.throws(() => sim.investigate(item.id, 'cfo'), /سبق/);
+  assert.equal(sim.investigate(item.id, 'crm').data, true);
+  // طلب تحليل: يجهز بعد 3 ساعات عمل
+  const before = sim.hoursUsed;
+  assert.deepEqual(sim.investigate(item.id, 'analyst'), { pending: true, delay: 3 });
+  assert.equal(sim.hoursUsed, before + 0.25);
+  assert.equal(item.pending.length, 1);
+  sim.wait(); sim.wait();
+  assert.equal(item.pending.length, 1, 'لم يجهز بعد');
+  sim.wait();
+  assert.equal(item.pending.length, 0);
+  assert.ok(item.findings.at(-1).text.includes('26 ساعة'));
+  const r = sim.submitResearch(item.id, { reason: 'تأخر الرد والمتابعة', count: 4 });
+  assert.deepEqual([r.good, r.quality], [true, 1]);
+  assert.ok(sim.feed.some((f) => f.text.includes('المتابعة لا في السعر')));
+
+  // من صدّق أول رأي سمعه
+  const lazy = at();
+  const it2 = lazy.inbox().find((i) => i.eventId === 'd9_research_lost');
+  lazy.investigate(it2.id, 'sales_head');
+  assert.equal(lazy.submitResearch(it2.id, { reason: 'السعر', count: 3 }).good, false);
+  // تخمين صحيح دون أي بحث لا يُحتسب كاملًا
+  const guess = at();
+  const it3 = guess.inbox().find((i) => i.eventId === 'd9_research_lost');
+  assert.equal(guess.submitResearch(it3.id, { reason: 'تأخر الرد والمتابعة', count: 4 }).quality, 0.3);
+});
+
+test('طلب التحليل الذي لا يكتمل اليوم يجهز صباح الغد، وطلبات التحليل محدودة في اليوم', () => {
+  const sim = newSim(6); while (sim.day < 14) sim.endDay();
+  const item = sim.inbox().find((i) => i.eventId === 'd14_research_cac');
+  for (let i = 0; i < 7; i++) sim.wait();
+  sim.investigate(item.id, 'finance_sheet'); // 0.25 ساعة، ويحتاج ساعتين: لن يجهز اليوم
+  assert.equal(item.pending.length, 1);
+  sim.endDay();
+  assert.equal(item.pending.length, 1, 'بقي له وقت');
+  sim.wait(); sim.wait();
+  assert.equal(item.pending.length, 0, 'جهز في اليوم التالي');
 });

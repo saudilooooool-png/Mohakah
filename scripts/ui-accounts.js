@@ -76,6 +76,7 @@ await page.evaluate(async () => {
   const doc = 'المشكلة انخفاض الاستخدام 41% مقابل 58%. البيانات والإيرادات والعملاء. السبب بطء. التوصية: نقترح ونوصي بالحل. الخيارات والبدائل. الميزانية والتكلفة والفريق. الجدول أسابيع على مراحل. مؤشر النجاح وقياس الهدف. المخاطر والتحديات. أنجزنا وأطلقنا. الخطوات القادمة. المستخدمين والشريحة. المتطلبات يجب. خارج النطاق لن نبني. '.repeat(3);
   while (!s.sim.finished) {
     for (const item of s.sim.inbox()) {
+      if (item.research) { for (const k of Object.keys(item.research.sources).filter((x) => !item.research.sources[x].delay).slice(0, 2)) s.investigate(item.id, k); s.research(item.id, Object.fromEntries(item.research.fields.map((f) => [f.id, f.correct]))); continue; }
       if (item.deliverable) { s.deliver(item.id, doc); continue; }
       const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
       s.respond(item.id, best.id, 'قرار مبني على البيانات وأثره على العملاء والفريق والإيرادات في هذه المرحلة من عمر الشركة',

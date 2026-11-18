@@ -10,6 +10,13 @@ export function goodRun(seed = 9, { stopDay = Infinity } = {}) {
   const log = [];
   while (!sim.finished && sim.day <= stopDay) {
     for (const item of sim.inbox()) {
+      if (item.research) {
+        // يسأل كل المصادر الفورية ثم يجيب الجواب الصحيح (مسار المتدرب المجتهد)
+        for (const [sid, src] of Object.entries(item.research.sources)) if (!src.delay) { sim.investigate(item.id, sid); log.push({ t: 'investigate', itemId: item.id, sourceId: sid }); }
+        const answers = Object.fromEntries(item.research.fields.map((f) => [f.id, f.correct]));
+        sim.submitResearch(item.id, answers); log.push({ t: 'research', itemId: item.id, answers });
+        continue;
+      }
       if (item.deliverable) { sim.submitDeliverable(item.id, DOC); log.push({ t: 'deliver', itemId: item.id, text: DOC }); continue; }
       const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
       const extra = item.dialogue ? { addressed: item.dialogue.concerns.map((c) => c.id), transcript: [{ speaker: 'trainee', text: 'رد مدروس' }], mode: 'claude' } : {};

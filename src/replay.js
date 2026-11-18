@@ -18,6 +18,9 @@ export function applyAction(sim, a, reviews = null) {
   if (a.t === 'endDay') return sim.endDay();
   if (a.t === 'insight') return sim.reportInsight(a.id);
   if (a.t === 'delegate') return sim.delegate(a.itemId, a.brief);
+  if (a.t === 'investigate') return sim.investigate(a.itemId, a.sourceId);
+  if (a.t === 'research') return sim.submitResearch(a.itemId, a.answers);
+  if (a.t === 'wait') return sim.wait();
   throw new Error(`فعل غير معروف: ${a.t}`);
 }
 

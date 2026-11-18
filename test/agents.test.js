@@ -379,7 +379,7 @@ test('مهارة إدارة الأشخاص تُقاس من التفويض وال
   const sim = new Simulation({ company, scenario, seed: 4 });
   while (!sim.finished) {
     for (const item of sim.inbox()) {
-      if (item.deliverable) continue;
+      if (item.deliverable || item.research) continue;
       const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
       sim.respond(item.id, best.id, { rationale: 'قرار مدروس' });
     }

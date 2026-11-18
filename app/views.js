@@ -63,6 +63,7 @@ export function shell(session, route, content) {
           <span>${finished ? 'افتح سجلك المهني' : `${weekday(day)} · الأسبوع ${weekOf(day)} من ${Math.ceil(sim.lastDay / 5)} · ${dueToday ? `${dueToday} بند تنتهي مهلته اليوم` : 'لا مهلات تنتهي اليوم'}`}</span>
         </div>
         <div class="daybar" aria-hidden="true"><i style="width:${((day - (finished ? 0 : 1)) / sim.lastDay) * 100}%"></i></div>
+        ${finished ? '' : `<div class="hours" title="ساعات يوم العمل: كل مهمة تستهلك وقتًا"><b class="num">${fmtH(sim.hoursLeft)}</b><span>من 8 ساعات باقية</span></div>`}
         <div class="spacer"></div>
         ${finished
           ? '<a class="btn teal" href="#/report">السجل المهني</a>'
@@ -232,7 +233,7 @@ function itemRow(session, item, activeId, filterQ = '') {
       <div class="tt">${mailTags(item, sim)}${esc(item.title)}</div>
       <div class="meta"><span>${esc(from.name)}</span>
         ${item.status === 'open' ? `<span class="pill p-${item.priority}">${PRIORITY[item.priority]}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
-        <span class="pill t-pill">${item.deliverable ? 'مستند' : item.dialogue?.mode === 'chat' ? 'محادثة' : TYPE[item.type] ?? ''}</span>
+        <span class="pill t-pill">${item.research ? 'بحث' : item.deliverable ? 'مستند' : item.dialogue?.mode === 'chat' ? 'محادثة' : TYPE[item.type] ?? ''}</span>
       </div>
     </span>
     <span class="due ${item.status === 'open' && item.dueDay <= sim.day ? 'today' : ''}">${due || `يوم ${item.createdDay}`}</span>
@@ -293,13 +294,16 @@ export function itemDetail(session, item, drafts = {}, ui = {}) {
     <div class="from">${avatar(from)}<div><b>${esc(from.name)}</b><div class="muted small">${esc(from.title)}</div></div></div>
     <div class="chips">
       <span class="pill p-${item.priority}">أولوية ${PRIORITY[item.priority]}</span>
-      <span class="pill t-pill">${item.deliverable ? 'مستند مطلوب' : TYPE[item.type] ?? ''}</span>
+      <span class="pill t-pill">${item.research ? 'مهمة بحث' : item.deliverable ? 'مستند مطلوب' : TYPE[item.type] ?? ''}</span>
+      ${item.status === 'open' ? `<span class="pill t-pill" title="ما يستهلكه هذا البند من ساعات اليوم">⏱ ${fmtH(sim.costOf(item))} س</span>` : ''}
       <span class="pill t-pill">وصل يوم ${item.createdDay}</span>
       ${item.status === 'open' ? `<span class="pill ${item.dueDay <= sim.day ? 'p-critical' : 't-pill'}">${due}</span>` : `<span class="pill s-${item.status}">${STATUS[item.status]}</span>`}
     </div>
     <h1>${jg(session, esc(item.title))}</h1>
     <p class="body">${jg(session, esc(item.body))}</p>
     ${attachmentsBlock(session, item)}`;
+
+  if (item.research) return `${head}${researchView(session, item)}`;
 
   if (item.status === 'open' && item.deliverable) {
     const draft = drafts[item.id] ?? '';
@@ -1927,4 +1931,43 @@ export function assessAdminPage(user, state) {
         <div class="actions"><button class="btn primary" type="submit">إنشاء التقييم</button></div>
       </form></section>
   </div>`;
+}
+
+// ——— ساعات اليوم ومهام البحث ———
+
+const fmtH = (h) => (Number.isInteger(h) ? String(h) : h.toFixed(2).replace(/0$/, ''));
+
+function researchView(session, item) {
+  const sim = session.sim;
+  const spec = item.research;
+  const nameOf = (id) => spec.places?.find((p) => p.id === id)?.label ?? session.person(id).name;
+  if (item.status !== 'open') {
+    const act = sim.actions.find((a) => a.itemId === item.id);
+    if (item.status === 'expired' || !act?.research) return closedOutcome(session, item);
+    const good = act.quality >= 0.6;
+    return `<div class="outcome ${good ? 'good' : 'bad'}"><h3>${good ? 'جواب صحيح ومدعوم' : 'الجواب لم يصمد'} · ${Math.round(act.quality * 100)}%</h3>
+      <ul class="evidence">${act.research.fields.map((f) => `<li>${f.ok ? '<span class="check">✓</span>' : '<span class="x">✗</span>'} ${esc(f.label)}: <b>${esc(String(f.given))}</b>${f.ok ? '' : ` · الصحيح: ${esc(String(spec.fields.find((x) => x.id === f.id).correct))}`}</li>`).join('')}</ul>
+      <p class="small">سألت ${act.research.sources.length} مصادر، منها ${act.research.evidence} أعطتك بيانات.${act.research.evidence < 2 ? ' الجواب المعتمد يحتاج مصدرين على الأقل.' : ''}</p></div>
+      <h3 class="section-t">ما جمعته</h3>${item.findings.map((f) => `<div class="finding ${f.data ? '' : 'empty'}"><b>${esc(nameOf(f.sourceId))}</b><p>${esc(f.text)}</p></div>`).join('')}`;
+  }
+  const asked = new Set([...item.findings.map((f) => f.sourceId), ...item.pending.map((p) => p.sourceId)]);
+  const people = session.world.company.people.filter((p) => !p.external && (p.id !== 'junior' || sim.day >= 6));
+  const btn = (id, label, sub, kind) => `<button type="button" class="src ${asked.has(id) ? 'asked' : ''}" data-act="research-ask" data-item="${esc(item.id)}" data-source="${esc(id)}" ${asked.has(id) ? 'disabled' : ''}>
+      <span class="src-i">${kind === 'file' ? '🗂️' : '💬'}</span><span><b>${esc(label)}</b><small>${esc(sub)}</small></span></button>`;
+  return `
+    <div class="research">
+      <div class="research-h"><h3 class="section-t">أين تبحث؟</h3><span class="small muted">كل استفسار يستهلك نصف ساعة. طلبات التحليل تأخذ ساعات عمل لتجهز، ولك ${2 - sim.slowToday} منها اليوم. لا أحد يخبرك من يعرف: اسأل، وقارن.</span></div>
+      <div class="src-grid">${(spec.places ?? []).map((p) => btn(p.id, p.label, 'ملف', 'file')).join('')}${people.map((p) => btn(p.id, p.name, p.title, 'person')).join('')}</div>
+      ${item.pending.length ? `<div class="outcome info pending"><b>طلبات قيد التجهيز</b>${item.pending.map((p) => `<div class="pend"><span>${esc(nameOf(p.sourceId))}</span><span class="num">يجهز بعد ${fmtH(Math.max(0, p.readyAt - sim.clock))} ساعات عمل</span></div>`).join('')}
+        <div class="actions"><button class="btn" data-act="work-hour" ${sim.canAfford(1) ? '' : 'disabled'}>اعمل ساعة على شيء آخر</button><span class="small muted">الأفضل أن تنجز مهمة أخرى أثناء الانتظار. وما لا يجهز اليوم يصلك صباح الغد.</span></div></div>` : ''}
+      <h3 class="section-t">ما جمعته (${item.findings.length})</h3>
+      ${item.findings.length ? item.findings.map((f) => `<div class="finding ${f.data ? '' : 'empty'}"><b>${esc(nameOf(f.sourceId))}${f.slow ? ' <span class="pill s-done">تحليل</span>' : ''}</b><p>${esc(f.text)}</p></div>`).join('') : '<p class="small muted">لم تسأل أحدًا بعد.</p>'}
+      <form data-form="research" data-item="${esc(item.id)}" class="research-form">
+        <h3 class="section-t">جوابك</h3>
+        ${spec.fields.map((f) => `<div class="field"><label>${esc(f.label)}</label>${f.type === 'choice'
+          ? `<span class="seg">${f.options.map((o) => `<label><input type="radio" name="${esc(f.id)}" value="${esc(o)}" required><span>${esc(o)}</span></label>`).join('')}</span>`
+          : `<input name="${esc(f.id)}" type="number" step="any" required dir="ltr" style="max-width:220px">`}</div>`).join('')}
+        <div class="actions"><button class="btn primary" type="submit">سلّم الجواب</button><span class="small muted">الجواب المعتمد يحتاج مصدرين على الأقل يدعمانه. بعد التسليم لا يمكن التعديل.</span></div>
+      </form>
+    </div>`;
 }

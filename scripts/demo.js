@@ -65,6 +65,7 @@ const fmt = (n) => Math.round(n).toLocaleString('en');
 let printed = 0;
 while (!sim.finished) {
   for (const item of sim.inbox()) {
+    if (item.research) continue;
     if (item.deliverable) {
       if (DOCS[item.eventId]) {
         const ev = sim.submitDeliverable(item.id, DOCS[item.eventId]);

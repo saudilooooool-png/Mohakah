@@ -17,6 +17,13 @@ function goodRun(seed = 9) {
   const doc = 'المشكلة انخفاض الاستخدام 41% مقابل 58%. البيانات والإيرادات والعملاء. السبب بطء. التوصية: نقترح ونوصي بالحل. الخيارات والبدائل. الميزانية والتكلفة والفريق. الجدول أسابيع على مراحل. مؤشر النجاح وقياس الهدف. المخاطر والتحديات. أنجزنا وأطلقنا. الخطوات القادمة. المستخدمين والشريحة. المتطلبات يجب. خارج النطاق لن نبني. '.repeat(3);
   while (!sim.finished) {
     for (const item of sim.inbox()) {
+      if (item.research) {
+        const sid = Object.keys(item.research.sources).filter((k) => !item.research.sources[k].delay).slice(0, 2);
+        for (const s of sid) { sim.investigate(item.id, s); log.push({ t: 'investigate', itemId: item.id, sourceId: s }); }
+        const answers = Object.fromEntries(item.research.fields.map((f) => [f.id, f.correct]));
+        sim.submitResearch(item.id, answers); log.push({ t: 'research', itemId: item.id, answers });
+        continue;
+      }
       if (item.deliverable) { sim.submitDeliverable(item.id, doc); log.push({ t: 'deliver', itemId: item.id, text: doc }); continue; }
       const best = [...item.options].sort((a, b) => b.quality - a.quality)[0];
       const extra = item.dialogue ? { addressed: item.dialogue.concerns.map((c) => c.id), transcript: [{ speaker: 'trainee', text: 'رد مدروس' }] } : {};

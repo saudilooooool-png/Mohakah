@@ -94,6 +94,11 @@ export class Session {
     return this._do({ t: 'endDay' });
   }
 
+  /** مهام البحث: استفسار من مصدر، وتسليم الجواب، وساعة عمل مكتبي حتى تجهز الطلبات. */
+  investigate(itemId, sourceId) { return this._do({ t: 'investigate', itemId, sourceId }); }
+  research(itemId, answers) { return this._do({ t: 'research', itemId, answers }); }
+  wait() { return this._do({ t: 'wait' }); }
+
   /** إسناد بند إلى الزميل المنفّذ بنص تكليف. */
   delegate(itemId, brief) {
     return this._do({ t: 'delegate', itemId, brief });

@@ -9,6 +9,11 @@ import { buildReport } from './evaluation.js';
 const clone = (x) => structuredClone(x);
 const PRIORITY_RANK = { critical: 3, high: 2, normal: 1, low: 0 };
 
+export const HOURS_PER_DAY = 8;
+/** تكلفة كل نوع عمل بساعات يوم العمل. */
+export const COST = { message: 0.5, meeting: 1, deliverable: 1.5, research: 0.5, ask: 0.5, request: 0.25, wait: 1 };
+export const SLOW_PER_DAY = 2; // طلبات التحليل التي يقبلها الفريق منك في اليوم
+
 export class Simulation {
   /**
    * @param {object} opts
@@ -43,6 +48,8 @@ export class Simulation {
     this.actions = [];        // سجل أفعال المتدرب (الأدلة)
     this.reported = new Set(); // الاكتشافات التي أبلغ عنها من المكتبة
     this.delegations = [];     // بنود أُسندت إلى الزميل المنفّذ وتعود في يوم محدد
+    this.hoursUsed = 0;
+    this.slowToday = 0;
     this.history = [];        // لقطة يومية من مؤشرات الشركة
     this._seq = 0;
 
@@ -72,6 +79,7 @@ export class Simulation {
     const item = this._openItem(itemId);
     const option = item.options.find((o) => o.id === optionId);
     if (!option) throw new Error(`الخيار ${optionId} غير متاح في ${itemId}`);
+    this._spend(this.costOf(item));
     const concerns = item.dialogue?.concerns ?? [];
     const valid = addressed ? concerns.filter((c) => addressed.includes(c.id)) : [];
     this._recordAction(item, {
@@ -98,6 +106,7 @@ export class Simulation {
     const spec = item.delegable;
     if (!spec) throw new Error(`${itemId} لا يمكن إسناده`);
     if (this.day < (spec.fromDay ?? 1)) throw new Error('الزميل المنفّذ لم ينضم بعد');
+    this._spend(COST.request);
     const text = String(brief);
     const hits = (spec.keywords ?? []).filter((k) => text.includes(k)).length;
     const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -138,6 +147,7 @@ export class Simulation {
   submitDeliverable(itemId, text) {
     const item = this._openItem(itemId);
     if (!item.deliverable) throw new Error(`${itemId} لا يتطلب تسليم مستند`);
+    this._spend(COST.deliverable);
     const evaluation = scoreDeliverable(item.deliverable, text);
     this._recordAction(item, { kind: 'deliverable', evaluation, text });
     item.status = 'done';
@@ -246,7 +256,88 @@ export class Simulation {
 
   // ——— داخلي ———
 
+  // ——— ساعات يوم العمل ———
+  // لكل يوم 8 ساعات عمل تستهلكها المهام. من تنتهي ساعاته لا ينجز المزيد اليوم، فعليه أن يرتب أولوياته.
+  // الوقت وقت محاكاة لا وقت حقيقي: عادل للجميع، ويُعاد تشغيله على الخادم كما هو.
+  get hoursLeft() { return Math.max(0, HOURS_PER_DAY - this.hoursUsed); }
+  /** الساعة المطلقة منذ بداية الشهر (لحساب مواعيد الطلبات التي تأخذ وقتًا). */
+  get clock() { return (this.day - 1) * HOURS_PER_DAY + this.hoursUsed; }
+  costOf(item) { return item.research ? COST.research : item.deliverable ? COST.deliverable : item.type === 'meeting' ? COST.meeting : COST.message; }
+  canAfford(hours) { return this.hoursUsed + hours <= HOURS_PER_DAY + 1e-9; }
+  _spend(hours) {
+    if (!this.canAfford(hours)) throw new Error(`انتهت ساعات عمل اليوم (${HOURS_PER_DAY} ساعات). أنهِ يوم العمل وأكمل غدًا.`);
+    this.hoursUsed = Math.round((this.hoursUsed + hours) * 100) / 100;
+    this._resolvePending();
+  }
+  _resolvePending() {
+    for (const item of this.items) {
+      if (!item.pending?.length) continue;
+      const ready = item.pending.filter((p) => p.readyAt <= this.clock + 1e-9);
+      if (!ready.length) continue;
+      item.pending = item.pending.filter((p) => !ready.includes(p));
+      for (const p of ready) item.findings.push({ sourceId: p.sourceId, text: p.text, data: true, slow: true });
+    }
+  }
+
+  /** عمل مكتبي لساعة: يمر الوقت حتى تجهز الطلبات التي تنتظرها. */
+  wait() {
+    if (this.finished) throw new Error('انتهت فترة المحاكاة');
+    this._spend(COST.wait);
+  }
+
+  // ——— مهام البحث ———
+  /**
+   * مهمة بحث: سؤال من المدير دون أن يقول من يعرف الجواب. المتدرب يسأل الزملاء ويفتش في الملفات.
+   * كل استفسار يستهلك وقتًا. بعض المصادر يجيب فورًا، وبعضها يحتاج ساعات عمل ليجهز (طلب تحليل)،
+   * وعدد طلبات التحليل في اليوم محدود. وبعض المصادر رأيه غير دقيق: الجواب الصحيح يحتاج مقارنة.
+   */
+  investigate(itemId, sourceId) {
+    const item = this._openItem(itemId);
+    const spec = item.research;
+    if (!spec) throw new Error(`${itemId} ليس مهمة بحث`);
+    if (item.findings.some((f) => f.sourceId === sourceId) || item.pending.some((p) => p.sourceId === sourceId)) throw new Error('سبق أن سألت هذا المصدر');
+    const src = spec.sources[sourceId];
+    if (src?.delay) {
+      if (this.slowToday >= SLOW_PER_DAY) throw new Error(`استنفدت طلبات التحليل اليوم (${SLOW_PER_DAY}). اطلب غدًا، أو ابحث في مصدر آخر.`);
+      this._spend(COST.request);
+      this.slowToday += 1;
+      item.pending.push({ sourceId, text: src.text, readyAt: this.clock + src.delay, delay: src.delay });
+      return { pending: true, delay: src.delay };
+    }
+    this._spend(COST.ask);
+    const f = src ? { sourceId, text: src.text, data: true } : { sourceId, text: spec.hints?.[sourceId] ?? spec.defaultHint ?? 'ليست عندي معلومة عن هذا.', data: false };
+    item.findings.push(f);
+    return f;
+  }
+
+  submitResearch(itemId, answers = {}) {
+    const item = this._openItem(itemId);
+    const spec = item.research;
+    if (!spec) throw new Error(`${itemId} ليس مهمة بحث`);
+    this._spend(COST.research);
+    const fields = spec.fields.map((f) => {
+      const v = answers[f.id];
+      const ok = f.type === 'number' ? Number.isFinite(Number(v)) && String(v).trim() !== '' && Math.abs(Number(v) - f.correct) <= (f.tolerance ?? 0) : String(v) === String(f.correct);
+      return { id: f.id, label: f.label, given: f.type === 'number' ? Number(v) : String(v ?? ''), ok };
+    });
+    const evidence = item.findings.filter((f) => f.data).length;
+    const correct = fields.filter((f) => f.ok).length / fields.length;
+    // الجواب الصحيح دون مصدرين على الأقل تخمين محظوظ: لا يُحتسب كاملًا
+    const quality = Math.round(Math.min(evidence ? 1 : 0.3, 0.8 * correct + (evidence >= 2 ? 0.2 : 0)) * 100) / 100;
+    const good = quality >= 0.6;
+    this._recordAction(item, { kind: 'decision', optionId: good ? 'correct' : 'wrong', quality, rationale: '', research: { fields, sources: item.findings.map((f) => f.sourceId), evidence } });
+    item.status = 'done';
+    item.resolution = { day: this.day, quality };
+    const branch = good ? spec.onGood : spec.onWeak;
+    if (branch?.result) this.log(branch.result, good ? 'good' : 'bad');
+    applyEffects(this.state, branch?.effects, { sim: this });
+    return { quality, good, fields };
+  }
+
   _startDay() {
+    this.hoursUsed = 0;
+    this.slowToday = 0;
+    this._resolvePending();
     for (const e of this.scenario.events.filter((x) => x.day === this.day)) this._fire(e);
     for (const s of this.scheduledEvents.filter((x) => x.day === this.day)) this._fire(this.eventDefs.get(s.eventId));
     this._maybeRandomEvent();
@@ -295,6 +386,9 @@ export class Simulation {
       dialogue: def.dialogue ?? null,
       attachments: def.attachments ?? [],
       delegable: def.delegable ?? null,
+      research: def.research ?? null,
+      findings: [],
+      pending: [],
       onExpire: def.onExpire ?? null,
       skills: def.skills ?? [],
       status: 'open',
